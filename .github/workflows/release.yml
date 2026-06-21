@@ -1,0 +1,160 @@
+name: release
+
+# Triggered by pushing a version tag, e.g.:
+#   git tag v1.2.3 && git push origin v1.2.3
+#
+# Produces, all attached to the same GitHub Release for the tag:
+#   - awg-admin (standalone web server): linux/darwin/windows, amd64/arm64
+#     archives — built by GoReleaser (see .goreleaser.yaml).
+#   - awg-agent: linux only, amd64/arm64 — built by GoReleaser.
+#   - a multi-arch (amd64+arm64) Docker image of the standalone server,
+#     pushed to GHCR.
+#   - the Wails desktop app for Windows (.exe + NSIS installer), macOS
+#     (.app + .dmg, universal binary) and Linux (binary).
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the release / upload assets
+  packages: write # push to ghcr.io
+
+env:
+  GOEXPERIMENT: jsonv2
+
+jobs:
+  # ---------------------------------------------------------------------
+  # awg-admin + awg-agent binaries, checksums, changelog, GitHub Release.
+  # ---------------------------------------------------------------------
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # GoReleaser needs full history for the changelog
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------
+  # Multi-arch Docker image of the standalone server. Built directly with
+  # buildx rather than through GoReleaser's `dockers` pipe: the Dockerfile
+  # compiles the frontend and Go binary from source itself (see
+  # Dockerfile), so there's no prebuilt binary for GoReleaser to hand it.
+  # ---------------------------------------------------------------------
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image name (lowercase)
+        id: image
+        run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ github.ref_name }}
+            ${{ steps.image.outputs.name }}:latest
+
+  # ---------------------------------------------------------------------
+  # Wails desktop app, one job per target OS (the webview bindings can
+  # only be built on their own platform). Uploaded to the release created
+  # by the goreleaser job above, so it must run after it.
+  # ---------------------------------------------------------------------
+  desktop:
+    needs: goreleaser
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows/amd64
+          - os: macos-latest
+            platform: darwin/universal
+          - os: ubuntu-latest
+            platform: linux/amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux GTK/webkit build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: choco install nsis -y
+
+      - name: Build desktop app
+        run: go tool wails build -platform ${{ matrix.platform }} -nsis -trimpath
+
+      - name: Package macOS .dmg
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil create -volname "Amnezia Admin" \
+            -srcfolder build/bin/amnezia-admin.app \
+            -ov -format UDZO build/bin/amnezia-admin.dmg
+
+      - name: Rename artifacts with version
+        shell: bash
+        run: |
+          cd build/bin
+          tag='${{ github.ref_name }}'
+          for f in amnezia-admin.exe amnezia-admin-amd64-installer.exe amnezia-admin.dmg amnezia-admin; do
+            [ -f "$f" ] || continue
+            ext="${f##*.}"
+            base="${f%.*}"
+            [ "$ext" = "$f" ] && ext='' # no extension (plain Linux binary)
+            if [ -n "$ext" ]; then
+              mv "$f" "${base}_${tag}.${ext}"
+            else
+              mv "$f" "${f}_${tag}"
+            fi
+          done
+
+      - name: Upload to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" build/bin/amnezia-admin* --clobber

@@ -1,0 +1,19 @@
+.git
+.idea
+_tmp
+build
+cmd/dist
+
+# Root module only imports agent/models (see CLAUDE.md) — the rest of the
+# agent module's source isn't needed to build the standalone server, but
+# go.mod/go.sum must stay so Go can resolve the local `replace` in go.mod
+# and download agent/models' own dependency (wgctrl-go).
+agent
+!agent/go.mod
+!agent/go.sum
+!agent/models
+
+# Generated/installed, not source — reinstalled/rebuilt in the frontend
+# build stage.
+frontend/node_modules
+frontend/dist

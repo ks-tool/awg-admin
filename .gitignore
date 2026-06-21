@@ -1,0 +1,7 @@
+.idea
+bin
+_tmp
+cmd/dist
+frontend/node_modules
+
+.DS_Store

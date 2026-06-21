@@ -1,0 +1,103 @@
+# GoReleaser config for awg-admin's two pure-Go binaries:
+#   - awg-admin: the standalone web server (cmd/awg-admin.go), embeds the
+#     built frontend (see the "before.hooks" below) — linux/darwin/windows,
+#     amd64/arm64.
+#   - awg-agent: the per-server daemon (agent/cmd/awg-agent.go) — linux
+#     only (it manages WireGuard interfaces on the box it runs on), amd64
+#     and arm64.
+#
+# Deliberately NOT handled here:
+#   - The Docker image: the project's Dockerfile builds Go from source
+#     itself (multi-stage, frontend+backend) rather than embedding a
+#     prebuilt binary, so it doesn't fit GoReleaser's `dockers` pipe well —
+#     built and pushed directly via docker/build-push-action in
+#     .github/workflows/release.yml instead.
+#   - The Wails desktop app (Windows/macOS/Linux): needs the `wails` CLI,
+#     platform-specific packaging (NSIS installer, .dmg) and to run on each
+#     target OS's own runner — also handled as separate jobs in
+#     .github/workflows/release.yml, which upload their artifacts to the
+#     same GitHub release this config creates.
+version: 2
+
+project_name: awg-admin
+
+before:
+  hooks:
+    - sh -c "cd frontend && npm ci"
+    - make frontend
+
+builds:
+  - id: admin
+    main: ./cmd/awg-admin.go
+    binary: awg-admin
+    env:
+      - CGO_ENABLED=0
+      - GOEXPERIMENT=jsonv2
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+  - id: agent
+    dir: agent
+    main: ./cmd/awg-agent.go
+    binary: awg-agent
+    env:
+      - CGO_ENABLED=0
+      - GOEXPERIMENT=jsonv2
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: admin-archive
+    ids: [admin]
+    name_template: >-
+      awg-admin_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+  - id: agent-archive
+    ids: [agent]
+    name_template: >-
+      awg-agent_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+release:
+  # github.owner/name are left unset — GoReleaser auto-detects the repo
+  # from the `origin` git remote in CI.
+  #
+  # The desktop-build jobs in .github/workflows/release.yml run after this
+  # and upload more assets (Wails apps, installers) to the very same
+  # release via `gh release upload`, so it must already exist and stay
+  # editable rather than be (re)published as final by some other step.
+  mode: keep-existing

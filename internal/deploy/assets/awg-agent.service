@@ -1,0 +1,24 @@
+[Unit]
+Description=AmneziaWG admin agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/awg-agent
+EnvironmentFile=-/etc/awg-agent/awg-agent.env
+Restart=on-failure
+RestartSec=2s
+
+# The agent manages WireGuard interfaces and needs elevated network
+# capabilities, but does not need full root.
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/awg-agent /var/lib/awg-agent
+StateDirectory=awg-agent
+
+[Install]
+WantedBy=multi-user.target

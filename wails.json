@@ -1,0 +1,16 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "amnezia-admin",
+  "outputfilename": "amnezia-admin",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "http://localhost:5173",
+  "author": {
+    "name": "Aleksey Shulutkov"
+  },
+  "info": {
+    "productName": "Amnezia Admin",
+    "productVersion": "0.0.1"
+  }
+}

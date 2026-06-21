@@ -1,0 +1,374 @@
+/*
+  Copyright © 2026 Alexey Shulutkov <github@shulutkov.ru>
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  	http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+// Package metrics periodically samples host (CPU/RAM/load/network) and
+// WireGuard peer (rx/tx/last handshake) stats and keeps the last 48h of
+// them in an in-process ring buffer per metric (see store.go) — no
+// external TSDB. A third-party embeddable engine (github.com/aymanhs/
+// nanotdb) was tried first, but its storage engine lives under its own
+// internal/ import path and Go's internal-package visibility rule blocks
+// using it as a library from outside that module, despite its own
+// EMBEDDING.md describing exactly that. Vendoring that engine's source was
+// possible but pulled in WAL/crash-recovery/rollup/compaction machinery
+// this agent doesn't need just to keep 48h of 30-60s samples; a plain ring
+// buffer covers the actual requirement in a few hundred lines with no
+// third-party code or extra dependencies; not persisting to disk loses
+// history across agent restarts, an accepted trade-off for monitoring data.
+//
+// Samples are exposed read-only over HTTP via Snapshot (see
+// agent/internal/api's "/metrics" handler), as JSON by default or
+// Prometheus text exposition format with "?fmt=prom" (see prometheus.go).
+package metrics
+
+import (
+	"context"
+	"encoding/hex"
+	"fmt"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/ks-tool/awg-admin/agent/models"
+	"github.com/ks-tool/awg-admin/agent/storage"
+
+	"github.com/Jipok/wgctrl-go"
+	"github.com/rs/zerolog/log"
+)
+
+const (
+	systemDB = "system"
+
+	metricCPUPercent    = "cpu_percent"
+	metricMemUsedBytes  = "mem_used_bytes"
+	metricMemTotalBytes = "mem_total_bytes"
+	metricLoad1         = "load1"
+	metricLoad5         = "load5"
+	metricLoad15        = "load15"
+	metricNetRxBytes    = "net_rx_bytes"
+	metricNetTxBytes    = "net_tx_bytes"
+)
+
+// retentionPeriod is how much history each metric's ring buffer covers.
+const retentionPeriod = 48 * time.Hour
+
+// Collector periodically samples host and peer metrics into an in-memory
+// ring buffer per metric and serves the latest values back out via
+// Snapshot.
+type Collector struct {
+	store *store
+	awg   *wgctrl.Client
+	agent storage.Storage
+
+	interval time.Duration
+	enabled  atomic.Bool
+
+	mu      sync.Mutex
+	prevCPU cpuTotals
+	haveCPU bool
+	prevNet netStats
+	haveNet bool
+}
+
+// NewCollector returns a Collector that samples every interval (the task
+// this was built for calls for 30-60s) and retains retentionPeriod (48h) of
+// history per metric, sized from those two numbers — no data directory or
+// persistence involved, see the package doc comment.
+func NewCollector(awg *wgctrl.Client, agentStore storage.Storage, interval time.Duration) *Collector {
+	capacity := int(retentionPeriod/interval) + 1
+	c := &Collector{store: newStore(capacity), awg: awg, agent: agentStore, interval: interval}
+	c.enabled.Store(true)
+	return c
+}
+
+// SetEnabled turns sampling on/off at runtime (awg-admin's "disable
+// monitoring" toggle, see internal/agentclient.SetMetricsEnabled). Disabling
+// stops new samples from being collected; Snapshot keeps serving whatever
+// was last recorded rather than going blank. Not persisted across agent
+// restarts — sampling resumes enabled, same as the ring buffer losing its
+// history on restart.
+func (c *Collector) SetEnabled(enabled bool) { c.enabled.Store(enabled) }
+
+func (c *Collector) Enabled() bool { return c.enabled.Load() }
+
+// Run samples metrics every c.interval until ctx is cancelled. Errors from
+// a single collection cycle are logged and don't stop the loop — a
+// transient /proc read failure or unreachable wgctrl device shouldn't take
+// monitoring down entirely.
+func (c *Collector) Run(ctx context.Context) {
+	ticker := time.NewTicker(c.interval)
+	defer ticker.Stop()
+
+	c.collectOnce()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.collectOnce()
+		}
+	}
+}
+
+func (c *Collector) collectOnce() {
+	if !c.Enabled() {
+		return
+	}
+
+	now := time.Now()
+	if err := c.collectSystem(now); err != nil {
+		log.Warn().Err(err).Msg("failed to collect system metrics")
+	}
+	c.collectPeers(now)
+}
+
+func (c *Collector) collectSystem(now time.Time) error {
+	cpu, err := readCPUTotals()
+	if err != nil {
+		return fmt.Errorf("read cpu stats: %w", err)
+	}
+
+	c.mu.Lock()
+	prev, haveCPU := c.prevCPU, c.haveCPU
+	c.prevCPU, c.haveCPU = cpu, true
+	c.mu.Unlock()
+
+	if haveCPU {
+		c.store.write(systemDB, metricCPUPercent, now, cpuPercent(prev, cpu))
+	}
+
+	mem, err := readMemStats()
+	if err != nil {
+		return fmt.Errorf("read mem stats: %w", err)
+	}
+	c.store.write(systemDB, metricMemUsedBytes, now, float64(mem.usedBytes))
+	c.store.write(systemDB, metricMemTotalBytes, now, float64(mem.totalBytes))
+
+	la, err := readLoadAvg()
+	if err != nil {
+		return fmt.Errorf("read load average: %w", err)
+	}
+	c.store.write(systemDB, metricLoad1, now, la.load1)
+	c.store.write(systemDB, metricLoad5, now, la.load5)
+	c.store.write(systemDB, metricLoad15, now, la.load15)
+
+	net, err := readNetStats()
+	if err != nil {
+		return fmt.Errorf("read net stats: %w", err)
+	}
+
+	c.mu.Lock()
+	prevNet, haveNet := c.prevNet, c.haveNet
+	c.prevNet, c.haveNet = net, true
+	c.mu.Unlock()
+
+	// /proc/net/dev's counters are cumulative since the interface came up,
+	// not since the last sample — charting them as-is just shows an
+	// ever-climbing line that's only useful read as "total since boot",
+	// not as actual network load. Store the delta against the previous
+	// sample instead, same as CPU above: bytes transferred *during this
+	// collection interval*, which is what's actually useful for traffic
+	// accounting. The very first sample has no previous reading to diff
+	// against, so it's recorded as 0 (consistent with every other
+	// per-tick metric always having an entry — see SystemHistory's
+	// index-zipped points) rather than skipped outright.
+	var rxDelta, txDelta uint64
+	if haveNet {
+		rxDelta = deltaUint64(prevNet.rxBytes, net.rxBytes)
+		txDelta = deltaUint64(prevNet.txBytes, net.txBytes)
+	}
+	c.store.write(systemDB, metricNetRxBytes, now, float64(rxDelta))
+	c.store.write(systemDB, metricNetTxBytes, now, float64(txDelta))
+	return nil
+}
+
+// deltaUint64 returns cur-prev, clamped to 0 when cur < prev — the counter
+// went backwards (interface recreated/driver reload resetting it to 0),
+// not an actual negative amount of traffic.
+func deltaUint64(prev, cur uint64) uint64 {
+	if cur < prev {
+		return 0
+	}
+	return cur - prev
+}
+
+// collectPeers samples rx/tx/last-handshake for every peer of every
+// interface this agent manages (agent/cmd/dump.go is the same idea as a
+// one-shot CLI). Each interface gets its own "database" within the store,
+// named after the interface.
+func (c *Collector) collectPeers(now time.Time) {
+	ifaces, err := c.agent.List()
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to list interfaces for metrics")
+		return
+	}
+
+	for _, cfg := range ifaces {
+		dev, err := c.awg.Device(cfg.Interface)
+		if err != nil {
+			log.Warn().Err(err).Str("interface", cfg.Interface).Msg("failed to read wireguard device for metrics")
+			continue
+		}
+
+		for _, peer := range dev.Peers {
+			key := hex.EncodeToString(peer.PublicKey[:])
+			db := cfg.Interface
+
+			c.store.write(db, key+"/rx", now, float64(peer.ReceiveBytes))
+			c.store.write(db, key+"/tx", now, float64(peer.TransmitBytes))
+
+			handshake := peer.LastHandshakeTime.Unix()
+			if handshake < 0 {
+				handshake = 0
+			}
+			c.store.write(db, key+"/handshake", now, float64(handshake))
+		}
+	}
+}
+
+// Snapshot returns the most recently recorded value of every metric this
+// agent has collected. The wire types (models.MetricsSnapshot and friends)
+// live in agent/models rather than here so the root module's
+// internal/agentclient can decode them without crossing this package's
+// internal/ boundary — see the package doc comment.
+func (c *Collector) Snapshot() models.MetricsSnapshot {
+	return models.MetricsSnapshot{
+		System:     c.querySystem(),
+		Interfaces: c.queryInterfaces(),
+	}
+}
+
+func (c *Collector) querySystem() models.SystemSnapshot {
+	var snap models.SystemSnapshot
+
+	if p, ok := c.store.last(systemDB, metricCPUPercent); ok {
+		snap.CPUPercent, snap.Timestamp = p.value, p.ts
+	}
+	if p, ok := c.store.last(systemDB, metricMemUsedBytes); ok {
+		snap.MemUsedBytes, snap.Timestamp = uint64(p.value), p.ts
+	}
+	if p, ok := c.store.last(systemDB, metricMemTotalBytes); ok {
+		snap.MemTotalBytes = uint64(p.value)
+	}
+	if p, ok := c.store.last(systemDB, metricLoad1); ok {
+		snap.Load1 = p.value
+	}
+	if p, ok := c.store.last(systemDB, metricLoad5); ok {
+		snap.Load5 = p.value
+	}
+	if p, ok := c.store.last(systemDB, metricLoad15); ok {
+		snap.Load15 = p.value
+	}
+	if p, ok := c.store.last(systemDB, metricNetRxBytes); ok {
+		snap.NetRxBytes = uint64(p.value)
+	}
+	if p, ok := c.store.last(systemDB, metricNetTxBytes); ok {
+		snap.NetTxBytes = uint64(p.value)
+	}
+	return snap
+}
+
+// SystemHistory returns every host-level sample still retained in the ring
+// buffers (up to 48h, oldest first), for charting instead of just the
+// latest value (see Snapshot). NetRxBytes/NetTxBytes/MemUsedBytes/
+// MemTotalBytes are written unconditionally on every collectSystem tick, so
+// their series always have the same length/order and are zipped by index;
+// CPUPercent is skipped on the very first tick (no previous sample to diff
+// against yet — see collectSystem), so it's looked up by exact timestamp
+// instead and left at zero for any point it's missing.
+func (c *Collector) SystemHistory() models.SystemHistory {
+	rx := c.store.series(systemDB, metricNetRxBytes)
+	tx := c.store.series(systemDB, metricNetTxBytes)
+	memUsed := c.store.series(systemDB, metricMemUsedBytes)
+	memTotal := c.store.series(systemDB, metricMemTotalBytes)
+	cpu := c.store.series(systemDB, metricCPUPercent)
+
+	cpuByTS := make(map[int64]float64, len(cpu))
+	for _, p := range cpu {
+		cpuByTS[p.ts.UnixNano()] = p.value
+	}
+
+	points := make([]models.SystemHistoryPoint, len(rx))
+	for i, p := range rx {
+		hp := models.SystemHistoryPoint{
+			Timestamp:  p.ts,
+			NetRxBytes: uint64(p.value),
+			CPUPercent: cpuByTS[p.ts.UnixNano()],
+		}
+		if i < len(tx) {
+			hp.NetTxBytes = uint64(tx[i].value)
+		}
+		if i < len(memUsed) {
+			hp.MemUsedBytes = uint64(memUsed[i].value)
+		}
+		if i < len(memTotal) {
+			hp.MemTotalBytes = uint64(memTotal[i].value)
+		}
+		points[i] = hp
+	}
+	return models.SystemHistory{Points: points}
+}
+
+func (c *Collector) queryInterfaces() []models.InterfaceSnapshot {
+	var out []models.InterfaceSnapshot
+	for _, db := range c.store.databases() {
+		if db == systemDB {
+			continue
+		}
+		out = append(out, c.queryInterface(db))
+	}
+	return out
+}
+
+func (c *Collector) queryInterface(db string) models.InterfaceSnapshot {
+	snap := models.InterfaceSnapshot{Interface: db}
+
+	peers := make(map[string]*models.PeerSnapshot)
+	peerOf := func(key string) *models.PeerSnapshot {
+		if p, ok := peers[key]; ok {
+			return p
+		}
+		p := &models.PeerSnapshot{PublicKey: key}
+		peers[key] = p
+		return p
+	}
+
+	for _, name := range c.store.metricNames(db) {
+		key, field, ok := strings.Cut(name, "/")
+		if !ok {
+			continue
+		}
+		p, ok := c.store.last(db, name)
+		if !ok {
+			continue
+		}
+
+		peer := peerOf(key)
+		switch field {
+		case "rx":
+			peer.RxBytes = uint64(p.value)
+		case "tx":
+			peer.TxBytes = uint64(p.value)
+		case "handshake":
+			peer.LastHandshake = time.Unix(int64(p.value), 0)
+		}
+	}
+
+	for _, p := range peers {
+		snap.Peers = append(snap.Peers, *p)
+	}
+	return snap
+}
