@@ -35,7 +35,7 @@ const getApiBaseUrl = (): string => {
     return 'http://localhost:8080';
 };
 
-const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
 
 interface ApiResponse<T> {
     data: T;

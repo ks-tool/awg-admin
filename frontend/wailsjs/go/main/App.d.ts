@@ -5,6 +5,8 @@ import {models} from '../models';
 
 export function AddPeer(arg1:string,arg2:service.AddPeerInput):Promise<models.User>;
 
+export function Backup():Promise<Array<number>>;
+
 export function BasicAuthEnabled():Promise<boolean>;
 
 export function BuildTunnel(arg1:Array<models.TunnelStep>,arg2:string):Promise<models.Tunnel>;
@@ -80,6 +82,8 @@ export function ReconcileServer(arg1:string):Promise<service.ReconcileReport>;
 export function RefreshAgentSourceCache(arg1:string):Promise<void>;
 
 export function RemoveTunnel(arg1:string):Promise<void>;
+
+export function SaveBackup():Promise<boolean>;
 
 export function SaveLogs():Promise<boolean>;
 

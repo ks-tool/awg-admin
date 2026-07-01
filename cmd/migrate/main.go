@@ -17,12 +17,12 @@
 package main
 
 import (
-	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/ks-tool/awg-admin/storage/boltdb/dump"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -122,13 +122,9 @@ func runImportCmd(args []string) {
 	fmt.Printf("imported %s -> %s\n", *inPath, *dbPath)
 }
 
-// dump is the on-disk JSON shape: bucket name -> (hex-encoded key -> raw
-// JSON value). Keys are hex-encoded rather than left as plain strings
-// because several buckets (servers, interfaces, users) key their entries by
-// raw 16-byte UUIDs, which aren't valid UTF-8/JSON string content as-is.
-type dump struct {
-	Buckets map[string]map[string]json.RawMessage `json:"buckets"`
-}
+// The dump JSON shape and the copy logic live in storage/boltdb/dump, shared
+// with the in-app backup feature so a dump taken by either can be restored by
+// the other. This CLI only owns opening the file and streaming to/from disk.
 
 func exportDB(dbPath, outPath string) error {
 	db, err := bolt.Open(dbPath, 0600, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
@@ -137,44 +133,24 @@ func exportDB(dbPath, outPath string) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	d := dump{Buckets: make(map[string]map[string]json.RawMessage)}
-	err = db.View(func(tx *bolt.Tx) error {
-		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
-			entries := make(map[string]json.RawMessage)
-			if err := b.ForEach(func(k, v []byte) error {
-				entries[hex.EncodeToString(k)] = append(json.RawMessage{}, v...)
-				return nil
-			}); err != nil {
-				return fmt.Errorf("read bucket %q: %w", name, err)
-			}
-			d.Buckets[string(name)] = entries
-			return nil
-		})
-	})
+	f, err := os.Create(outPath)
 	if err != nil {
+		return fmt.Errorf("create %s: %w", outPath, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	if err := dump.Export(db, f); err != nil {
 		return err
 	}
-
-	data, err := json.MarshalIndent(d, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode dump: %w", err)
-	}
-	if err := os.WriteFile(outPath, data, 0600); err != nil {
-		return fmt.Errorf("write %s: %w", outPath, err)
-	}
-	return nil
+	return f.Close()
 }
 
 func importDB(dbPath, inPath string, force bool) error {
-	raw, err := os.ReadFile(inPath)
+	f, err := os.Open(inPath)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", inPath, err)
 	}
-
-	var d dump
-	if err := json.Unmarshal(raw, &d); err != nil {
-		return fmt.Errorf("parse %s: %w", inPath, err)
-	}
+	defer func() { _ = f.Close() }()
 
 	db, err := bolt.Open(dbPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
@@ -182,25 +158,5 @@ func importDB(dbPath, inPath string, force bool) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	return db.Update(func(tx *bolt.Tx) error {
-		for bucketName, entries := range d.Buckets {
-			b, err := tx.CreateBucketIfNotExists([]byte(bucketName))
-			if err != nil {
-				return fmt.Errorf("create bucket %q: %w", bucketName, err)
-			}
-			for hexKey, value := range entries {
-				key, err := hex.DecodeString(hexKey)
-				if err != nil {
-					return fmt.Errorf("bucket %q: decode key %q: %w", bucketName, hexKey, err)
-				}
-				if !force && b.Get(key) != nil {
-					return fmt.Errorf("bucket %q: key %s already exists in %s (use -force to overwrite)", bucketName, hexKey, dbPath)
-				}
-				if err := b.Put(key, value); err != nil {
-					return fmt.Errorf("bucket %q: write key %s: %w", bucketName, hexKey, err)
-				}
-			}
-		}
-		return nil
-	})
+	return dump.Import(db, f, force)
 }

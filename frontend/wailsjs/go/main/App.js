@@ -6,6 +6,10 @@ export function AddPeer(arg1, arg2) {
   return window['go']['main']['App']['AddPeer'](arg1, arg2);
 }
 
+export function Backup() {
+  return window['go']['main']['App']['Backup']();
+}
+
 export function BasicAuthEnabled() {
   return window['go']['main']['App']['BasicAuthEnabled']();
 }
@@ -156,6 +160,10 @@ export function RefreshAgentSourceCache(arg1) {
 
 export function RemoveTunnel(arg1) {
   return window['go']['main']['App']['RemoveTunnel'](arg1);
+}
+
+export function SaveBackup() {
+  return window['go']['main']['App']['SaveBackup']();
 }
 
 export function SaveLogs() {

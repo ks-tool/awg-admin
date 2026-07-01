@@ -610,6 +610,22 @@ export const bindingsClient = {
         }
     },
 
+    // Desktop-only: Go builds a full DB snapshot and writes it to a user-chosen
+    // file via a native save dialog. Resolves true if a file was written,
+    // false if cancelled.
+    async saveBackup(): Promise<ApiResponse<boolean>> {
+        try {
+            const data = await AppBindings.SaveBackup();
+            return { data };
+        } catch (error) {
+            console.error('Bindings SaveBackup failed:', error);
+            return {
+                data: false,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     // Desktop-only: open a native file picker and return the chosen absolute
     // path ('' if cancelled). No HTTP equivalent — a browser can't hand back a
     // real filesystem path.

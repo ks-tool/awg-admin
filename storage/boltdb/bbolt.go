@@ -18,10 +18,12 @@ package boltdb
 
 import (
 	"encoding/json"
+	"io"
 	"time"
 
 	"github.com/ks-tool/awg-admin/models"
 	"github.com/ks-tool/awg-admin/storage"
+	"github.com/ks-tool/awg-admin/storage/boltdb/dump"
 
 	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
@@ -106,6 +108,7 @@ func Open(path string) (*BoltDB, error) {
 }
 
 func (db *BoltDB) Close() error                       { return db.db.Close() }
+func (db *BoltDB) Backup(w io.Writer) error           { return dump.Export(db.db, w) }
 func (db *BoltDB) Users() storage.Users               { return &users{db.db} }
 func (db *BoltDB) Servers() storage.Servers           { return &servers{db: db.db} }
 func (db *BoltDB) Auth() storage.Auth                 { return &auth{db: db.db} }

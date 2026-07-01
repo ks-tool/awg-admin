@@ -32,6 +32,9 @@ type Storage interface {
 	Servers() Servers
 	Auth() Auth
 	AgentSources() AgentSources
+	// Backup writes a consistent, restorable snapshot of the entire store to
+	// w (see storage/boltdb/dump — the same format as the awg-migrate CLI).
+	Backup(w io.Writer) error
 }
 
 // AgentSources holds the named, reusable agent-binary deploy presets (see

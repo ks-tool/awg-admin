@@ -64,6 +64,8 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *sessionStore {
 		gr.PATCH("/basic-auth", h.authSetBasicAuth)
 	})
 
+	protected.GET("/backup", h.backupDownload)
+
 	protected.WithGroup("/agent-sources", func(gr *bunrouter.Group) {
 		gr.POST("", h.agentSourceCreate)
 		gr.GET("/", h.agentSourceList)

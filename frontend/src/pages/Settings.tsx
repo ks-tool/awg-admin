@@ -17,7 +17,7 @@
 import {useEffect, useRef, useState} from 'react';
 import type {FormEvent} from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings as SettingsIcon, ScrollText, Save, RefreshCw } from 'lucide-react';
+import { Settings as SettingsIcon, ScrollText, Save, RefreshCw, DatabaseBackup } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { buttons, inputs, Modal } from '@/components/common/Modal';
@@ -26,6 +26,7 @@ import { CopyButton } from '@/components/common/CopyButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { changeCredentials, getCurrentUser, setBasicAuthEnabled } from '@/services/auth';
 import { getLogs, saveLogs, debugLoggingEnabled, setDebugLogging } from '@/services/logs';
+import { saveBackup } from '@/services/backup';
 import { getCurrentApiMode } from '@/services/apiMode';
 import { cn } from '@/lib/utils';
 
@@ -286,6 +287,40 @@ function LogsSection() {
     );
 }
 
+// Full backup of the admin database (servers, users, peers, credentials) as a
+// JSON dump restorable with `awg-migrate import`. Available in both desktop
+// (native save dialog) and standalone (browser download) modes.
+function BackupSection() {
+    const { t } = useTranslation();
+    const [saving, setSaving] = useState(false);
+
+    const handleBackup = async () => {
+        setSaving(true);
+        try {
+            if (await saveBackup()) toast.success(t('settings.backupSaved'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="p-4 bg-card border border-border rounded-lg space-y-2">
+            <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">{t('settings.backup')}</span>
+                <button
+                    onClick={handleBackup}
+                    disabled={saving}
+                    className={cn('inline-flex items-center gap-2', buttons.secondary)}
+                >
+                    {saving ? <RefreshCw size={16} className="animate-spin" /> : <DatabaseBackup size={16} />}
+                    {t('settings.createBackup')}
+                </button>
+            </div>
+            <p className="text-xs text-muted-foreground">{t('settings.backupHint')}</p>
+        </div>
+    );
+}
+
 export default function Settings() {
     const { t, i18n } = useTranslation();
     const { enabled: authEnabled } = useAuth();
@@ -318,6 +353,7 @@ export default function Settings() {
                     </div>
                 </div>
 
+                <BackupSection />
                 {isDesktop && <LogsSection />}
                 {authEnabled && <BasicAuthSection />}
                 {authEnabled && <ChangeCredentialsSection />}

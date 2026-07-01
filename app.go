@@ -218,3 +218,43 @@ func (a *App) SaveLogs() (bool, error) {
 	}
 	return true, nil
 }
+
+// SaveBackup writes a full snapshot of the admin database to a user-chosen
+// file (same JSON dump format as `awg-migrate export`, restorable with
+// `awg-migrate import`). Returns true if a file was written, false if the
+// dialog was cancelled. Desktop-only (a.ctx is set in startup). The file
+// contains secrets (SSH keys, PSKs, the admin password hash) — see
+// Service.Backup — so it's written 0600.
+func (a *App) SaveBackup() (bool, error) {
+	if a.ctx == nil {
+		return false, nil
+	}
+
+	data, err := a.Backup()
+	if err != nil {
+		return false, fmt.Errorf("build backup: %w", err)
+	}
+
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Backup admin database",
+		DefaultFilename: "awg-admin-backup.json",
+		Filters: []runtime.FileFilter{{
+			DisplayName: "JSON (*.json)",
+			Pattern:     "*.json",
+		}},
+	})
+	if err != nil {
+		return false, err
+	}
+	if path == "" {
+		return false, nil // dialog cancelled
+	}
+	if filepath.Ext(path) == "" {
+		path += ".json"
+	}
+
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return false, fmt.Errorf("write backup: %w", err)
+	}
+	return true, nil
+}

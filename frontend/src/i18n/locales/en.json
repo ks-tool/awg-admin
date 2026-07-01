@@ -369,7 +369,11 @@
     "saveLogs": "Save to file",
     "logsSaved": "Logs saved",
     "debugLogging": "Debug mode",
-    "debugLoggingHint": "Capture debug-level entries. Off by default; enable to gather more detail before reproducing an issue, then refresh."
+    "debugLoggingHint": "Capture debug-level entries. Off by default; enable to gather more detail before reproducing an issue, then refresh.",
+    "backup": "Backup",
+    "createBackup": "Save backup",
+    "backupHint": "Download a full snapshot of the admin database (servers, users, peers, credentials) as a JSON file. Restore it with the awg-migrate tool.",
+    "backupSaved": "Backup saved"
   },
   "auth": {
     "signInTitle": "Amnezia Admin",
