@@ -84,7 +84,13 @@ func (s *Service) ReconcileServer(serverID string) (*ReconcileReport, error) {
 		agentByName[cfg.Interface] = cfg
 	}
 
-	report := &ReconcileReport{}
+	// Initialize to empty (non-nil) slices so both halves marshal as JSON
+	// `[]` rather than `null` when there's no mismatch — the frontend reads
+	// .length off them directly.
+	report := &ReconcileReport{
+		AgentOnly: []agentmodels.InterfaceConfig{},
+		DBOnly:    []models.Interface{},
+	}
 	for name, cfg := range agentByName {
 		if _, ok := dbByName[name]; !ok {
 			report.AgentOnly = append(report.AgentOnly, cfg)

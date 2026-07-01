@@ -285,7 +285,12 @@ function ReconcileModal({serverId, onClose, onChanged}: {
         }
     };
 
-    const hasMismatch = report && (report.agentOnly.length > 0 || report.dbOnly.length > 0);
+    // Go marshals nil slices as JSON `null`, so agentOnly/dbOnly arrive as
+    // null (not []) whenever that side has no mismatching interfaces — guard
+    // against it here rather than assuming an array.
+    const agentOnly = report?.agentOnly ?? [];
+    const dbOnly = report?.dbOnly ?? [];
+    const hasMismatch = report && (agentOnly.length > 0 || dbOnly.length > 0);
 
     return (
         <Modal title={t('servers.reconcile.title')} onClose={onClose} size="lg">
@@ -303,7 +308,7 @@ function ReconcileModal({serverId, onClose, onChanged}: {
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {report.agentOnly.length > 0 && (
+                    {agentOnly.length > 0 && (
                         <div className="space-y-2">
                             <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">
                                 {t('servers.reconcile.agentOnlyTitle')}
@@ -312,7 +317,7 @@ function ReconcileModal({serverId, onClose, onChanged}: {
                                 {t('servers.reconcile.agentOnlyHint')}
                             </p>
                             <div className="space-y-2">
-                                {report.agentOnly.map(cfg => (
+                                {agentOnly.map(cfg => (
                                     <div key={cfg.iface} className="flex items-center justify-between rounded-lg border border-input bg-background p-3 dark:border-white/10 dark:bg-white/5">
                                         <span className="font-mono text-sm dark:text-zinc-300">{cfg.iface}</span>
                                         <div className="flex gap-2">
@@ -337,7 +342,7 @@ function ReconcileModal({serverId, onClose, onChanged}: {
                         </div>
                     )}
 
-                    {report.dbOnly.length > 0 && (
+                    {dbOnly.length > 0 && (
                         <div className="space-y-2">
                             <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">
                                 {t('servers.reconcile.dbOnlyTitle')}
@@ -346,7 +351,7 @@ function ReconcileModal({serverId, onClose, onChanged}: {
                                 {t('servers.reconcile.dbOnlyHint')}
                             </p>
                             <div className="space-y-2">
-                                {report.dbOnly.map(iface => (
+                                {dbOnly.map(iface => (
                                     <div key={iface.id} className="flex items-center justify-between rounded-lg border border-input bg-background p-3 dark:border-white/10 dark:bg-white/5">
                                         <span className="font-mono text-sm dark:text-zinc-300">{iface.iface}</span>
                                         <div className="flex gap-2">
