@@ -41,19 +41,25 @@ func (h *Handler) All() error {
 	}
 
 	for _, cfg := range configs {
-		if err = h.One(cfg); err != nil {
+		// Startup re-apply: no distinct "previous" config to reconcile against,
+		// so idempotent up-hooks just (re)assert the rules.
+		if err = h.One(nil, cfg); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (h *Handler) One(cfg models.InterfaceConfig) error {
+// One applies cfg to the host: creates or (in place) updates the link, then
+// pushes the full device config. prev is the previously-stored config for this
+// interface (nil for a brand-new one), used by InterfaceUpdate to reconcile
+// hooks on an in-place edit.
+func (h *Handler) One(prev *models.InterfaceConfig, cfg models.InterfaceConfig) error {
 	logger := log.Debug().Str("interface", cfg.Interface)
 
 	if ok := IsInterfaceExist(cfg); ok {
 		logger.Str("action", "update").Send()
-		if err := InterfaceUpdate(cfg); err != nil {
+		if err := InterfaceUpdate(prev, cfg); err != nil {
 			return err
 		}
 	} else {
@@ -63,8 +69,13 @@ func (h *Handler) One(cfg models.InterfaceConfig) error {
 		}
 	}
 
+	// Apply the FULL device config — private key, listen port, firewall mark,
+	// AmneziaWG obfuscation params AND peers — not just the peer set.
+	// ToAmneziaConfig builds all of it; ReplacePeers makes the peers authoritative.
 	logger.Str("action", "configure").Send()
-	return h.awg.ConfigureDevice(cfg.Interface, wgtypes.Config{ReplacePeers: true, Peers: cfg.ToWireguardPeers()})
+	awgCfg := cfg.ToAmneziaConfig()
+	awgCfg.ReplacePeers = true
+	return h.awg.ConfigureDevice(cfg.Interface, *awgCfg)
 }
 
 func (h *Handler) Delete(iface string) error {

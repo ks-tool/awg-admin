@@ -88,6 +88,12 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *sessionStore {
 		})
 	})
 
+	protected.WithGroup("/tunnels", func(gr *bunrouter.Group) {
+		gr.POST("", h.tunnelBuild)
+		gr.GET("/", h.tunnelList)
+		gr.DELETE("/:tunnelID", h.tunnelDelete)
+	})
+
 	protected.WithGroup("/servers", func(gr *bunrouter.Group) {
 		gr.POST("", h.serverCreate)
 		gr.GET("/", h.serverList)

@@ -170,6 +170,49 @@ export interface Interface extends InterfaceConfig {
   inSync: boolean;
   lastSyncError?: string;
   lastSyncedAt?: number /* time.Time */;
+  /**
+   * Tunnel groups the interfaces that together form one multi-hop tunnel
+   * (see Service.BuildTunnel / the tunnel wizard): every interface a tunnel
+   * is built from carries the same id, nil means "not part of any tunnel".
+   * Admin-only bookkeeping — never pushed to the agent (only the embedded
+   * InterfaceConfig is), not shown or editable in the UI. Its only visible
+   * effects: it blocks deleting the interface while the tunnel exists, and
+   * the dashboard counts distinct tunnel ids.
+   */
+  tunnel?: string;
+}
+
+//////////
+// source: tunnel.go
+
+/**
+ * TunnelStep identifies one interface a tunnel is built from, given in order
+ * (entry first, exit last). Input to Service.BuildTunnel.
+ */
+export interface TunnelStep {
+  serverId: string;
+  ifaceId: string;
+}
+/**
+ * TunnelMember is one interface belonging to a tunnel, for display in the
+ * tunnel list. Role is derived from the interface's config ("entry" keeps its
+ * listen port and relays; "exit" has none and NATs).
+ */
+export interface TunnelMember {
+  serverId: string;
+  serverName: string;
+  ifaceId: string;
+  interface: string;
+  role: string;
+}
+/**
+ * Tunnel is the derived view of the interfaces sharing one Tunnel id. It is
+ * NOT persisted as its own entity — it's reconstructed from the Tunnel field
+ * on models.Interface (see Service.ListTunnels).
+ */
+export interface Tunnel {
+  id: string;
+  members: TunnelMember[];
 }
 
 //////////

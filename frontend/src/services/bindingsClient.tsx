@@ -386,6 +386,39 @@ export const bindingsClient = {
         }
     },
 
+    async listTunnels(): Promise<ApiResponse<models.Tunnel[]>> {
+        try {
+            const data = await AppBindings.ListTunnels();
+            return { data: data || [] };
+        } catch (error) {
+            console.error('Bindings ListTunnels failed:', error);
+            return { data: null as any, error: extractErrorMessage(error) };
+        }
+    },
+
+    // steps carry string uuids at runtime (Go marshals uuid.UUID as a string),
+    // but Wails' generated models.TunnelStep types them as number[] — so accept
+    // the real shape and cast for the binding call.
+    async buildTunnel(steps: { serverId: string; ifaceId: string }[], subnet: string): Promise<ApiResponse<models.Tunnel>> {
+        try {
+            const data = await AppBindings.BuildTunnel(steps as unknown as models.TunnelStep[], subnet);
+            return { data };
+        } catch (error) {
+            console.error('Bindings BuildTunnel failed:', error);
+            return { data: null as any, error: extractErrorMessage(error) };
+        }
+    },
+
+    async removeTunnel(id: string): Promise<ApiResponse<void>> {
+        try {
+            await AppBindings.RemoveTunnel(id);
+            return { data: undefined };
+        } catch (error) {
+            console.error('Bindings RemoveTunnel failed:', error);
+            return { data: undefined, error: extractErrorMessage(error) };
+        }
+    },
+
     async getInterface(serverId: string, interfaceId: string): Promise<ApiResponse<models.Interface>> {
         try {
             const data = await AppBindings.GetInterface(serverId, interfaceId);

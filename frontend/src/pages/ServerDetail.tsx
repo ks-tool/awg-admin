@@ -901,15 +901,17 @@ export default function ServerDetail() {
                                                         },
                                                         interfaceId: iface.id,
                                                     })}
-                                                    className="p-1 text-muted-foreground hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-500/10 rounded transition-colors"
-                                                    title={t('servers.interfaces.editTooltip')}
+                                                    disabled={!!iface.tunnel}
+                                                    className="p-1 text-muted-foreground hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-500/10 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                                    title={iface.tunnel ? t('servers.interfaces.inTunnelTooltip') : t('servers.interfaces.editTooltip')}
                                                 >
                                                     <Edit2 size={16}/>
                                                 </button>
                                                 <button
                                                     onClick={() => setDeleteInterfaceId(iface.id)}
-                                                    className="p-1 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/10 rounded transition-colors"
-                                                    title={t('servers.interfaces.deleteTooltip')}
+                                                    disabled={!!iface.tunnel}
+                                                    className="p-1 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/10 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                                    title={iface.tunnel ? t('servers.interfaces.inTunnelTooltip') : t('servers.interfaces.deleteTooltip')}
                                                 >
                                                     <Trash2 size={16}/>
                                                 </button>

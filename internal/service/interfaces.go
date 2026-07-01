@@ -112,6 +112,13 @@ func (s *Service) DeleteInterface(serverID, ifaceID string) error {
 	if err != nil {
 		return err
 	}
+	// An interface that's part of a tunnel can't be deleted on its own —
+	// remove the tunnel first (see Service.RemoveTunnel). The tunnel id isn't
+	// surfaced in the UI, so this is what stops the user from breaking a tunnel
+	// by deleting one of its interfaces.
+	if iface.Tunnel != nil {
+		return fmt.Errorf("interface %q is part of a tunnel; remove the tunnel first", iface.Interface)
+	}
 	if err = ifaces.Delete(iID); err != nil {
 		return err
 	}

@@ -101,6 +101,15 @@ type Interface struct {
 	InSync        bool      `json:"inSync"`
 	LastSyncError string    `json:"lastSyncError,omitempty"`
 	LastSyncedAt  time.Time `json:"lastSyncedAt,omitempty"`
+
+	// Tunnel groups the interfaces that together form one multi-hop tunnel
+	// (see Service.BuildTunnel / the tunnel wizard): every interface a tunnel
+	// is built from carries the same id, nil means "not part of any tunnel".
+	// Admin-only bookkeeping — never pushed to the agent (only the embedded
+	// InterfaceConfig is), not shown or editable in the UI. Its only visible
+	// effects: it blocks deleting the interface while the tunnel exists, and
+	// the dashboard counts distinct tunnel ids.
+	Tunnel *uuid.UUID `json:"tunnel,omitempty"`
 }
 
 func (cfg SSHConfig) IsZero() bool {

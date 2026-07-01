@@ -26,7 +26,12 @@ import {SSHPassphraseRequiredError} from "@/services/sshErrors";
 /**
  * Helper function to calculate stats from servers and users
  */
-function calculateStats(servers: Server[], users: User[], allPeers: PeerInfo[]): DashboardStats {
+function calculateStats(
+  servers: Server[],
+  users: User[],
+  allPeers: PeerInfo[],
+  interfaces: Map<string, Interface>,
+): DashboardStats {
   let activePeers = 0
   let totalRxBytes = 0
   let totalTxBytes = 0
@@ -38,13 +43,20 @@ function calculateStats(servers: Server[], users: User[], allPeers: PeerInfo[]):
     totalTxBytes += peer.tx || 0
   })
 
+  // A tunnel is a group of interfaces sharing a non-empty tunnel id (see
+  // models.Interface.Tunnel); count the distinct ids.
+  const tunnelIds = new Set<string>()
+  interfaces.forEach((iface) => {
+    if (iface.tunnel) tunnelIds.add(iface.tunnel)
+  })
+
   return {
     totalServers: servers.length,
     onlineServers: servers.length, // TODO: Implement proper status checking
     totalPeers: allPeers.length,
     activePeers,
     totalUsers: users.length,
-    totalTunnels: 0, // TODO: Implement tunnel counting
+    totalTunnels: tunnelIds.size,
     totalRxBytes,
     totalTxBytes,
   }
@@ -157,7 +169,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         // Update stats after loading interfaces
         const { users, peers } = get()
-        set({ stats: calculateStats(servers, users, peers) })
+        set({ stats: calculateStats(servers, users, peers, interfacesMap) })
       }
     } catch (error) {
       console.error('Failed to fetch servers:', error)
@@ -179,11 +191,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const server = await serversService.createServer(input)
       if (server) {
-        const { servers, users, peers } = get()
+        const { servers, users, peers, interfaces } = get()
         const newServers = [...servers, server]
         set({ 
           servers: newServers,
-          stats: calculateStats(newServers, users, peers)
+          stats: calculateStats(newServers, users, peers, interfaces)
         })
       }
       return server
@@ -198,11 +210,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const server = await serversService.updateServer(id, input)
       if (server) {
-        const { servers, users, peers } = get()
+        const { servers, users, peers, interfaces } = get()
         const newServers = servers.map((s) => (s.id === id ? server : s))
         set({
           servers: newServers,
-          stats: calculateStats(newServers, users, peers)
+          stats: calculateStats(newServers, users, peers, interfaces)
         })
       }
       return server
@@ -217,11 +229,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const success = await serversService.deleteServer(id)
       if (success) {
-        const { servers, users, peers } = get()
+        const { servers, users, peers, interfaces } = get()
         const newServers = servers.filter((s) => s.id !== id)
         set({ 
           servers: newServers,
-          stats: calculateStats(newServers, users, peers)
+          stats: calculateStats(newServers, users, peers, interfaces)
         })
       }
       return success
@@ -264,8 +276,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ peers: allPeers })
         
         // Update stats after users are fetched
-        const { servers } = get()
-        set({ stats: calculateStats(servers, users, allPeers) })
+        const { servers, interfaces } = get()
+        set({ stats: calculateStats(servers, users, allPeers, interfaces) })
       }
     } catch (error) {
       console.error('Failed to fetch users:', error)
@@ -287,11 +299,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const user = await usersService.createUser(input)
       if (user) {
-        const { users, servers, peers } = get()
+        const { users, servers, peers, interfaces } = get()
         const newUsers = [...users, user]
         set({ 
           users: newUsers,
-          stats: calculateStats(servers, newUsers, peers)
+          stats: calculateStats(servers, newUsers, peers, interfaces)
         })
       }
       return user
@@ -305,11 +317,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const user = await usersService.updateUser(id, input)
       if (user) {
-        const { users, servers, peers } = get()
+        const { users, servers, peers, interfaces } = get()
         const newUsers = users.map((u) => (u.id === id ? user : u))
         set({
           users: newUsers,
-          stats: calculateStats(servers, newUsers, peers)
+          stats: calculateStats(servers, newUsers, peers, interfaces)
         })
       }
       return user
@@ -323,11 +335,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const success = await usersService.deleteUser(id)
       if (success) {
-        const { users, servers, peers } = get()
+        const { users, servers, peers, interfaces } = get()
         const newUsers = users.filter((u) => u.id !== id)
         set({ 
           users: newUsers,
-          stats: calculateStats(servers, newUsers, peers)
+          stats: calculateStats(servers, newUsers, peers, interfaces)
         })
       }
       return success

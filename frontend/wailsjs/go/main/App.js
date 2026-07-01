@@ -10,6 +10,10 @@ export function BasicAuthEnabled() {
   return window['go']['main']['App']['BasicAuthEnabled']();
 }
 
+export function BuildTunnel(arg1, arg2) {
+  return window['go']['main']['App']['BuildTunnel'](arg1, arg2);
+}
+
 export function ChangeCredentials(arg1, arg2, arg3) {
   return window['go']['main']['App']['ChangeCredentials'](arg1, arg2, arg3);
 }
@@ -126,6 +130,10 @@ export function ListServers() {
   return window['go']['main']['App']['ListServers']();
 }
 
+export function ListTunnels() {
+  return window['go']['main']['App']['ListTunnels']();
+}
+
 export function ListUsers() {
   return window['go']['main']['App']['ListUsers']();
 }
@@ -140,6 +148,10 @@ export function ReconcileServer(arg1) {
 
 export function RefreshAgentSourceCache(arg1) {
   return window['go']['main']['App']['RefreshAgentSourceCache'](arg1);
+}
+
+export function RemoveTunnel(arg1) {
+  return window['go']['main']['App']['RemoveTunnel'](arg1);
 }
 
 export function SaveLogs() {

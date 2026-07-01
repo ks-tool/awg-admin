@@ -18,11 +18,12 @@ import Dashboard from './Dashboard';
 import Servers from './Servers';
 import Settings from './Settings';
 import Users from './Users';
+import Tunnels from './Tunnels';
 import AddUser from './AddUser';
 import AddServer from './AddServer';
 import UserDetail from './UserDetail';
 import ServerDetail from './ServerDetail';
-import { LayoutDashboard, Server, Users as UsersIcon, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, Server, Users as UsersIcon, Settings as SettingsIcon, Waypoints } from 'lucide-react';
 
 // Pages visible in the sidebar navigation
 export const navPages = [
@@ -43,6 +44,12 @@ export const navPages = [
         labelKey: 'nav.users',
         icon: UsersIcon,
         component: Users,
+    },
+    {
+        id: 'tunnels',
+        labelKey: 'nav.tunnels',
+        icon: Waypoints,
+        component: Tunnels,
     },
     {
         id: 'settings',

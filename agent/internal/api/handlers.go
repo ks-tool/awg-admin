@@ -86,6 +86,11 @@ func (h *Handler) set(w http.ResponseWriter, r *http.Request) {
 	fields["interface"] = cfg.Interface
 	log.Debug().Fields(fields).Msg("setting interface")
 
+	// Capture the previously-stored config before overwriting it, so the apply
+	// path can reconcile hooks (tear down the old rules, set up the new ones).
+	// nil for a brand-new interface (Get returns ErrNotFound).
+	old, _ := h.store.Get(cfg.Interface)
+
 	if err := h.store.Set(&cfg); err != nil {
 		log.Error().Fields(fields).Err(err).Msg("save interface to DB failed")
 		handleErr(w, err)
@@ -93,7 +98,7 @@ func (h *Handler) set(w http.ResponseWriter, r *http.Request) {
 	}
 
 	networkService := service.NewHandler(h.store, h.awg)
-	if err := networkService.One(cfg); err != nil {
+	if err := networkService.One(old, cfg); err != nil {
 		log.Error().Fields(fields).Err(err).Msg("configure interface failed")
 		if e := h.store.Delete(cfg.Interface); e != nil {
 			log.Warn().Fields(fields).Err(e).Msg("delete interface from DB failed")

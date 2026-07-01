@@ -7,6 +7,8 @@ export function AddPeer(arg1:string,arg2:service.AddPeerInput):Promise<models.Us
 
 export function BasicAuthEnabled():Promise<boolean>;
 
+export function BuildTunnel(arg1:Array<models.TunnelStep>,arg2:string):Promise<models.Tunnel>;
+
 export function ChangeCredentials(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CreateAgentSource(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<models.AgentSource>;
@@ -65,6 +67,8 @@ export function ListPeers(arg1:string):Promise<Array<models.Peer>>;
 
 export function ListServers():Promise<Array<models.Server>>;
 
+export function ListTunnels():Promise<Array<models.Tunnel>>;
+
 export function ListUsers():Promise<Array<models.User>>;
 
 export function Login(arg1:string,arg2:string):Promise<void>;
@@ -72,6 +76,8 @@ export function Login(arg1:string,arg2:string):Promise<void>;
 export function ReconcileServer(arg1:string):Promise<service.ReconcileReport>;
 
 export function RefreshAgentSourceCache(arg1:string):Promise<void>;
+
+export function RemoveTunnel(arg1:string):Promise<void>;
 
 export function SaveLogs():Promise<boolean>;
 

@@ -29,10 +29,13 @@ import (
 func InterfaceCreate(cfg models.InterfaceConfig) error {
 	dev := Device(cfg.Interface)
 
-	if err := runHooks(cfg.Interface, "PreUp", cfg.PreUp); err != nil {
+	if err := dev.Add(); err != nil {
 		return err
 	}
-	if err := dev.Add(); err != nil {
+	// PreUp runs after the link exists (so interface-referencing rules such as
+	// `ip route ... dev %i` or `ip rule ... iif %i` resolve) but before it's
+	// brought up — matching wg-quick's order (add link → PreUp → up → PostUp).
+	if err := runHooks(cfg.Interface, "PreUp", cfg.PreUp); err != nil {
 		return err
 	}
 	if err := dev.AddrAdd(cfg.Address); err != nil {
@@ -50,8 +53,25 @@ func InterfaceCreate(cfg models.InterfaceConfig) error {
 	return runHooks(cfg.Interface, "PostUp", cfg.PostUp)
 }
 
-func InterfaceUpdate(cfg models.InterfaceConfig) error {
+// InterfaceUpdate reconfigures an already-existing link in place and reconciles
+// its hooks: any rules the previous config set up (prev's PreDown/PostDown) are
+// torn down first, then the new config's PreUp/PostUp set up the current ones.
+// This lets an admin edit an interface — e.g. add or remove a tunnel's routing
+// rules — and have them applied and reverted without recreating the link (which
+// would drop its peers/clients). prev is nil on agent-startup re-apply, in which
+// case only the new up-hooks run. The teardown side is best-effort so a rule
+// that's already gone doesn't block the update.
+func InterfaceUpdate(prev *models.InterfaceConfig, cfg models.InterfaceConfig) error {
 	dev := Device(cfg.Interface)
+
+	if prev != nil {
+		if err := runHooks(cfg.Interface, "PreDown", prev.PreDown); err != nil {
+			log.Warn().Err(err).Str("interface", cfg.Interface).Msg("reconcile PreDown hook failed, continuing")
+		}
+		if err := runHooks(cfg.Interface, "PostDown", prev.PostDown); err != nil {
+			log.Warn().Err(err).Str("interface", cfg.Interface).Msg("reconcile PostDown hook failed, continuing")
+		}
+	}
 
 	if err := dev.SyncAddr(cfg.Address); err != nil {
 		return err
@@ -61,7 +81,14 @@ func InterfaceUpdate(cfg models.InterfaceConfig) error {
 			return err
 		}
 	}
-	return dev.Up()
+	if err := dev.Up(); err != nil {
+		return err
+	}
+
+	if err := runHooks(cfg.Interface, "PreUp", cfg.PreUp); err != nil {
+		return err
+	}
+	return runHooks(cfg.Interface, "PostUp", cfg.PostUp)
 }
 
 // InterfaceDelete tears cfg's interface down and removes the OS-level link

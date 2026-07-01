@@ -311,5 +311,15 @@ func (s *Service) DeleteServer(id string) error {
 	if err != nil {
 		return err
 	}
+	// Refuse if any of the server's interfaces is part of a tunnel — the
+	// tunnel's other end lives on a different server, so it must be removed
+	// first (mirrors the per-interface delete guard in DeleteInterface).
+	if ifaces, e := s.store.Servers().Interfaces(sID).List(); e == nil {
+		for i := range ifaces {
+			if ifaces[i].Tunnel != nil {
+				return fmt.Errorf("server has interface %q that is part of a tunnel; remove the tunnel first", ifaces[i].Interface)
+			}
+		}
+	}
 	return s.store.Servers().Delete(sID)
 }
