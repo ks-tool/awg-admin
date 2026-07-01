@@ -14,7 +14,7 @@
   limitations under the License.
  */
 
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
     CategoryScale,
@@ -30,8 +30,9 @@ import {Line} from 'react-chartjs-2';
 import {RefreshCw} from 'lucide-react';
 import {Modal} from '@/components/common/Modal';
 import {getServerMetricsHistory} from '@/services/servers';
-import {formatBytes} from '@/lib/utils';
-import type {SystemHistoryPoint} from '@/types';
+import {useAppStore} from '@/store';
+import {cn, formatBytes} from '@/lib/utils';
+import type {PeerHistoryPoint, SystemHistory, SystemHistoryPoint} from '@/types';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -87,17 +88,63 @@ const baseOptions: ChartOptions<'line'> = {
     },
 };
 
+// activitySeries turns a peer's cumulative rx+tx counters into per-interval
+// traffic (bytes moved between consecutive samples) — the actual "activity",
+// since the raw counters only ever climb. The first sample has no predecessor
+// to diff against, so the series starts one point in; a counter that went
+// backwards (interface recreated) is clamped to 0.
+function activitySeries(points: PeerHistoryPoint[]): number[] {
+    const out: number[] = [];
+    for (let i = 1; i < points.length; i++) {
+        const delta = (points[i].rx + points[i].tx) - (points[i - 1].rx + points[i - 1].tx);
+        out.push(delta > 0 ? delta : 0);
+    }
+    return out;
+}
+
+const shortKey = (pk: string) => (pk.length > 12 ? `${pk.slice(0, 10)}…` : pk);
+
+// Sparkline is a small inline area chart — deliberately narrow and short (not
+// a full Chart.js instance per row, which would be heavy for many peers) — for
+// showing a peer's activity trend beside its identifier in the table.
+function Sparkline({values, width = 160, height = 28}: {values: number[]; width?: number; height?: number}) {
+    if (values.length === 0) {
+        return <svg width={width} height={height} aria-hidden="true"/>;
+    }
+
+    const max = Math.max(...values, 1);
+    const n = values.length;
+    const pad = 2;
+    const h = height - pad * 2;
+    const xy = values.map((v, i) => {
+        const x = n > 1 ? (i / (n - 1)) * width : width / 2;
+        const y = pad + h - (v / max) * h;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+
+    return (
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="block">
+            <polygon points={`0,${height} ${xy.join(' ')} ${width},${height}`} fill="rgba(56,189,248,0.15)"/>
+            <polyline points={xy.join(' ')} fill="none" stroke="rgb(56,189,248)" strokeWidth={1.5} strokeLinejoin="round"/>
+        </svg>
+    );
+}
+
+type MetricsTab = 'system' | 'peers';
+
 export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
     const {t} = useTranslation();
-    const [points, setPoints] = useState<SystemHistoryPoint[] | null>(null);
+    const users = useAppStore((s) => s.users);
+    const [history, setHistory] = useState<SystemHistory | null>(null);
     const [loading, setLoading] = useState(true);
+    const [tab, setTab] = useState<MetricsTab>('system');
 
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
         getServerMetricsHistory(serverId).then((hist) => {
             if (!cancelled) {
-                setPoints(hist?.points ?? null);
+                setHistory(hist ?? null);
                 setLoading(false);
             }
         });
@@ -105,6 +152,37 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
             cancelled = true;
         };
     }, [serverId]);
+
+    const points = history?.points ?? null;
+
+    // Resolve a peer's public key to "<user>/<peer>" using the admin's own
+    // user→peer records (the agent only knows public keys). Unknown keys —
+    // e.g. a peer added directly on the box — fall back to a short key.
+    const peerLabels = useMemo(() => {
+        const m = new Map<string, string>();
+        for (const u of users) {
+            for (const p of u.peers ?? []) {
+                m.set(p.pk, `${u.name}/${p.name}`);
+            }
+        }
+        return m;
+    }, [users]);
+
+    const peerRows = useMemo(() => {
+        const rows = (history?.interfaces ?? []).flatMap((iface) =>
+            iface.peers.map((peer) => {
+                const activity = activitySeries(peer.points);
+                return {
+                    publicKey: peer.publicKey,
+                    label: peerLabels.get(peer.publicKey) ?? shortKey(peer.publicKey),
+                    activity,
+                    total: activity.reduce((sum, v) => sum + v, 0),
+                };
+            }),
+        );
+        // Busiest peers first, like Uptrace's GROUPS ordered by count.
+        return rows.sort((a, b) => b.total - a.total);
+    }, [history, peerLabels]);
 
     const labels = points?.map(timeLabel) ?? [];
 
@@ -184,6 +262,8 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         scales: {...baseOptions.scales, y: {...netBounds, ticks: {font: {size: 10}, callback: (v) => formatBytes(Number(v))}}},
     };
 
+    const tabs: MetricsTab[] = ['system', 'peers'];
+
     return (
         <Modal title={`${t('servers.metricsTitle')} — ${serverName}`} onClose={onClose} size="lg">
             {loading ? (
@@ -191,34 +271,88 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                     <RefreshCw className="w-5 h-5 mr-2 animate-spin"/>
                     {t('common.loading')}
                 </div>
-            ) : !points || points.length === 0 ? (
-                <div className="py-16 text-center text-sm text-zinc-600">{t('servers.metricsNoData')}</div>
             ) : (
-                <div className="space-y-3">
-                    <div>
-                        <h4 className="text-xs font-medium text-muted-foreground dark:text-zinc-400 mb-1">
-                            {t('servers.metricsCpu')}
-                        </h4>
-                        <div style={{height: CHART_HEIGHT}}>
-                            <Line data={cpuData} options={cpuOptions}/>
-                        </div>
+                <div>
+                    <div className="mb-3 flex gap-1 border-b border-border dark:border-white/10">
+                        {tabs.map((tk) => (
+                            <button
+                                key={tk}
+                                type="button"
+                                onClick={() => setTab(tk)}
+                                className={cn(
+                                    '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                                    tab === tk
+                                        ? 'border-sky-500 text-foreground dark:text-zinc-100'
+                                        : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
+                                )}
+                            >
+                                {t(tk === 'system' ? 'servers.metricsTabSystem' : 'servers.metricsTabPeers')}
+                            </button>
+                        ))}
                     </div>
-                    <div>
-                        <h4 className="text-xs font-medium text-muted-foreground dark:text-zinc-400 mb-1">
-                            {t('servers.metricsMemory')}
-                        </h4>
-                        <div style={{height: CHART_HEIGHT}}>
-                            <Line data={memData} options={memOptions}/>
-                        </div>
-                    </div>
-                    <div>
-                        <h4 className="text-xs font-medium text-muted-foreground dark:text-zinc-400 mb-1">
-                            {t('servers.metricsNetwork')}
-                        </h4>
-                        <div style={{height: CHART_HEIGHT}}>
-                            <Line data={netData} options={netOptions}/>
-                        </div>
-                    </div>
+
+                    {tab === 'system' ? (
+                        !points || points.length === 0 ? (
+                            <div className="py-16 text-center text-sm text-zinc-600">{t('servers.metricsNoData')}</div>
+                        ) : (
+                            <div className="space-y-3">
+                                <div>
+                                    <h4 className="text-xs font-medium text-muted-foreground dark:text-zinc-400 mb-1">
+                                        {t('servers.metricsCpu')}
+                                    </h4>
+                                    <div style={{height: CHART_HEIGHT}}>
+                                        <Line data={cpuData} options={cpuOptions}/>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-medium text-muted-foreground dark:text-zinc-400 mb-1">
+                                        {t('servers.metricsMemory')}
+                                    </h4>
+                                    <div style={{height: CHART_HEIGHT}}>
+                                        <Line data={memData} options={memOptions}/>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-medium text-muted-foreground dark:text-zinc-400 mb-1">
+                                        {t('servers.metricsNetwork')}
+                                    </h4>
+                                    <div style={{height: CHART_HEIGHT}}>
+                                        <Line data={netData} options={netOptions}/>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    ) : peerRows.length === 0 ? (
+                        <div className="py-16 text-center text-sm text-zinc-600">{t('servers.metricsPeersNoData')}</div>
+                    ) : (
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-border dark:border-white/10 text-xs uppercase tracking-wider text-zinc-500">
+                                    <th className="py-2 pr-3 text-left font-medium">{t('servers.metricsPeerColumn')}</th>
+                                    <th className="py-2 pl-3 text-right font-medium">{t('servers.metricsActivity')}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {peerRows.map((row) => (
+                                    <tr key={row.publicKey} className="border-b border-white/5 last:border-0">
+                                        <td className="py-2 pr-3 align-middle">
+                                            <span className="font-mono text-xs dark:text-zinc-300" title={row.publicKey}>
+                                                {row.label}
+                                            </span>
+                                        </td>
+                                        <td className="py-2 pl-3 align-middle">
+                                            <div className="flex items-center justify-end gap-3">
+                                                <span className="text-xs tabular-nums text-muted-foreground dark:text-zinc-500">
+                                                    {formatBytes(row.total)}
+                                                </span>
+                                                <Sparkline values={row.activity}/>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
             )}
         </Modal>
