@@ -19,6 +19,7 @@ package service
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	agentmodels "github.com/ks-tool/awg-admin/agent/models"
@@ -35,10 +36,17 @@ import (
 const defaultKeepaliveInterval = 10 // seconds
 
 type AddPeerInput struct {
-	Name              string
-	InterfaceID       uuid.UUID
-	AllowedIPs        []string
-	Endpoint          string
+	Name        string
+	InterfaceID uuid.UUID
+	AllowedIPs  []string
+	Endpoint    string
+	// PrivateKey, when non-empty, is the peer's private key to use as-is
+	// (base64 WireGuard key). Empty means generate a fresh one.
+	PrivateKey string
+	// PresharedKey, when non-empty and WithPresharedKey is false, is the PSK
+	// to use as-is (base64 WireGuard key). Ignored when WithPresharedKey is
+	// set (a fresh PSK is generated instead).
+	PresharedKey      string
 	WithPresharedKey  bool
 	KeepaliveInterval int // seconds; 0 = use defaultKeepaliveInterval
 }
@@ -85,9 +93,17 @@ func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) 
 		in.AllowedIPs = []string{fmt.Sprintf("%s/32", ip.String())}
 	}
 
-	privKey, err := agentmodels.GeneratePrivateKey()
-	if err != nil {
-		return nil, fmt.Errorf("generate key: %w", err)
+	var privKey agentmodels.Key
+	if k := strings.TrimSpace(in.PrivateKey); k != "" {
+		privKey, err = agentmodels.ParseKey(k)
+		if err != nil {
+			return nil, fmt.Errorf("parse private key: %w", err)
+		}
+	} else {
+		privKey, err = agentmodels.GeneratePrivateKey()
+		if err != nil {
+			return nil, fmt.Errorf("generate key: %w", err)
+		}
 	}
 
 	peer := &models.Peer{Name: in.Name, PrivateKey: privKey, InterfaceId: in.InterfaceID}
@@ -101,6 +117,12 @@ func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) 
 		psk, err := agentmodels.GenerateKey()
 		if err != nil {
 			return nil, fmt.Errorf("generate PSK: %w", err)
+		}
+		ifacePeer.PresharedKey = &psk
+	} else if k := strings.TrimSpace(in.PresharedKey); k != "" {
+		psk, err := agentmodels.ParseKey(k)
+		if err != nil {
+			return nil, fmt.Errorf("parse preshared key: %w", err)
 		}
 		ifacePeer.PresharedKey = &psk
 	}

@@ -25,6 +25,8 @@ export interface AddPeerInput {
   interfaceId: string;
   allowedIps: string[];
   endpoint?: string;
+  privateKey?: string;
+  presharedKey?: string;
   withPresharedKey?: boolean;
   keepaliveInterval?: number;
 }

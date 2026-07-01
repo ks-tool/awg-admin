@@ -139,7 +139,9 @@ const INITIAL_PEER_FORM = {
     interfaceId: '',
     allowedIps: '',
     endpoint: '',
-    withPresharedKey: false,
+    privateKey: '',
+    presharedKey: '',
+    withPresharedKey: true,
 };
 type PeerFormData = typeof INITIAL_PEER_FORM;
 
@@ -264,6 +266,18 @@ function AddPeerModal({
                     />
                 </FormField>
 
+                <FormField label={`${t('peers.privateKey')} (${t('common.optional')})`}>
+                    <input
+                        type="text"
+                        name="privateKey"
+                        value={form.privateKey}
+                        onChange={handleChange}
+                        placeholder={t('peers.privateKeyPlaceholder')}
+                        disabled={loading}
+                        className={inputs.primary}
+                    />
+                </FormField>
+
                 <FormField label="">
                     <label className="flex items-center cursor-pointer">
                         <input
@@ -279,6 +293,20 @@ function AddPeerModal({
                         </span>
                     </label>
                 </FormField>
+
+                {!form.withPresharedKey && (
+                    <FormField label={`${t('peers.presharedKey')} (${t('common.optional')})`}>
+                        <input
+                            type="text"
+                            name="presharedKey"
+                            value={form.presharedKey}
+                            onChange={handleChange}
+                            placeholder={t('peers.presharedKeyPlaceholder')}
+                            disabled={loading}
+                            className={inputs.primary}
+                        />
+                    </FormField>
+                )}
 
                 <div className="flex gap-3 pt-4">
                     <button
@@ -409,6 +437,8 @@ export default function UserDetail() {
                 interfaceId: form.interfaceId,
                 allowedIps: allowedIpsArray,
                 endpoint: form.endpoint || undefined,
+                privateKey: form.privateKey.trim() || undefined,
+                presharedKey: form.withPresharedKey ? undefined : form.presharedKey.trim() || undefined,
                 withPresharedKey: form.withPresharedKey,
             });
 

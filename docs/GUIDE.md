@@ -200,8 +200,12 @@ A **peer** is a single VPN client belonging to a user. *Add peer*:
 - **Allowed IPs** — the peer's addresses; leave blank to auto-assign a free
   host address on the interface's subnet.
 - **Endpoint** — optional, for peers that should be dialed at a fixed address.
+- **Private key** — optional; leave it blank to have a fresh key generated for
+  the peer. Fill it in only to import an existing key.
 - **Pre-shared key** — optional extra symmetric key for post-quantum-ish
-  hardening; tick the box to generate one.
+  hardening. The *Generate preshared key* box is ticked by default (a random key
+  is created for you). Untick it to reveal a field where you can paste your own
+  key — or leave that field empty to create the peer without a pre-shared key.
 
 For each peer you get:
 

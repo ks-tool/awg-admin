@@ -864,6 +864,8 @@ export namespace service {
 	    InterfaceID: number[];
 	    AllowedIPs: string[];
 	    Endpoint: string;
+	    PrivateKey: string;
+	    PresharedKey: string;
 	    WithPresharedKey: boolean;
 	    KeepaliveInterval: number;
 	
@@ -877,6 +879,8 @@ export namespace service {
 	        this.InterfaceID = source["InterfaceID"];
 	        this.AllowedIPs = source["AllowedIPs"];
 	        this.Endpoint = source["Endpoint"];
+	        this.PrivateKey = source["PrivateKey"];
+	        this.PresharedKey = source["PresharedKey"];
 	        this.WithPresharedKey = source["WithPresharedKey"];
 	        this.KeepaliveInterval = source["KeepaliveInterval"];
 	    }
