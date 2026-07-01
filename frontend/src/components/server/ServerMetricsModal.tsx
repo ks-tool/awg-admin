@@ -104,28 +104,59 @@ function activitySeries(points: PeerHistoryPoint[]): number[] {
 
 const shortKey = (pk: string) => (pk.length > 12 ? `${pk.slice(0, 10)}…` : pk);
 
-// Sparkline is a small inline area chart — deliberately narrow and short (not
-// a full Chart.js instance per row, which would be heavy for many peers) — for
-// showing a peer's activity trend beside its identifier in the table.
-function Sparkline({values, width = 160, height = 28}: {values: number[]; width?: number; height?: number}) {
+// The admin exposes a peer's public key base64-encoded (WireGuard's string
+// form, the `pk` field after sanitizePeer swaps the private key for the
+// public one), while the agent keys its per-peer history by the SAME public
+// key hex-encoded (hex.EncodeToString). Convert to hex so the two match.
+function b64ToHex(b64: string): string {
+    try {
+        const bin = atob(b64);
+        let hex = '';
+        for (let i = 0; i < bin.length; i++) hex += bin.charCodeAt(i).toString(16).padStart(2, '0');
+        return hex;
+    } catch {
+        return '';
+    }
+}
+
+// Sparkline is a small inline area chart that fills the width of its container
+// — deliberately short (not a full Chart.js instance per row, which would be
+// heavy for many peers) — for showing a peer's activity trend beside its
+// identifier. The SVG stretches horizontally to whatever room the row gives it
+// (preserveAspectRatio="none") while the stroke stays crisp (non-scaling).
+function Sparkline({values, height = 28}: {values: number[]; height?: number}) {
     if (values.length === 0) {
-        return <svg width={width} height={height} aria-hidden="true"/>;
+        return <div className="w-full" style={{height}} aria-hidden="true"/>;
     }
 
+    const vbWidth = 1000; // coordinate space; the SVG scales to the container's real width
     const max = Math.max(...values, 1);
     const n = values.length;
     const pad = 2;
     const h = height - pad * 2;
     const xy = values.map((v, i) => {
-        const x = n > 1 ? (i / (n - 1)) * width : width / 2;
+        const x = n > 1 ? (i / (n - 1)) * vbWidth : vbWidth / 2;
         const y = pad + h - (v / max) * h;
         return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
 
     return (
-        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="block">
-            <polygon points={`0,${height} ${xy.join(' ')} ${width},${height}`} fill="rgba(56,189,248,0.15)"/>
-            <polyline points={xy.join(' ')} fill="none" stroke="rgb(56,189,248)" strokeWidth={1.5} strokeLinejoin="round"/>
+        <svg
+            width="100%"
+            height={height}
+            viewBox={`0 0 ${vbWidth} ${height}`}
+            preserveAspectRatio="none"
+            className="block"
+        >
+            <polygon points={`0,${height} ${xy.join(' ')} ${vbWidth},${height}`} fill="rgba(56,189,248,0.15)"/>
+            <polyline
+                points={xy.join(' ')}
+                fill="none"
+                stroke="rgb(56,189,248)"
+                strokeWidth={1.5}
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+            />
         </svg>
     );
 }
@@ -162,7 +193,8 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         const m = new Map<string, string>();
         for (const u of users) {
             for (const p of u.peers ?? []) {
-                m.set(p.pk, `${u.name}/${p.name}`);
+                const hex = b64ToHex(p.pk);
+                if (hex) m.set(hex, `${u.name}/${p.name}`);
             }
         }
         return m;
@@ -328,24 +360,26 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-border dark:border-white/10 text-xs uppercase tracking-wider text-zinc-500">
-                                    <th className="py-2 pr-3 text-left font-medium">{t('servers.metricsPeerColumn')}</th>
-                                    <th className="py-2 pl-3 text-right font-medium">{t('servers.metricsActivity')}</th>
+                                    <th className="whitespace-nowrap py-2 pr-3 text-left font-medium">{t('servers.metricsPeerColumn')}</th>
+                                    <th className="w-full py-2 pl-3 text-left font-medium">{t('servers.metricsActivity')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {peerRows.map((row) => (
                                     <tr key={row.publicKey} className="border-b border-white/5 last:border-0">
-                                        <td className="py-2 pr-3 align-middle">
+                                        <td className="whitespace-nowrap py-2 pr-3 align-middle">
                                             <span className="font-mono text-xs dark:text-zinc-300" title={row.publicKey}>
                                                 {row.label}
                                             </span>
                                         </td>
-                                        <td className="py-2 pl-3 align-middle">
-                                            <div className="flex items-center justify-end gap-3">
-                                                <span className="text-xs tabular-nums text-muted-foreground dark:text-zinc-500">
+                                        <td className="w-full py-2 pl-3 align-middle">
+                                            <div className="flex items-center gap-3">
+                                                <span className="shrink-0 text-xs tabular-nums text-muted-foreground dark:text-zinc-500">
                                                     {formatBytes(row.total)}
                                                 </span>
-                                                <Sparkline values={row.activity}/>
+                                                <div className="min-w-0 flex-1">
+                                                    <Sparkline values={row.activity}/>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
