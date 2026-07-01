@@ -20,7 +20,10 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 
 	agentmodels "github.com/ks-tool/awg-admin/agent/models"
@@ -51,6 +54,64 @@ func (s *Service) agentClientFor(srv *models.Server) (*agentclient.Client, error
 	return agentclient.New(tunnel.Client, "http://"+srv.Agent.Address), nil
 }
 
+// callAgent runs an idempotent op against srv's agent, owning transport setup,
+// the request timeout, and — for tunnelled servers — a single retry after
+// force-reopening a tunnel that turned out to be dead.
+//
+// TunnelClient.Alive() reports liveness from an in-memory flag that a
+// background goroutine only flips once ssh.Client.Wait() returns, so it can
+// briefly lag a connection that has just died (agent host rebooted, sshd
+// restarted, network dropped the session). In that window agentClientFor →
+// Manager.Ensure hands back a tunnel whose very next request fails with a bare
+// io.EOF from the dead SSH mux — surfacing as e.g.
+// `PUT /interfaces: Put "http://127.0.0.1:8080/interfaces": EOF` — instead of
+// being transparently reconnected. Every mutation routed through here
+// (PUT/DELETE /interfaces, PATCH /metrics) is idempotent, so we recover by
+// forcing a fresh dial (Manager.Open, which closes the stale tunnel first) and
+// retrying once; by then Alive() has flipped and Ensure yields a live tunnel.
+//
+// mTLS clients aren't retried here: their only comparable failure is a stale
+// keep-alive connection, which net/http already retries on its own via the
+// Idempotency-Key set in agentclient.markIdempotent.
+func (s *Service) callAgent(srv *models.Server, op func(context.Context, *agentclient.Client) error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
+	defer cancel()
+
+	client, err := s.agentClientFor(srv)
+	if err != nil {
+		return err
+	}
+
+	err = op(ctx, client)
+	if err == nil || !srv.Agent.TLS.IsZero() || !tunnelDropped(err) {
+		return err
+	}
+
+	// The tunnel died underneath the request but Ensure didn't notice in
+	// time. Force a fresh one and try again; keep the original error if the
+	// reconnect itself fails so the caller sees the real push failure.
+	if reopenErr := s.tunnels.Open(srv.ID, srv.SSH, srv.Agent.Address); reopenErr != nil {
+		return err
+	}
+	client, reErr := s.agentClientFor(srv)
+	if reErr != nil {
+		return err
+	}
+	return op(ctx, client)
+}
+
+// tunnelDropped reports whether err looks like the SSH tunnel (or a pooled
+// connection carried over it) died underneath the request, as opposed to the
+// agent itself answering with an error — the cases callAgent can recover by
+// reconnecting. The wrapped io.EOF is what golang.org/x/crypto/ssh's mux
+// returns from a Dial once the connection is gone; net.ErrClosed covers a
+// connection torn down concurrently.
+func tunnelDropped(err error) bool {
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, net.ErrClosed)
+}
+
 // GetServerMetrics fetches the latest CPU/RAM/load/network/peer snapshot
 // from serverID's agent, for display on the frontend Dashboard.
 func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapshot, error) {
@@ -63,14 +124,16 @@ func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapsho
 		return nil, err
 	}
 
-	client, err := s.agentClientFor(srv)
+	var snap *agentmodels.MetricsSnapshot
+	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		var mErr error
+		snap, mErr = c.Metrics(ctx)
+		return mErr
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-	return client.Metrics(ctx)
+	return snap, nil
 }
 
 // GetServerMetricsHistory fetches every host-level sample still retained in
@@ -86,14 +149,16 @@ func (s *Service) GetServerMetricsHistory(serverID string) (*agentmodels.SystemH
 		return nil, err
 	}
 
-	client, err := s.agentClientFor(srv)
+	var history *agentmodels.SystemHistory
+	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		var mErr error
+		history, mErr = c.MetricsHistory(ctx)
+		return mErr
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-	return client.MetricsHistory(ctx)
+	return history, nil
 }
 
 // SetServerMonitoring enables/disables the agent's metrics collection for
@@ -110,14 +175,9 @@ func (s *Service) SetServerMonitoring(serverID string, enabled bool) (*models.Se
 		return nil, err
 	}
 
-	client, err := s.agentClientFor(srv)
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-	if err := client.SetMetricsEnabled(ctx, enabled); err != nil {
+	if err := s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		return c.SetMetricsEnabled(ctx, enabled)
+	}); err != nil {
 		return nil, err
 	}
 

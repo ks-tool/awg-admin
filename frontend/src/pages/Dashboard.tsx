@@ -44,7 +44,21 @@ export default function Dashboard() {
         let cancelled = false
         Promise.all(servers.map(async (server) => [server.id, await getServerMetrics(server.id)] as const))
             .then((entries) => {
-                if (!cancelled) setMetricsByServer(Object.fromEntries(entries))
+                if (cancelled) return
+                // Merge rather than replace the whole map: a single failing tick
+                // (agent momentarily unreachable — getServerMetrics swallows the
+                // error to null) must not blank a row that was already populated.
+                // Keep the last known snapshot on a transient miss; "—" is only
+                // shown until a server's very first successful fetch. Reachability
+                // is still signalled separately by the tunnel/online badge.
+                setMetricsByServer((prev) => {
+                    const next: Record<string, MetricsSnapshot | null> = { ...prev }
+                    for (const [id, snapshot] of entries) {
+                        if (snapshot !== null) next[id] = snapshot
+                        else if (!(id in next)) next[id] = null
+                    }
+                    return next
+                })
             })
         return () => {
             cancelled = true

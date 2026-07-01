@@ -42,15 +42,9 @@ func (s *Service) pushInterface(serverID uuid.UUID, iface *models.Interface) {
 		return
 	}
 
-	client, err := s.agentClientFor(srv)
-	if err != nil {
-		s.recordSyncResult(serverID, iface, err)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-	s.recordSyncResult(serverID, iface, client.Set(ctx, iface.InterfaceConfig))
+	s.recordSyncResult(serverID, iface, s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		return c.Set(ctx, iface.InterfaceConfig)
+	}))
 }
 
 func (s *Service) recordSyncResult(serverID uuid.UUID, iface *models.Interface, pushErr error) {
@@ -83,18 +77,10 @@ func (s *Service) pushInterfaceDelete(serverID uuid.UUID, ifaceName string) {
 		return
 	}
 
-	client, err := s.agentClientFor(srv)
-	if err != nil {
-		log.Warn().Err(err).Str("server_id", serverID.String()).Str("interface", ifaceName).
-			Msg("failed to delete interface on agent")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-
 	var notFound *agentclient.NotFoundError
-	if err := client.Delete(ctx, ifaceName); err != nil && !errors.As(err, &notFound) {
+	if err := s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		return c.Delete(ctx, ifaceName)
+	}); err != nil && !errors.As(err, &notFound) {
 		log.Warn().Err(err).Str("server_id", serverID.String()).Str("interface", ifaceName).
 			Msg("failed to delete interface on agent")
 	}
@@ -137,15 +123,9 @@ func (s *Service) syncMonitoringState(serverID uuid.UUID) {
 		return
 	}
 
-	client, err := s.agentClientFor(srv)
-	if err != nil {
-		log.Warn().Err(err).Str("server_id", serverID.String()).Msg("failed to re-apply monitoring state")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-	if err := client.SetMetricsEnabled(ctx, false); err != nil {
+	if err := s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		return c.SetMetricsEnabled(ctx, false)
+	}); err != nil {
 		log.Warn().Err(err).Str("server_id", serverID.String()).Msg("failed to re-apply monitoring state")
 	}
 }
