@@ -74,6 +74,10 @@ export function GetInterface(arg1, arg2) {
   return window['go']['main']['App']['GetInterface'](arg1, arg2);
 }
 
+export function GetLogs() {
+  return window['go']['main']['App']['GetLogs']();
+}
+
 export function GetPeer(arg1, arg2) {
   return window['go']['main']['App']['GetPeer'](arg1, arg2);
 }
@@ -136,6 +140,10 @@ export function ReconcileServer(arg1) {
 
 export function RefreshAgentSourceCache(arg1) {
   return window['go']['main']['App']['RefreshAgentSourceCache'](arg1);
+}
+
+export function SaveLogs() {
+  return window['go']['main']['App']['SaveLogs']();
 }
 
 export function SavePeerQRCode(arg1, arg2, arg3) {

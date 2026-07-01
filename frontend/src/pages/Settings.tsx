@@ -14,16 +14,20 @@
   limitations under the License.
  */
 
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import type {FormEvent} from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings as SettingsIcon } from 'lucide-react';
+import { Settings as SettingsIcon, ScrollText, Save, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { buttons, inputs } from '@/components/common/Modal';
+import { buttons, inputs, Modal } from '@/components/common/Modal';
 import { FormField } from '@/components/common/FormField';
+import { CopyButton } from '@/components/common/CopyButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { changeCredentials, getCurrentUser, setBasicAuthEnabled } from '@/services/auth';
+import { getLogs, saveLogs } from '@/services/logs';
+import { getCurrentApiMode } from '@/services/apiMode';
+import { cn } from '@/lib/utils';
 
 const LANGUAGES = [
     { code: 'en', label: 'English' },
@@ -158,9 +162,113 @@ function BasicAuthSection() {
     );
 }
 
+// Desktop-only: view and save the process's captured stdout logs. In http
+// mode there is no log buffer to read, so LogsSection is never rendered.
+function LogsModal({ onClose }: { onClose: () => void }) {
+    const { t } = useTranslation();
+    const [logs, setLogs] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const scrollRef = useRef<HTMLPreElement>(null);
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            setLogs(await getLogs());
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        load();
+    }, []);
+
+    // Jump to the newest lines whenever the content changes (they matter most).
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+    }, [logs]);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            if (await saveLogs()) toast.success(t('settings.logsSaved'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Modal title={t('settings.logsTitle')} onClose={onClose} size="lg">
+            <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-2">
+                    <button
+                        onClick={load}
+                        disabled={loading}
+                        className={cn('inline-flex items-center gap-2', buttons.secondary)}
+                    >
+                        <RefreshCw size={14} className={loading ? 'animate-spin' : undefined} />
+                        {t('common.refresh')}
+                    </button>
+                    {logs && <CopyButton value={logs} />}
+                </div>
+
+                {loading ? (
+                    <div className="py-12 text-center text-sm text-muted-foreground">{t('common.loading')}</div>
+                ) : logs ? (
+                    <pre
+                        ref={scrollRef}
+                        className="max-h-[55vh] overflow-auto whitespace-pre-wrap break-all rounded-lg border border-border bg-muted/40 p-3 font-mono text-xs text-foreground dark:border-white/10 dark:bg-black/30 dark:text-zinc-200"
+                    >
+                        {logs}
+                    </pre>
+                ) : (
+                    <div className="py-12 text-center text-sm text-muted-foreground">{t('settings.logsEmpty')}</div>
+                )}
+
+                <div className="flex items-center justify-end gap-2">
+                    <button
+                        onClick={handleSave}
+                        disabled={saving || !logs}
+                        className={cn('inline-flex items-center gap-2', buttons.primary)}
+                    >
+                        <Save size={16} />
+                        {t('settings.saveLogs')}
+                    </button>
+                    <button onClick={onClose} className={buttons.secondary}>{t('common.close')}</button>
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
+function LogsSection() {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+
+    return (
+        <div className="p-4 bg-card border border-border rounded-lg space-y-2">
+            <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">{t('settings.logs')}</span>
+                <button
+                    onClick={() => setOpen(true)}
+                    className={cn('inline-flex items-center gap-2', buttons.secondary)}
+                >
+                    <ScrollText size={16} />
+                    {t('settings.viewLogs')}
+                </button>
+            </div>
+            <p className="text-xs text-muted-foreground">{t('settings.logsHint')}</p>
+            {open && <LogsModal onClose={() => setOpen(false)} />}
+        </div>
+    );
+}
+
 export default function Settings() {
     const { t, i18n } = useTranslation();
     const { enabled: authEnabled } = useAuth();
+    const isDesktop = getCurrentApiMode() === 'bindings';
 
     const handleLanguageChange = (lang: string) => {
         i18n.changeLanguage(lang);
@@ -189,6 +297,7 @@ export default function Settings() {
                     </div>
                 </div>
 
+                {isDesktop && <LogsSection />}
                 {authEnabled && <BasicAuthSection />}
                 {authEnabled && <ChangeCredentialsSection />}
             </div>

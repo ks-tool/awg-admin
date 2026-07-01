@@ -519,6 +519,36 @@ export const bindingsClient = {
         }
     },
 
+    // Desktop-only: the captured stdout logs (NDJSON text) for the Settings
+    // "Logs" modal.
+    async getLogs(): Promise<ApiResponse<string>> {
+        try {
+            const data = await AppBindings.GetLogs();
+            return { data };
+        } catch (error) {
+            console.error('Bindings GetLogs failed:', error);
+            return {
+                data: '',
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
+    // Desktop-only: Go opens a native save dialog and writes the captured logs
+    // as a JSON file. Resolves true if a file was written, false if cancelled.
+    async saveLogs(): Promise<ApiResponse<boolean>> {
+        try {
+            const data = await AppBindings.SaveLogs();
+            return { data };
+        } catch (error) {
+            console.error('Bindings SaveLogs failed:', error);
+            return {
+                data: false,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async deletePeer(userId: string, publicKey: string): Promise<ApiResponse<models.User>> {
         try {
             const data = await AppBindings.DeletePeer(userId, publicKey);

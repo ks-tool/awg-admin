@@ -338,7 +338,14 @@
     "basicAuthHint": "Requires a username/password prompt for every request to this server, including the login page — an extra layer on top of the regular login, useful when exposing it directly without a reverse proxy. Uses the same admin account as the login above. Off by default.",
     "basicAuthEnabledMsg": "Basic auth enabled",
     "basicAuthDisabledMsg": "Basic auth disabled",
-    "basicAuthUpdateError": "Failed to update basic auth setting"
+    "basicAuthUpdateError": "Failed to update basic auth setting",
+    "logs": "Logs",
+    "logsHint": "View the application's log output and save it to a JSON file — useful for diagnostics and bug reports.",
+    "viewLogs": "View logs",
+    "logsTitle": "Application logs",
+    "logsEmpty": "No logs yet",
+    "saveLogs": "Save to file",
+    "logsSaved": "Logs saved"
   },
   "auth": {
     "signInTitle": "Amnezia Admin",

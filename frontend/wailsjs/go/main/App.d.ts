@@ -39,6 +39,8 @@ export function GetDeployStatus(arg1:string):Promise<models.DeployStatus>;
 
 export function GetInterface(arg1:string,arg2:string):Promise<models.Interface>;
 
+export function GetLogs():Promise<string>;
+
 export function GetPeer(arg1:string,arg2:string):Promise<models.Peer>;
 
 export function GetPeerConfig(arg1:string,arg2:string):Promise<string>;
@@ -70,6 +72,8 @@ export function Login(arg1:string,arg2:string):Promise<void>;
 export function ReconcileServer(arg1:string):Promise<service.ReconcileReport>;
 
 export function RefreshAgentSourceCache(arg1:string):Promise<void>;
+
+export function SaveLogs():Promise<boolean>;
 
 export function SavePeerQRCode(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 

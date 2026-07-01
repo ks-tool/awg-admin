@@ -17,12 +17,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/ks-tool/awg-admin/internal/logbuffer"
 	"github.com/ks-tool/awg-admin/internal/service"
 	"github.com/ks-tool/awg-admin/storage/boltdb"
 	"github.com/rs/zerolog/log"
@@ -32,11 +36,20 @@ import (
 // App struct
 type App struct {
 	*service.Service
-	ctx context.Context
+	ctx  context.Context
+	logs *logbuffer.Buffer
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	// Tee the global logger to stdout AND an in-memory buffer (surfaced by the
+	// Settings "Logs" modal). This lives here rather than in the web-server
+	// entry point because NewApp is only ever constructed by the Wails desktop
+	// main (cmd/awg-admin.go builds the Service directly), and log viewing is a
+	// desktop-only feature.
+	logs := logbuffer.New(2000)
+	log.Logger = log.Output(io.MultiWriter(os.Stdout, logs))
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
@@ -47,7 +60,7 @@ func NewApp() *App {
 		log.Fatal().Err(err).Send()
 	}
 
-	return &App{Service: service.New(db)}
+	return &App{Service: service.New(db), logs: logs}
 }
 
 // startup is called when the app starts. The context is saved
@@ -117,6 +130,67 @@ func (a *App) SavePeerQRCode(userID, key, defaultName string) (bool, error) {
 
 	if err := os.WriteFile(path, png, 0o644); err != nil {
 		return false, fmt.Errorf("write QR code: %w", err)
+	}
+	return true, nil
+}
+
+// GetLogs returns the captured stdout log entries as newline-joined NDJSON
+// (one zerolog JSON object per line, oldest first) for the Settings "Logs"
+// modal. Returns an empty string when the buffer was never wired up (i.e. not
+// running as the desktop app).
+func (a *App) GetLogs() string {
+	if a.logs == nil {
+		return ""
+	}
+	return strings.Join(a.logs.Lines(), "\n")
+}
+
+// SaveLogs writes the captured logs to a user-chosen file as a JSON array of
+// log objects — valid JSON (not NDJSON), so it opens in any JSON tooling.
+// Each buffered line is already a complete zerolog JSON object, so wrapping
+// them in "[ ... ]" with commas is all that is needed. Returns true if a file
+// was written, false if the dialog was cancelled. Desktop-only (a.ctx is set
+// in startup).
+func (a *App) SaveLogs() (bool, error) {
+	if a.ctx == nil || a.logs == nil {
+		return false, nil
+	}
+
+	lines := a.logs.Lines()
+	var buf bytes.Buffer
+	buf.WriteByte('[')
+	for i, line := range lines {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		buf.WriteString("\n  ")
+		buf.WriteString(line)
+	}
+	if len(lines) > 0 {
+		buf.WriteByte('\n')
+	}
+	buf.WriteString("]\n")
+
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save logs",
+		DefaultFilename: "awg-admin-logs.json",
+		Filters: []runtime.FileFilter{{
+			DisplayName: "JSON (*.json)",
+			Pattern:     "*.json",
+		}},
+	})
+	if err != nil {
+		return false, err
+	}
+	if path == "" {
+		return false, nil // dialog cancelled
+	}
+	if filepath.Ext(path) == "" {
+		path += ".json"
+	}
+
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		return false, fmt.Errorf("write logs: %w", err)
 	}
 	return true, nil
 }
