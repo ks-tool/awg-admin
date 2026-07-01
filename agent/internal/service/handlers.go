@@ -70,7 +70,16 @@ func (h *Handler) One(cfg models.InterfaceConfig) error {
 func (h *Handler) Delete(iface string) error {
 	logger := log.Debug().Str("interface", iface)
 	logger.Str("action", "delete").Send()
-	return InterfaceDelete(iface)
+
+	// Load the stored config so InterfaceDelete can run its PreDown/PostDown
+	// hooks — it's still present here; the API handler removes the JSON record
+	// only after this returns. If it's already gone (an orphan link, or a
+	// record removed by hand), tear the interface down anyway, hooklessly.
+	cfg, err := h.store.Get(iface)
+	if err != nil {
+		return InterfaceDelete(models.InterfaceConfig{Interface: iface})
+	}
+	return InterfaceDelete(*cfg)
 }
 
 // DetectOrphans returns the name of every live WireGuard interface on the

@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ks-tool/awg-admin/agent/models"
+
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
 )
@@ -105,7 +107,9 @@ func handleStorageEvent(event fsnotify.Event) {
 
 	log.Info().Str("interface", iface).Msg(
 		"interface config file removed while agent was running — tearing down the link")
-	if err := deleteInterface(iface); err != nil {
+	// The config file is already gone, so there are no PreDown/PostDown hooks
+	// to run — tear the link down by name only.
+	if err := deleteInterface(models.InterfaceConfig{Interface: iface}); err != nil {
 		log.Error().Err(err).Str("interface", iface).Msg("failed to delete interface after its config file disappeared")
 	}
 }

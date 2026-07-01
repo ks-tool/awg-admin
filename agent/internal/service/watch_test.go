@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ks-tool/awg-admin/agent/models"
+
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -47,8 +49,8 @@ func TestIfaceNameFromConfigPath(t *testing.T) {
 func TestHandleStorageEventOnlyActsOnRemoveOfConfigFiles(t *testing.T) {
 	var deleted []string
 	orig := deleteInterface
-	deleteInterface = func(iface string) error {
-		deleted = append(deleted, iface)
+	deleteInterface = func(cfg models.InterfaceConfig) error {
+		deleted = append(deleted, cfg.Interface)
 		return nil
 	}
 	defer func() { deleteInterface = orig }()
@@ -78,8 +80,8 @@ func TestWatchStorageReactsToRealFileRemoval(t *testing.T) {
 
 	done := make(chan string, 1)
 	orig := deleteInterface
-	deleteInterface = func(iface string) error {
-		done <- iface
+	deleteInterface = func(cfg models.InterfaceConfig) error {
+		done <- cfg.Interface
 		return nil
 	}
 	defer func() { deleteInterface = orig }()
