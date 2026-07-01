@@ -15,14 +15,16 @@
  */
 
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {createPortal} from 'react-dom';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {ChevronDown, RefreshCw, X} from 'lucide-react';
+import {ChevronDown, FolderOpen, RefreshCw, X} from 'lucide-react';
 import {FormField} from '@/components/common/FormField';
 import {buttons, inputs} from '@/components/common/Modal';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {cn} from '@/lib/utils';
-import {createAgentSource, deleteAgentSource, listAgentSources, refreshAgentSourceCache} from '@/services/agentSources';
+import {createAgentSource, deleteAgentSource, listAgentSources, refreshAgentSourceCache, selectAgentFile} from '@/services/agentSources';
+import {getCurrentApiMode} from '@/services/apiMode';
 import type {AgentSource} from '@/types';
 
 interface Props {
@@ -58,6 +60,42 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
     const [removeLoading, setRemoveLoading] = useState(false);
     const [refreshConfirmId, setRefreshConfirmId] = useState<string | null>(null);
     const rootRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+    // Fixed-viewport position of the open list. The list is portaled to
+    // document.body so it floats above the modal instead of being clipped by
+    // its overflow-y-auto — and, unlike an in-flow list, it doesn't change the
+    // modal's size when it opens.
+    const [menuPos, setMenuPos] = useState<{top: number; left: number; width: number; maxHeight: number} | null>(null);
+
+    const updateMenuPos = useCallback(() => {
+        const el = triggerRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const gap = 4;
+        const margin = 8;
+        const desired = 256; // matches the old max-h-64
+        const spaceBelow = window.innerHeight - r.bottom - margin;
+        const spaceAbove = r.top - margin;
+        // Prefer opening downward; flip up only when there's clearly more room.
+        const openUp = spaceBelow < desired && spaceAbove > spaceBelow;
+        const maxHeight = Math.max(0, Math.min(desired, openUp ? spaceAbove : spaceBelow));
+        setMenuPos({
+            top: openUp ? r.top - gap - maxHeight : r.bottom + gap,
+            left: r.left,
+            width: r.width,
+            maxHeight,
+        });
+    }, []);
+
+    // The native file picker only exists in the Wails desktop app; a browser
+    // can't resolve a real filesystem path, so the Browse button is desktop-only.
+    const isDesktop = getCurrentApiMode() === 'bindings';
+
+    const handleBrowse = async () => {
+        const picked = await selectAgentFile(t('servers.selectAgentBinaryDialog'));
+        if (picked) setPath(picked);
+    };
 
     const load = useCallback(async () => {
         const list = await listAgentSources();
@@ -70,14 +108,30 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
 
     useEffect(() => {
         if (!open) return;
+        // The list is portaled outside rootRef, so a click inside it must not
+        // count as "outside" — check the menu element too.
         const handleClickOutside = (e: MouseEvent) => {
-            if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
+            const target = e.target as Node;
+            if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+            setOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [open]);
+
+    // Keep the portaled list anchored to the trigger while it's open: recompute
+    // on open and whenever the viewport or any scroll container moves it.
+    useEffect(() => {
+        if (!open) return;
+        updateMenuPos();
+        const onReflow = () => updateMenuPos();
+        window.addEventListener('scroll', onReflow, true); // capture: catch scrolling in the modal body too
+        window.addEventListener('resize', onReflow);
+        return () => {
+            window.removeEventListener('scroll', onReflow, true);
+            window.removeEventListener('resize', onReflow);
+        };
+    }, [open, updateMenuPos]);
 
     const selected = sources.find(s => s.id === value);
 
@@ -166,6 +220,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
             <FormField label={t('servers.agentSource')}>
                 <div className="relative">
                     <button
+                        ref={triggerRef}
                         type="button"
                         onClick={() => setOpen(o => !o)}
                         disabled={disabled}
@@ -179,8 +234,22 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                         <ChevronDown size={14} className="shrink-0 ml-2"/>
                     </button>
 
-                    {open && (
-                        <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-border bg-card shadow-lg dark:border-white/10 dark:bg-zinc-900">
+                    {open && menuPos && createPortal(
+                        // Portaled to document.body and fixed-positioned so the list floats
+                        // above the modal — not clipped by its overflow-y-auto — without
+                        // resizing it; kept anchored to the trigger by updateMenuPos.
+                        <div
+                            ref={menuRef}
+                            style={{
+                                position: 'fixed',
+                                top: menuPos.top,
+                                left: menuPos.left,
+                                width: menuPos.width,
+                                maxHeight: menuPos.maxHeight,
+                                zIndex: 60,
+                            }}
+                            className="overflow-auto rounded-lg border border-border bg-card shadow-lg dark:border-white/10 dark:bg-zinc-900"
+                        >
                             {sources.map(s => (
                                 <div
                                     key={s.id}
@@ -220,7 +289,8 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                             >
                                 {t('servers.addNewSource')}
                             </div>
-                        </div>
+                        </div>,
+                        document.body,
                     )}
                 </div>
             </FormField>
@@ -287,14 +357,27 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                     ) : (
                         <FormField label={t('servers.sourcePath')}>
                             <div>
-                                <input
-                                    type="text"
-                                    value={path}
-                                    onChange={e => setPath(e.target.value)}
-                                    placeholder="/usr/local/bin/awg-agent"
-                                    disabled={saving}
-                                    className={cn(inputs.primary, 'font-mono text-xs')}
-                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={path}
+                                        onChange={e => setPath(e.target.value)}
+                                        placeholder="/usr/local/bin/awg-agent"
+                                        disabled={saving}
+                                        className={cn(inputs.primary, 'font-mono text-xs min-w-0 flex-1')}
+                                    />
+                                    {isDesktop && (
+                                        <button
+                                            type="button"
+                                            onClick={handleBrowse}
+                                            disabled={saving}
+                                            className={cn('shrink-0 inline-flex items-center gap-2', buttons.secondary)}
+                                        >
+                                            <FolderOpen size={16}/>
+                                            {t('common.browse')}
+                                        </button>
+                                    )}
+                                </div>
                                 <p className="text-xs text-muted-foreground dark:text-zinc-500 mt-2">
                                     {t('servers.sourcePathHint')}
                                 </p>

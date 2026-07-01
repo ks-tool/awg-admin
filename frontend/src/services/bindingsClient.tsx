@@ -549,6 +549,22 @@ export const bindingsClient = {
         }
     },
 
+    // Desktop-only: open a native file picker and return the chosen absolute
+    // path ('' if cancelled). No HTTP equivalent — a browser can't hand back a
+    // real filesystem path.
+    async selectFile(title: string): Promise<ApiResponse<string>> {
+        try {
+            const data = await AppBindings.SelectFile(title);
+            return { data };
+        } catch (error) {
+            console.error('Bindings SelectFile failed:', error);
+            return {
+                data: '',
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async deletePeer(userId: string, publicKey: string): Promise<ApiResponse<models.User>> {
         try {
             const data = await AppBindings.DeletePeer(userId, publicKey);

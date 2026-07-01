@@ -24,6 +24,25 @@ function getClient() {
     return getCurrentApiMode() === 'bindings' ? bindingsClient : null;
 }
 
+/**
+ * Opens a native file picker to choose the awg-agent binary on awg-admin's own
+ * filesystem, for a Path-based agent source. Desktop (Wails) only — a browser
+ * can't resolve a real filesystem path, so this returns null in http mode (the
+ * caller hides the button). Returns the chosen absolute path, or null if the
+ * dialog was cancelled or the picker is unavailable.
+ */
+export async function selectAgentFile(title: string): Promise<string | null> {
+    const client = getClient();
+    if (!client) return null;
+
+    const {data, error} = await client.selectFile(title);
+    if (error) {
+        reportError('select-agent-file', 'Failed to open file picker', error);
+        return null;
+    }
+    return data || null; // '' means the dialog was cancelled
+}
+
 /** Saved agent-binary deploy presets, shown in the "Deploy agent" modal. */
 export async function listAgentSources(): Promise<AgentSource[] | null> {
     const client = getClient();
