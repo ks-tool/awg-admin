@@ -233,6 +233,8 @@
     "showQrCode": "Показать QR-код",
     "deletePeerTooltip": "Удалить пир",
     "qrCodeTitle": "QR-код — {{name}}",
+    "downloadQrCode": "Сохранить в PNG",
+    "qrCodeSaved": "QR-код сохранён",
     "generateConfigError": "Не удалось сгенерировать конфигурацию пира",
     "configGenerateFailed": "Не удалось сгенерировать конфигурацию"
   },

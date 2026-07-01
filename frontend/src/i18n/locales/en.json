@@ -233,6 +233,8 @@
     "showQrCode": "Show QR code",
     "deletePeerTooltip": "Delete peer",
     "qrCodeTitle": "QR Code — {{name}}",
+    "downloadQrCode": "Save as PNG",
+    "qrCodeSaved": "QR code saved",
     "generateConfigError": "Failed to generate peer config",
     "configGenerateFailed": "Failed to generate config"
   },

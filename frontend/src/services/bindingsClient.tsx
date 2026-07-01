@@ -503,6 +503,22 @@ export const bindingsClient = {
         }
     },
 
+    // Desktop-only "save QR as PNG": Go opens a native save dialog and writes
+    // the file (the webview can't download a data: URL). Resolves true if a
+    // file was written, false if the dialog was cancelled.
+    async savePeerQRCode(userId: string, publicKey: string, defaultName: string): Promise<ApiResponse<boolean>> {
+        try {
+            const data = await AppBindings.SavePeerQRCode(userId, publicKey, defaultName);
+            return { data };
+        } catch (error) {
+            console.error('Bindings SavePeerQRCode failed:', error);
+            return {
+                data: false,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async deletePeer(userId: string, publicKey: string): Promise<ApiResponse<models.User>> {
         try {
             const data = await AppBindings.DeletePeer(userId, publicKey);

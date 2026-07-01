@@ -134,6 +134,44 @@ export async function getPeerQRCode(userId: string, publicKey: Key): Promise<str
 }
 
 /**
+ * Save a peer's QR code to a PNG file.
+ *
+ * The two API modes need different mechanisms: the Wails desktop webview
+ * can't download a `data:` URL (an `<a download>` is a silent no-op there),
+ * so desktop routes through a native save dialog in Go (`SavePeerQRCode`).
+ * The plain browser (web-server mode / dev) already holds the rendered PNG as
+ * `qrDataUrl`, so it just triggers an anchor download locally — no server
+ * round-trip. Returns true if a file was saved (or the download was
+ * triggered), false if the user cancelled the desktop save dialog or an error
+ * was reported.
+ */
+export async function savePeerQRCode(
+  userId: string,
+  publicKey: Key,
+  defaultName: string,
+  qrDataUrl: string,
+): Promise<boolean> {
+  const client = getClient();
+
+  if (client) {
+    const { data, error } = await client.savePeerQRCode(userId, publicKey, defaultName);
+    if (error) {
+      reportError(`save-peer-qrcode-${publicKey}`, `Failed to save QR code for peer ${publicKey}`, error);
+      return false;
+    }
+    return data;
+  }
+
+  const a = document.createElement('a');
+  a.href = qrDataUrl;
+  a.download = `${defaultName}.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  return true;
+}
+
+/**
  * Add a peer to a user
  */
 export async function addPeer(userId: string, input: AddPeerInput): Promise<boolean> {

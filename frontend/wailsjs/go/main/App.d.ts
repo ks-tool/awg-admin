@@ -71,6 +71,8 @@ export function ReconcileServer(arg1:string):Promise<service.ReconcileReport>;
 
 export function RefreshAgentSourceCache(arg1:string):Promise<void>;
 
+export function SavePeerQRCode(arg1:string,arg2:string,arg3:string):Promise<boolean>;
+
 export function SelectFile(arg1:string):Promise<string>;
 
 export function ServerTunnelOpen(arg1:string):Promise<boolean>;

@@ -138,6 +138,10 @@ export function RefreshAgentSourceCache(arg1) {
   return window['go']['main']['App']['RefreshAgentSourceCache'](arg1);
 }
 
+export function SavePeerQRCode(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SavePeerQRCode'](arg1, arg2, arg3);
+}
+
 export function SelectFile(arg1) {
   return window['go']['main']['App']['SelectFile'](arg1);
 }

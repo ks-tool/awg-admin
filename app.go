@@ -18,6 +18,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -68,4 +70,53 @@ func (a *App) SelectFile(title string) (string, error) {
 		return "", nil
 	}
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{Title: title})
+}
+
+// SavePeerQRCode renders key's client-config QR code (see GetPeerQRCode) as a
+// PNG and writes it to a file the user chooses via a native save dialog. This
+// is the desktop path for "save QR as PNG": the Wails webview can't download a
+// data: URL the way a browser tab can (an <a download> is a no-op there), so
+// the file is written here in Go instead. Returns true if a file was written,
+// false if the dialog was cancelled. Desktop-only (a.ctx is set in startup);
+// in any other mode it returns false so the frontend falls back to a browser
+// download.
+func (a *App) SavePeerQRCode(userID, key, defaultName string) (bool, error) {
+	if a.ctx == nil {
+		return false, nil
+	}
+
+	b64, err := a.GetPeerQRCode(userID, key)
+	if err != nil {
+		return false, err
+	}
+	png, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return false, fmt.Errorf("decode QR code: %w", err)
+	}
+
+	if defaultName == "" {
+		defaultName = "peer"
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save QR code",
+		DefaultFilename: defaultName + ".png",
+		Filters: []runtime.FileFilter{{
+			DisplayName: "PNG image (*.png)",
+			Pattern:     "*.png",
+		}},
+	})
+	if err != nil {
+		return false, err
+	}
+	if path == "" {
+		return false, nil // dialog cancelled
+	}
+	if filepath.Ext(path) == "" {
+		path += ".png"
+	}
+
+	if err := os.WriteFile(path, png, 0o644); err != nil {
+		return false, fmt.Errorf("write QR code: %w", err)
+	}
+	return true, nil
 }
