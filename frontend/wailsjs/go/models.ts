@@ -321,6 +321,108 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class PeerHistoryPoint {
+	    // Go type: time
+	    timestamp: any;
+	    rx: number;
+	    tx: number;
+	    // Go type: time
+	    lastHandshake: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new PeerHistoryPoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = this.convertValues(source["timestamp"], null);
+	        this.rx = source["rx"];
+	        this.tx = source["tx"];
+	        this.lastHandshake = this.convertValues(source["lastHandshake"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class PeerHistory {
+	    publicKey: string;
+	    points: PeerHistoryPoint[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PeerHistory(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.publicKey = source["publicKey"];
+	        this.points = this.convertValues(source["points"], PeerHistoryPoint);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class InterfaceHistory {
+	    interface: string;
+	    peers: PeerHistory[];
+	
+	    static createFrom(source: any = {}) {
+	        return new InterfaceHistory(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.interface = source["interface"];
+	        this.peers = this.convertValues(source["peers"], PeerHistory);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	export class PeerSnapshot {
 	    publicKey: string;
@@ -489,6 +591,8 @@ export namespace models {
 	    }
 	}
 	
+	
+	
 	export class SSHConfig {
 	    host: string;
 	    port?: number;
@@ -611,6 +715,7 @@ export namespace models {
 	}
 	export class SystemHistory {
 	    points: SystemHistoryPoint[];
+	    interfaces: InterfaceHistory[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SystemHistory(source);
@@ -619,6 +724,7 @@ export namespace models {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.points = this.convertValues(source["points"], SystemHistoryPoint);
+	        this.interfaces = this.convertValues(source["interfaces"], InterfaceHistory);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

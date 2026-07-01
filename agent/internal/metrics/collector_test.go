@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -88,6 +89,207 @@ func TestCollectorWriteAndQueryPeerMetrics(t *testing.T) {
 	}
 	if peer.LastHandshake.Unix() != handshake {
 		t.Errorf("LastHandshake = %v, want unix %d", peer.LastHandshake, handshake)
+	}
+}
+
+func TestCollectorPeersHistory(t *testing.T) {
+	c := newTestCollector(t)
+	base := time.Now()
+
+	const iface = "wg0"
+	// Two peers, three ticks each, written the way collectPeers does (rx/tx/
+	// handshake together per tick). "aaaa" < "bbbb" so the sorted output order
+	// is deterministic.
+	for i := 0; i < 3; i++ {
+		ts := base.Add(time.Duration(i) * time.Minute)
+		c.store.write(iface, "bbbb/rx", ts, float64(100+i))
+		c.store.write(iface, "bbbb/tx", ts, float64(200+i))
+		c.store.write(iface, "bbbb/handshake", ts, float64(ts.Unix()))
+		c.store.write(iface, "aaaa/rx", ts, float64(10+i))
+		c.store.write(iface, "aaaa/tx", ts, float64(20+i))
+		c.store.write(iface, "aaaa/handshake", ts, float64(ts.Unix()))
+	}
+
+	hist := c.SystemHistory()
+	if len(hist.Interfaces) != 1 {
+		t.Fatalf("Interfaces = %d, want 1: %+v", len(hist.Interfaces), hist.Interfaces)
+	}
+	ih := hist.Interfaces[0]
+	if ih.Interface != iface {
+		t.Errorf("Interface = %q, want %q", ih.Interface, iface)
+	}
+	if len(ih.Peers) != 2 {
+		t.Fatalf("Peers = %d, want 2: %+v", len(ih.Peers), ih.Peers)
+	}
+	// Sorted by public key: aaaa first.
+	if ih.Peers[0].PublicKey != "aaaa" || ih.Peers[1].PublicKey != "bbbb" {
+		t.Fatalf("peer order = [%q %q], want [aaaa bbbb]", ih.Peers[0].PublicKey, ih.Peers[1].PublicKey)
+	}
+
+	aaaa := ih.Peers[0]
+	if len(aaaa.Points) != 3 {
+		t.Fatalf("aaaa points = %d, want 3", len(aaaa.Points))
+	}
+	for i, p := range aaaa.Points {
+		if p.RxBytes != uint64(10+i) || p.TxBytes != uint64(20+i) {
+			t.Errorf("aaaa point %d = rx %d/tx %d, want rx %d/tx %d", i, p.RxBytes, p.TxBytes, 10+i, 20+i)
+		}
+		wantTS := base.Add(time.Duration(i) * time.Minute)
+		if p.LastHandshake.Unix() != wantTS.Unix() {
+			t.Errorf("aaaa point %d handshake = %d, want %d", i, p.LastHandshake.Unix(), wantTS.Unix())
+		}
+	}
+}
+
+// TestCollectorPeersHistoryExcludesSystem confirms the host-level "system"
+// database never leaks into the per-peer Interfaces of the history response.
+func TestCollectorPeersHistoryExcludesSystem(t *testing.T) {
+	c := newTestCollector(t)
+	c.store.write(systemDB, metricCPUPercent, time.Now(), 50)
+
+	if hist := c.SystemHistory(); len(hist.Interfaces) != 0 {
+		t.Fatalf("expected no interfaces, got %+v", hist.Interfaces)
+	}
+}
+
+func TestCollectorPersistRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), HistoryFilename)
+	now := time.Now()
+
+	c1 := NewCollector(nil, nil, time.Minute)
+	c1.SetPersistence(path)
+	c1.store.write(systemDB, metricCPUPercent, now, 55.5)
+	c1.store.write(systemDB, metricNetRxBytes, now, 1000)
+	c1.store.write("wg0", "peerkey/rx", now, 4242)
+	c1.store.write("wg0", "peerkey/tx", now, 2424)
+	c1.store.write("wg0", "peerkey/handshake", now, float64(now.Unix()))
+
+	if err := c1.SaveHistory(); err != nil {
+		t.Fatalf("SaveHistory: %v", err)
+	}
+
+	// A fresh collector must recover the samples from the file alone.
+	c2 := NewCollector(nil, nil, time.Minute)
+	c2.SetPersistence(path)
+	if err := c2.LoadHistory(); err != nil {
+		t.Fatalf("LoadHistory: %v", err)
+	}
+
+	snap := c2.Snapshot()
+	if snap.System.CPUPercent != 55.5 {
+		t.Errorf("CPUPercent = %v, want 55.5", snap.System.CPUPercent)
+	}
+	if len(snap.Interfaces) != 1 || len(snap.Interfaces[0].Peers) != 1 {
+		t.Fatalf("interfaces/peers = %+v", snap.Interfaces)
+	}
+	if peer := snap.Interfaces[0].Peers[0]; peer.RxBytes != 4242 || peer.TxBytes != 2424 {
+		t.Errorf("peer rx/tx = %d/%d, want 4242/2424", peer.RxBytes, peer.TxBytes)
+	}
+	if pts := c2.SystemHistory().Points; len(pts) != 1 {
+		t.Errorf("history points = %d, want 1", len(pts))
+	}
+	if ph := c2.SystemHistory().Interfaces; len(ph) != 1 || len(ph[0].Peers) != 1 || len(ph[0].Peers[0].Points) != 1 {
+		t.Errorf("per-peer history not restored: %+v", ph)
+	}
+}
+
+func TestCollectorLoadHistoryDropsStale(t *testing.T) {
+	path := filepath.Join(t.TempDir(), HistoryFilename)
+
+	c1 := NewCollector(nil, nil, time.Minute)
+	c1.SetPersistence(path)
+	stale := time.Now().Add(-retentionPeriod - time.Hour)
+	fresh := time.Now().Add(-time.Minute)
+	c1.store.write(systemDB, metricNetRxBytes, stale, 1)
+	c1.store.write(systemDB, metricNetRxBytes, fresh, 2)
+	if err := c1.SaveHistory(); err != nil {
+		t.Fatalf("SaveHistory: %v", err)
+	}
+
+	c2 := NewCollector(nil, nil, time.Minute)
+	c2.SetPersistence(path)
+	if err := c2.LoadHistory(); err != nil {
+		t.Fatalf("LoadHistory: %v", err)
+	}
+
+	series := c2.store.series(systemDB, metricNetRxBytes)
+	if len(series) != 1 {
+		t.Fatalf("series = %d, want 1 (stale sample past retention dropped): %+v", len(series), series)
+	}
+	if series[0].value != 2 {
+		t.Errorf("kept value = %v, want 2 (the fresh sample)", series[0].value)
+	}
+}
+
+func TestCollectorPersistenceDisabledIsNoOp(t *testing.T) {
+	c := newTestCollector(t) // no SetPersistence
+	if err := c.SaveHistory(); err != nil {
+		t.Errorf("SaveHistory with persistence off: %v", err)
+	}
+	if err := c.LoadHistory(); err != nil {
+		t.Errorf("LoadHistory with persistence off: %v", err)
+	}
+}
+
+func TestCollectorLoadHistoryMissingFileOK(t *testing.T) {
+	c := newTestCollector(t)
+	c.SetPersistence(filepath.Join(t.TempDir(), "does-not-exist"))
+	if err := c.LoadHistory(); err != nil {
+		t.Errorf("LoadHistory on missing file should be a no-op, got: %v", err)
+	}
+}
+
+func TestSaveHistoryEvictsDeadPeers(t *testing.T) {
+	c := newTestCollector(t)
+	c.SetPersistence(filepath.Join(t.TempDir(), HistoryFilename))
+
+	stale := time.Now().Add(-retentionPeriod - time.Hour) // a removed peer's last sample
+	fresh := time.Now().Add(-time.Minute)
+
+	c.store.write(systemDB, metricCPUPercent, fresh, 42)
+	c.store.write("wg0", "livepeer/rx", fresh, 100) // still being sampled
+	c.store.write("wg0", "deadpeer/rx", stale, 1)   // removed peer, only stale
+
+	// SaveHistory prunes past the retention window before snapshotting.
+	if err := c.SaveHistory(); err != nil {
+		t.Fatalf("SaveHistory: %v", err)
+	}
+
+	if _, ok := c.store.last("wg0", "deadpeer/rx"); ok {
+		t.Errorf("dead peer series was not evicted")
+	}
+	if _, ok := c.store.last("wg0", "livepeer/rx"); !ok {
+		t.Errorf("live peer series was wrongly evicted")
+	}
+	if _, ok := c.store.last(systemDB, metricCPUPercent); !ok {
+		t.Errorf("system series was wrongly evicted")
+	}
+}
+
+func TestStorePruneRemovesEmptyDatabase(t *testing.T) {
+	c := newTestCollector(t)
+	c.store.write("wg9", "deadpeer/rx", time.Now().Add(-retentionPeriod-time.Hour), 1)
+
+	c.store.prune(time.Now().Add(-retentionPeriod))
+
+	for _, db := range c.store.databases() {
+		if db == "wg9" {
+			t.Fatalf("database with only dead peers was not removed: %v", c.store.databases())
+		}
+	}
+}
+
+func TestStorePruneDropsStaleKeepsFresh(t *testing.T) {
+	c := newTestCollector(t)
+	stale := time.Now().Add(-retentionPeriod - time.Hour)
+	fresh := time.Now().Add(-time.Minute)
+	c.store.write(systemDB, metricNetRxBytes, stale, 1)
+	c.store.write(systemDB, metricNetRxBytes, fresh, 2)
+
+	c.store.prune(time.Now().Add(-retentionPeriod))
+
+	if series := c.store.series(systemDB, metricNetRxBytes); len(series) != 1 || series[0].value != 2 {
+		t.Fatalf("series = %+v, want a single fresh sample (value 2)", series)
 	}
 }
 

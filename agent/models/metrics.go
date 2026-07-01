@@ -79,10 +79,41 @@ type SystemHistoryPoint struct {
 	NetTxBytes    uint64    `json:"netTxBytes"`
 }
 
-// SystemHistory is the full GET /metrics/history response: every
-// host-level sample still retained in the agent's in-memory ring buffer
-// (up to 48h, oldest first — see agent/internal/metrics's package doc
-// comment), for rendering charts instead of just the latest value.
+// SystemHistory is the full GET /metrics/history response: every host-level
+// sample (Points) plus every per-peer sample (Interfaces) still retained in
+// the agent's in-memory ring buffers (up to 48h, oldest first — see
+// agent/internal/metrics's package doc comment), for rendering charts instead
+// of just the latest value. History is served only through this one endpoint;
+// the per-peer series ride along here rather than on a separate route. Points
+// stays the top-level field it always was, so existing consumers that only
+// read host history are unaffected.
 type SystemHistory struct {
-	Points []SystemHistoryPoint `json:"points"`
+	Points     []SystemHistoryPoint `json:"points"`
+	Interfaces []InterfaceHistory   `json:"interfaces"`
+}
+
+// PeerHistoryPoint is one retained sample for a single peer. Unlike
+// SystemHistoryPoint's per-interval network deltas, RxBytes/TxBytes are the
+// cumulative byte counters WireGuard reports for the peer (same as
+// PeerSnapshot); differencing consecutive points yields per-interval traffic.
+// LastHandshake is the peer's last successful handshake at that sample (zero
+// value if it had never completed one yet).
+type PeerHistoryPoint struct {
+	Timestamp     time.Time `json:"timestamp"`
+	RxBytes       uint64    `json:"rx"`
+	TxBytes       uint64    `json:"tx"`
+	LastHandshake time.Time `json:"lastHandshake"`
+}
+
+// PeerHistory is every retained sample for one peer, oldest first.
+type PeerHistory struct {
+	PublicKey string             `json:"publicKey"`
+	Points    []PeerHistoryPoint `json:"points"`
+}
+
+// InterfaceHistory groups per-peer history under their interface name, as
+// carried in SystemHistory.Interfaces.
+type InterfaceHistory struct {
+	Interface string        `json:"interface"`
+	Peers     []PeerHistory `json:"peers"`
 }

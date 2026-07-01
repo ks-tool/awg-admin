@@ -30,10 +30,10 @@ type point struct {
 // ringBuffer holds up to cap samples for one metric, oldest overwritten
 // first — that's the entire retention mechanism: once full, writing a new
 // sample implicitly drops the oldest one, so the buffer never holds more
-// than cap*interval worth of history. Not persisted to disk: an agent
-// restart starts history over, which is an acceptable trade-off for
-// monitoring data sampled every 30-60s (see store_test.go and the package
-// doc comment for the full reasoning).
+// than cap*interval worth of history. The buffers live in memory; the
+// collector snapshots the whole store to a single JSON file so history
+// survives an agent restart (see Collector.SaveHistory / export / restore),
+// rather than running a full on-disk TSDB (see the package doc comment).
 type ringBuffer struct {
 	mu   sync.Mutex
 	buf  []point
@@ -79,6 +79,33 @@ func (r *ringBuffer) series() []point {
 		out[i] = r.buf[(start+i)%len(r.buf)]
 	}
 	return out
+}
+
+// pruneBefore drops every sample older than cutoff and reports whether the
+// buffer is now empty (its newest sample was itself older than cutoff — e.g. a
+// peer that was removed and has had no new samples for the whole retention
+// window). Called only when snapshotting (see store.prune), so the rebuild
+// cost is irrelevant.
+func (r *ringBuffer) pruneBefore(cutoff time.Time) (empty bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.size == 0 {
+		return true
+	}
+	kept := make([]point, 0, r.size)
+	start := (r.next - r.size + len(r.buf)) % len(r.buf)
+	for i := 0; i < r.size; i++ {
+		if p := r.buf[(start+i)%len(r.buf)]; !p.ts.Before(cutoff) {
+			kept = append(kept, p)
+		}
+	}
+	for i := range r.buf {
+		r.buf[i] = point{}
+	}
+	copy(r.buf, kept)
+	r.size = len(kept)
+	r.next = r.size % len(r.buf)
+	return r.size == 0
 }
 
 // store is a registry of ring buffers grouped by database (the "system"
@@ -175,4 +202,77 @@ func (s *store) metricNames(db string) []string {
 		out = append(out, name)
 	}
 	return out
+}
+
+// persistedPoint / persistedStore are the on-disk JSON shape of the whole
+// store, used to carry the ring buffers across an agent restart (see
+// Collector.SaveHistory / LoadHistory).
+type persistedPoint struct {
+	TS    time.Time `json:"ts"`
+	Value float64   `json:"value"`
+}
+
+type persistedStore struct {
+	DBs map[string]map[string][]persistedPoint `json:"dbs"`
+}
+
+// export snapshots every retained sample, grouped by database then metric
+// (oldest first). It goes through the same locked accessors reads use, so it
+// never holds a lock across the whole store; a sample written concurrently may
+// or may not be included, which is fine for monitoring data.
+func (s *store) export() persistedStore {
+	out := persistedStore{DBs: make(map[string]map[string][]persistedPoint)}
+	for _, db := range s.databases() {
+		metrics := make(map[string][]persistedPoint)
+		for _, name := range s.metricNames(db) {
+			series := s.series(db, name)
+			pts := make([]persistedPoint, len(series))
+			for i, p := range series {
+				pts[i] = persistedPoint{TS: p.ts, Value: p.value}
+			}
+			metrics[name] = pts
+		}
+		if len(metrics) > 0 {
+			out.DBs[db] = metrics
+		}
+	}
+	return out
+}
+
+// restore replays persisted samples back into the ring buffers, skipping any
+// older than cutoff (so a long-stopped agent doesn't reload history past the
+// retention window). Samples go through the normal oldest-first write path, so
+// an over-capacity series keeps only its newest entries.
+func (s *store) restore(data persistedStore, cutoff time.Time) {
+	for db, metrics := range data.DBs {
+		for name, pts := range metrics {
+			for _, p := range pts {
+				if p.TS.Before(cutoff) {
+					continue
+				}
+				s.write(db, name, p.TS, p.Value)
+			}
+		}
+	}
+}
+
+// prune drops samples older than cutoff and removes any metric (and any then
+// empty database) whose buffer is left empty. This is what actually evicts the
+// series of a removed peer — the collector stops writing to it, so within one
+// retention window its newest sample ages past cutoff and it's dropped here,
+// instead of lingering in memory (and every snapshot) forever. Run from
+// Collector.SaveHistory before each snapshot.
+func (s *store) prune(cutoff time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for db, metrics := range s.dbs {
+		for name, rb := range metrics {
+			if rb.pruneBefore(cutoff) {
+				delete(metrics, name)
+			}
+		}
+		if len(metrics) == 0 {
+			delete(s.dbs, db)
+		}
+	}
 }

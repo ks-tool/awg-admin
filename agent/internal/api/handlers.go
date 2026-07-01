@@ -44,7 +44,7 @@ func New(store storage.Storage, collector *metrics.Collector, mws ...mux.Middlew
 
 	// GET         /info				=> info
 	// GET         /metrics			=> metrics snapshot (CPU/RAM/LA/network, peer rx/tx/handshake)
-	// GET         /metrics/history	=> retained system metrics history (up to 48h)
+	// GET         /metrics/history	=> retained system + per-peer metrics history (up to 48h)
 	// PATCH       /metrics			=> enable/disable metrics collection
 
 	awg, err := wgctrl.New()

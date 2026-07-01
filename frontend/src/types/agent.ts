@@ -86,13 +86,47 @@ export interface SystemHistoryPoint {
   netTxBytes: number /* uint64 */;
 }
 /**
- * SystemHistory is the full GET /metrics/history response: every
- * host-level sample still retained in the agent's in-memory ring buffer
- * (up to 48h, oldest first — see agent/internal/metrics's package doc
- * comment), for rendering charts instead of just the latest value.
+ * SystemHistory is the full GET /metrics/history response: every host-level
+ * sample (Points) plus every per-peer sample (Interfaces) still retained in
+ * the agent's in-memory ring buffers (up to 48h, oldest first — see
+ * agent/internal/metrics's package doc comment), for rendering charts instead
+ * of just the latest value. History is served only through this one endpoint;
+ * the per-peer series ride along here rather than on a separate route. Points
+ * stays the top-level field it always was, so existing consumers that only
+ * read host history are unaffected.
  */
 export interface SystemHistory {
   points: SystemHistoryPoint[];
+  interfaces: InterfaceHistory[];
+}
+/**
+ * PeerHistoryPoint is one retained sample for a single peer. Unlike
+ * SystemHistoryPoint's per-interval network deltas, RxBytes/TxBytes are the
+ * cumulative byte counters WireGuard reports for the peer (same as
+ * PeerSnapshot); differencing consecutive points yields per-interval traffic.
+ * LastHandshake is the peer's last successful handshake at that sample (zero
+ * value if it had never completed one yet).
+ */
+export interface PeerHistoryPoint {
+  timestamp: number /* time.Time */;
+  rx: number /* uint64 */;
+  tx: number /* uint64 */;
+  lastHandshake: number /* time.Time */;
+}
+/**
+ * PeerHistory is every retained sample for one peer, oldest first.
+ */
+export interface PeerHistory {
+  publicKey: string;
+  points: PeerHistoryPoint[];
+}
+/**
+ * InterfaceHistory groups per-peer history under their interface name, as
+ * carried in SystemHistory.Interfaces.
+ */
+export interface InterfaceHistory {
+  interface: string;
+  peers: PeerHistory[];
 }
 
 //////////

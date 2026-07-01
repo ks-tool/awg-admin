@@ -121,9 +121,20 @@ func main() {
 	defer func() { _ = metricsAwg.Close() }()
 
 	collector := metrics.NewCollector(metricsAwg, store, cfg.MetricsInterval)
+	// Persist metrics history under the agent's data dir so charts survive a
+	// restart (the file has no .json extension, so the interface-config storage
+	// and its watcher ignore it — see metrics.HistoryFilename).
+	collector.SetPersistence(filepath.Join(cfg.DB, metrics.HistoryFilename))
+	if err := collector.LoadHistory(); err != nil {
+		log.Warn().Err(err).Msg("failed to load persisted metrics history")
+	}
 	metricsCtx, stopMetrics := context.WithCancel(context.Background())
 	defer stopMetrics()
-	go collector.Run(metricsCtx)
+	metricsDone := make(chan struct{})
+	go func() {
+		collector.Run(metricsCtx)
+		close(metricsDone)
+	}()
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: api.New(store, collector, middleware.RequestID, middleware.Logging)}
 
@@ -150,6 +161,16 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	<-sig
+
+	// Stop sampling and let Run flush the final metrics-history checkpoint to
+	// disk before tearing the server down. Bounded so a stuck filesystem can't
+	// hang shutdown.
+	stopMetrics()
+	select {
+	case <-metricsDone:
+	case <-time.After(5 * time.Second):
+		log.Warn().Msg("timed out waiting for metrics history to flush")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

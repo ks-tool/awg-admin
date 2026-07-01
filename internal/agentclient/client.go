@@ -177,9 +177,11 @@ func (c *Client) Metrics(ctx context.Context) (*agentmodels.MetricsSnapshot, err
 	return &snap, nil
 }
 
-// MetricsHistory fetches every host-level sample still retained in the
-// agent's in-memory ring buffer (GET /metrics/history) — up to 48h, oldest
-// first — for charting instead of just the latest value (see Metrics).
+// MetricsHistory fetches every host-level sample plus every per-peer sample
+// still retained in the agent's in-memory ring buffers (GET /metrics/history)
+// — up to 48h, oldest first — for charting instead of just the latest value
+// (see Metrics). Per-peer series arrive in SystemHistory.Interfaces; history
+// is served only through this one endpoint.
 func (c *Client) MetricsHistory(ctx context.Context) (*agentmodels.SystemHistory, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/metrics/history", nil)
 	if err != nil {

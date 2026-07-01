@@ -136,9 +136,11 @@ func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapsho
 	return snap, nil
 }
 
-// GetServerMetricsHistory fetches every host-level sample still retained in
-// serverID's agent's in-memory ring buffer (up to 48h), for the Dashboard's
-// per-server metrics chart modal.
+// GetServerMetricsHistory fetches every host-level sample plus every per-peer
+// sample still retained in serverID's agent's in-memory ring buffers (up to
+// 48h), for the Dashboard's per-server metrics chart modal. Per-peer series
+// come back in SystemHistory.Interfaces (the agent serves all history through
+// its single /metrics/history endpoint).
 func (s *Service) GetServerMetricsHistory(serverID string) (*agentmodels.SystemHistory, error) {
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
