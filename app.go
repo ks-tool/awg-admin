@@ -29,6 +29,7 @@ import (
 	"github.com/ks-tool/awg-admin/internal/logbuffer"
 	"github.com/ks-tool/awg-admin/internal/service"
 	"github.com/ks-tool/awg-admin/storage/boltdb"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -49,6 +50,11 @@ func NewApp() *App {
 	// desktop-only feature.
 	logs := logbuffer.New(2000)
 	log.Logger = log.Output(io.MultiWriter(os.Stdout, logs))
+
+	// Debug is an opt-in mode toggled from the Settings "Logs" modal
+	// (SetDebugLogging); default to info so the captured log isn't drowned in
+	// per-request debug noise until an admin turns it on to troubleshoot.
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -143,6 +149,24 @@ func (a *App) GetLogs() string {
 		return ""
 	}
 	return strings.Join(a.logs.Lines(), "\n")
+}
+
+// DebugLoggingEnabled reports whether debug-level entries are currently being
+// captured (the "Debug" checkbox state in the Settings "Logs" modal).
+func (a *App) DebugLoggingEnabled() bool {
+	return zerolog.GlobalLevel() <= zerolog.DebugLevel
+}
+
+// SetDebugLogging turns debug-level log capture on or off at runtime for the
+// Settings "Logs" modal. When off (the default) debug entries are dropped by
+// the global zerolog level filter and never reach stdout or the buffer;
+// turning it on surfaces them for troubleshooting. Desktop-only.
+func (a *App) SetDebugLogging(enabled bool) {
+	if enabled {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
 }
 
 // SaveLogs writes the captured logs to a user-chosen file as a JSON array of

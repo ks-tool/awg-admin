@@ -366,7 +366,9 @@
     "logsTitle": "Application logs",
     "logsEmpty": "No logs yet",
     "saveLogs": "Save to file",
-    "logsSaved": "Logs saved"
+    "logsSaved": "Logs saved",
+    "debugLogging": "Debug mode",
+    "debugLoggingHint": "Capture debug-level entries. Off by default; enable to gather more detail before reproducing an issue, then refresh."
   },
   "auth": {
     "signInTitle": "Amnezia Admin",

@@ -29,14 +29,20 @@ import (
 )
 
 // TestTunnelDropped pins down which failures callAgent treats as a dead tunnel
-// worth reconnecting for. The retryable case mirrors the exact shape of the
-// real reported error: agentclient wraps the http.Client error (a *url.Error
-// whose inner error is io.EOF from the dead SSH mux) with fmt.Errorf("%w").
+// worth reconnecting for. The retryable cases mirror the exact shape of the
+// real reported errors: agentclient wraps the http.Client error (a *url.Error
+// whose inner error is io.EOF from the dead SSH mux, or context.DeadlineExceeded
+// when the request hung on a silently-dead socket) with fmt.Errorf("%w").
 func TestTunnelDropped(t *testing.T) {
 	reportedEOF := fmt.Errorf("PUT /interfaces: %w", &url.Error{
 		Op:  "Put",
 		URL: "http://127.0.0.1:8080/interfaces",
 		Err: io.EOF,
+	})
+	reportedTimeout := fmt.Errorf("GET /interfaces/: %w", &url.Error{
+		Op:  "Get",
+		URL: "http://127.0.0.1:8080/interfaces/",
+		Err: context.DeadlineExceeded,
 	})
 
 	retryable := []struct {
@@ -47,6 +53,8 @@ func TestTunnelDropped(t *testing.T) {
 		{"bare EOF", io.EOF},
 		{"unexpected EOF", io.ErrUnexpectedEOF},
 		{"closed conn", fmt.Errorf("dial: %w", net.ErrClosed)},
+		{"reported wrapped deadline", reportedTimeout},
+		{"bare context deadline", fmt.Errorf("PUT /interfaces: %w", context.DeadlineExceeded)},
 	}
 	for _, tc := range retryable {
 		if !tunnelDropped(tc.err) {
@@ -61,7 +69,6 @@ func TestTunnelDropped(t *testing.T) {
 		{"nil", nil},
 		{"agent 404", &agentclient.NotFoundError{Interface: "awg1"}},
 		{"agent 4xx/5xx body", errors.New("agent returned 400 Bad Request: bad config")},
-		{"context deadline", fmt.Errorf("PUT /interfaces: %w", context.DeadlineExceeded)},
 	}
 	for _, tc := range notRetryable {
 		if tunnelDropped(tc.err) {

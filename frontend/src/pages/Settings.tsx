@@ -25,7 +25,7 @@ import { FormField } from '@/components/common/FormField';
 import { CopyButton } from '@/components/common/CopyButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { changeCredentials, getCurrentUser, setBasicAuthEnabled } from '@/services/auth';
-import { getLogs, saveLogs } from '@/services/logs';
+import { getLogs, saveLogs, debugLoggingEnabled, setDebugLogging } from '@/services/logs';
 import { getCurrentApiMode } from '@/services/apiMode';
 import { cn } from '@/lib/utils';
 
@@ -169,6 +169,7 @@ function LogsModal({ onClose }: { onClose: () => void }) {
     const [logs, setLogs] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [debug, setDebug] = useState(false);
     const scrollRef = useRef<HTMLPreElement>(null);
 
     const load = async () => {
@@ -182,7 +183,15 @@ function LogsModal({ onClose }: { onClose: () => void }) {
 
     useEffect(() => {
         load();
+        void debugLoggingEnabled().then(setDebug);
     }, []);
+
+    const handleToggleDebug = async (enabled: boolean) => {
+        setDebug(enabled); // optimistic
+        if (!(await setDebugLogging(enabled))) {
+            setDebug(!enabled); // revert on failure (reportError already toasted)
+        }
+    };
 
     // Jump to the newest lines whenever the content changes (they matter most).
     useEffect(() => {
@@ -211,8 +220,20 @@ function LogsModal({ onClose }: { onClose: () => void }) {
                         <RefreshCw size={14} className={loading ? 'animate-spin' : undefined} />
                         {t('common.refresh')}
                     </button>
-                    {logs && <CopyButton value={logs} />}
+                    <div className="flex items-center gap-3">
+                        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                            <input
+                                type="checkbox"
+                                checked={debug}
+                                onChange={(e) => handleToggleDebug(e.target.checked)}
+                                className="h-4 w-4 rounded border-input accent-primary"
+                            />
+                            {t('settings.debugLogging')}
+                        </label>
+                        {logs && <CopyButton value={logs} />}
+                    </div>
                 </div>
+                <p className="text-xs text-muted-foreground">{t('settings.debugLoggingHint')}</p>
 
                 {loading ? (
                     <div className="py-12 text-center text-sm text-muted-foreground">{t('common.loading')}</div>

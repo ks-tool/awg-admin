@@ -43,6 +43,38 @@ export async function getLogs(): Promise<string> {
 }
 
 /**
+ * Report whether debug-level log capture is currently enabled. Resolves false
+ * in http mode (no log buffer / level control exists there).
+ */
+export async function debugLoggingEnabled(): Promise<boolean> {
+  const client = bindings();
+  if (!client) return false;
+
+  const { data, error } = await client.debugLoggingEnabled();
+  if (error) {
+    reportError('debug-logging-state', 'Failed to read debug logging state', error);
+    return false;
+  }
+  return data;
+}
+
+/**
+ * Turn debug-level log capture on or off at runtime. Returns true on success.
+ * No-op (returns false) in http mode.
+ */
+export async function setDebugLogging(enabled: boolean): Promise<boolean> {
+  const client = bindings();
+  if (!client) return false;
+
+  const { error } = await client.setDebugLogging(enabled);
+  if (error) {
+    reportError('set-debug-logging', 'Failed to change debug logging', error);
+    return false;
+  }
+  return true;
+}
+
+/**
  * Save the captured logs to a JSON file via the OS-native save dialog (handled
  * in Go). Returns true if a file was written, false if the user cancelled the
  * dialog or an error was reported.

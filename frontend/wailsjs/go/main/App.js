@@ -38,6 +38,10 @@ export function CurrentUsername() {
   return window['go']['main']['App']['CurrentUsername']();
 }
 
+export function DebugLoggingEnabled() {
+  return window['go']['main']['App']['DebugLoggingEnabled']();
+}
+
 export function DeleteAgentInterface(arg1, arg2) {
   return window['go']['main']['App']['DeleteAgentInterface'](arg1, arg2);
 }
@@ -172,6 +176,10 @@ export function ServerTunnelOpen(arg1) {
 
 export function SetBasicAuthEnabled(arg1) {
   return window['go']['main']['App']['SetBasicAuthEnabled'](arg1);
+}
+
+export function SetDebugLogging(arg1) {
+  return window['go']['main']['App']['SetDebugLogging'](arg1);
 }
 
 export function SetServerMonitoring(arg1, arg2) {

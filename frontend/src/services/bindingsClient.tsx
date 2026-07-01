@@ -567,6 +567,34 @@ export const bindingsClient = {
         }
     },
 
+    // Desktop-only: read whether debug-level log capture is currently on.
+    async debugLoggingEnabled(): Promise<ApiResponse<boolean>> {
+        try {
+            const data = await AppBindings.DebugLoggingEnabled();
+            return { data };
+        } catch (error) {
+            console.error('Bindings DebugLoggingEnabled failed:', error);
+            return {
+                data: false,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
+    // Desktop-only: turn debug-level log capture on or off at runtime.
+    async setDebugLogging(enabled: boolean): Promise<ApiResponse<void>> {
+        try {
+            await AppBindings.SetDebugLogging(enabled);
+            return { data: undefined };
+        } catch (error) {
+            console.error('Bindings SetDebugLogging failed:', error);
+            return {
+                data: undefined,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     // Desktop-only: Go opens a native save dialog and writes the captured logs
     // as a JSON file. Resolves true if a file was written, false if cancelled.
     async saveLogs(): Promise<ApiResponse<boolean>> {

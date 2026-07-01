@@ -73,23 +73,26 @@ func (s *Service) agentClientFor(srv *models.Server) (*agentclient.Client, error
 // mTLS clients aren't retried here: their only comparable failure is a stale
 // keep-alive connection, which net/http already retries on its own via the
 // Idempotency-Key set in agentclient.markIdempotent.
+//
+// Each attempt gets its own fresh pushTimeout via callOnce — critically so the
+// retry has a full budget even when the first attempt exhausted its deadline
+// (the context-deadline-exceeded case below), where a single shared context
+// would leave the retry no time to run.
 func (s *Service) callAgent(srv *models.Server, op func(context.Context, *agentclient.Client) error) error {
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-
 	client, err := s.agentClientFor(srv)
 	if err != nil {
 		return err
 	}
 
-	err = op(ctx, client)
+	err = callOnce(client, op)
 	if err == nil || !srv.Agent.TLS.IsZero() || !tunnelDropped(err) {
 		return err
 	}
 
-	// The tunnel died underneath the request but Ensure didn't notice in
-	// time. Force a fresh one and try again; keep the original error if the
-	// reconnect itself fails so the caller sees the real push failure.
+	// The tunnel died (or hung until the deadline) underneath the request but
+	// Ensure didn't notice in time. Force a fresh one and try again; keep the
+	// original error if the reconnect itself fails so the caller sees the real
+	// failure.
 	if reopenErr := s.tunnels.Open(srv.ID, srv.SSH, srv.Agent.Address); reopenErr != nil {
 		return err
 	}
@@ -97,6 +100,13 @@ func (s *Service) callAgent(srv *models.Server, op func(context.Context, *agentc
 	if reErr != nil {
 		return err
 	}
+	return callOnce(client, op)
+}
+
+// callOnce runs op against client under a fresh pushTimeout context.
+func callOnce(client *agentclient.Client, op func(context.Context, *agentclient.Client) error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
+	defer cancel()
 	return op(ctx, client)
 }
 
@@ -106,10 +116,19 @@ func (s *Service) callAgent(srv *models.Server, op func(context.Context, *agentc
 // reconnecting. The wrapped io.EOF is what golang.org/x/crypto/ssh's mux
 // returns from a Dial once the connection is gone; net.ErrClosed covers a
 // connection torn down concurrently.
+//
+// A context.DeadlineExceeded is also treated as droppable: a request to the
+// agent over the tunnel that never returns within pushTimeout almost always
+// means the SSH connection silently died (host rebooted / network dropped the
+// session with no RST) and TunnelClient.Alive() hasn't flipped yet, so the
+// request hangs on a dead socket rather than the agent being genuinely slow —
+// every op routed through callAgent is a fast, small request. Reopening the
+// tunnel and retrying recovers it instead of surfacing a bare timeout.
 func tunnelDropped(err error) bool {
 	return errors.Is(err, io.EOF) ||
 		errors.Is(err, io.ErrUnexpectedEOF) ||
-		errors.Is(err, net.ErrClosed)
+		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, context.DeadlineExceeded)
 }
 
 // GetServerMetrics fetches the latest CPU/RAM/load/network/peer snapshot

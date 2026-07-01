@@ -21,6 +21,8 @@ export function CreateUser(arg1:service.UserInput):Promise<models.User>;
 
 export function CurrentUsername():Promise<string>;
 
+export function DebugLoggingEnabled():Promise<boolean>;
+
 export function DeleteAgentInterface(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteAgentSource(arg1:string):Promise<void>;
@@ -88,6 +90,8 @@ export function SelectFile(arg1:string):Promise<string>;
 export function ServerTunnelOpen(arg1:string):Promise<boolean>;
 
 export function SetBasicAuthEnabled(arg1:boolean):Promise<void>;
+
+export function SetDebugLogging(arg1:boolean):Promise<void>;
 
 export function SetServerMonitoring(arg1:string,arg2:boolean):Promise<models.Server>;
 

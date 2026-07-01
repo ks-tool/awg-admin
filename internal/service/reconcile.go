@@ -22,6 +22,7 @@ import (
 	"time"
 
 	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	"github.com/ks-tool/awg-admin/internal/agentclient"
 	"github.com/ks-tool/awg-admin/models"
 
 	"github.com/google/uuid"
@@ -58,15 +59,12 @@ func (s *Service) ReconcileServer(serverID string) (*ReconcileReport, error) {
 		return nil, err
 	}
 
-	client, err := s.agentClientFor(srv)
-	if err != nil {
-		return nil, fmt.Errorf("reach agent: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-	agentIfaces, err := client.List(ctx)
-	if err != nil {
+	var agentIfaces []agentmodels.InterfaceConfig
+	if err := s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		var lErr error
+		agentIfaces, lErr = c.List(ctx)
+		return lErr
+	}); err != nil {
 		return nil, fmt.Errorf("list agent interfaces: %w", err)
 	}
 
@@ -129,15 +127,12 @@ func (s *Service) ImportInterface(serverID, ifaceName string) (*models.Interface
 		return nil, err
 	}
 
-	client, err := s.agentClientFor(srv)
-	if err != nil {
-		return nil, fmt.Errorf("reach agent: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-	cfg, err := client.Get(ctx, ifaceName)
-	if err != nil {
+	var cfg *agentmodels.InterfaceConfig
+	if err := s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		var gErr error
+		cfg, gErr = c.Get(ctx, ifaceName)
+		return gErr
+	}); err != nil {
 		return nil, fmt.Errorf("get %s from agent: %w", ifaceName, err)
 	}
 
@@ -170,12 +165,7 @@ func (s *Service) DeleteAgentInterface(serverID, ifaceName string) error {
 		return err
 	}
 
-	client, err := s.agentClientFor(srv)
-	if err != nil {
-		return fmt.Errorf("reach agent: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	defer cancel()
-	return client.Delete(ctx, ifaceName)
+	return s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		return c.Delete(ctx, ifaceName)
+	})
 }

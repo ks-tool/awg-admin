@@ -91,11 +91,40 @@ func Dial(cfg models.SSHConfig, passphrase string) (*ssh.Client, error) {
 	}
 
 	addr := net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", port))
-	client, err := ssh.Dial("tcp", addr, clientCfg)
+
+	// Dial the TCP connection ourselves (rather than ssh.Dial) so we can turn
+	// on TCP keepalive: without it, a silently-dropped SSH connection (the
+	// agent host rebooted, or the network dropped the session with no RST) is
+	// never noticed — ssh.Client.Wait() blocks until the OS TCP stack gives up
+	// on its own (many minutes), so TunnelClient.Alive() keeps reporting the
+	// dead tunnel as live and every request through it hangs until its deadline
+	// (surfacing as "context deadline exceeded"). Keepalive probes make the
+	// read loop error out — and Wait() return — within ~30s, so Manager.Ensure
+	// transparently reconnects on the next call.
+	dialer := net.Dialer{
+		Timeout: dialTimeout,
+		KeepAliveConfig: net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     15 * time.Second,
+			Interval: 5 * time.Second,
+			Count:    3,
+		},
+	}
+	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("dial %s: %w", addr, err)
 	}
-	return client, nil
+	// Bound the SSH handshake (ssh.NewClientConn, unlike ssh.Dial, doesn't
+	// honor ClientConfig.Timeout), then clear the deadline so keepalive alone
+	// governs the long-lived connection.
+	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
+	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, clientCfg)
+	if err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("dial %s: %w", addr, err)
+	}
+	_ = conn.SetDeadline(time.Time{})
+	return ssh.NewClient(sshConn, chans, reqs), nil
 }
 
 func authMethod(cfg models.SSHConfig, passphrase string) (ssh.AuthMethod, error) {
