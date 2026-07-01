@@ -4,13 +4,20 @@
 
 **Amnezia Admin** is an admin tool for managing [AmneziaWG](https://github.com/amnezia-vpn/amneziawg-go)/WireGuard servers, the VPN peers connected to them, and the users those peers belong to. One admin instance can manage many servers at once; each server runs a small agent that owns the actual WireGuard interfaces on that box.
 
+> 📖 **Full feature guide:** [docs/GUIDE.md](docs/GUIDE.md) — a complete walkthrough of every feature.
+
 ## What it's for
 
-- Create and configure WireGuard/AmneziaWG interfaces on remote servers without SSH'ing in by hand.
-- Manage users and issue/revoke VPN peers (keys, allowed IPs, QR codes for client provisioning) per user.
-- Deploy the per-server agent over SSH with one click, and keep its config in sync.
-- Watch basic server health (CPU/RAM/network, peer online status) from one place.
+- Create and configure WireGuard/AmneziaWG interfaces on remote servers without SSH'ing in by hand — addresses, keys and AmneziaWG obfuscation parameters are filled in for you.
+- Manage users and issue/revoke VPN peers (keys, allowed IPs, QR codes and ready-to-use client configs) per user.
+- Deploy the per-server agent over SSH with one click, keep its config in sync, and **reconcile** what the agent actually has against your database when they drift.
+- Chain servers into **multi-hop tunnels** so clients egress the internet through a chosen exit node.
+- Watch server health — load average, RAM, and per-peer traffic activity — from one place.
+- **Back up** your whole setup to a portable file at any time.
+- Reach agents over an automatic SSH tunnel, or directly via mTLS on a public IP.
 - Run either as a local desktop app or as a small web service you host yourself — your data stays on infrastructure you control, never a third-party cloud.
+
+See the [full guide](docs/GUIDE.md) for how each of these works.
 
 ## Components
 
@@ -94,7 +101,7 @@ awg-migrate export -db ~/.awg-admin -out dump.json   # on the old machine
 awg-migrate import -db ~/.awg-admin -in dump.json    # on the new machine
 ```
 
-Both deployment modes already read the same file/format, so this is only needed when moving across machines.
+Both deployment modes already read the same file/format, so this is only needed when moving across machines. *Settings → Backup* exports the same dump from inside the app with one click (desktop save dialog or browser download), and an in-app backup is restored the same way — `awg-migrate import` it into the target database. See the [backup section of the guide](docs/GUIDE.md#backup-restore-and-migration).
 
 ## Building from source
 
