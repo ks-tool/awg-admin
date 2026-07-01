@@ -161,8 +161,11 @@ function InterfaceFormModal({
                 </FormField>
 
                 <FormField label={t('servers.interfaces.addr')}>
-                    <input type="text" name="addr" value={form.addr} onChange={handleChange}
-                           placeholder="10.0.0.1/24" disabled={loading} className={inputs.primary}/>
+                    <div>
+                        <input type="text" name="addr" value={form.addr} onChange={handleChange}
+                               placeholder="10.0.0.1/24" disabled={loading} className={inputs.primary}/>
+                        <p className="mt-1 text-xs text-muted-foreground">{t('servers.interfaces.addrHint')}</p>
+                    </div>
                 </FormField>
 
                 <FormField label={t('servers.interfaces.port')}>

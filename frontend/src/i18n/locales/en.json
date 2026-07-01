@@ -212,6 +212,7 @@
     "interfaces": {
       "name": "Interface Name (Required)",
       "addr": "Address (Optional)",
+      "addrHint": "Leave blank to auto-assign the first host of a free /24 (172.23.x.0/24).",
       "port": "Listen Port",
       "privateKey": "Private Key (Optional)",
       "privateKeyPlaceholder": "Enter Wireguard private key",
