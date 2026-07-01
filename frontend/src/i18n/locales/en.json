@@ -47,6 +47,7 @@
     "publicKey": "Public Key",
     "rxBytes": "Download",
     "txBytes": "Upload",
+    "loadAverage": "Load avg (1 / 5 / 15)",
     "metricsTitle": "Metrics history",
     "metricsCpu": "CPU",
     "metricsMemory": "Memory",

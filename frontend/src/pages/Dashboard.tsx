@@ -21,7 +21,6 @@ import { useAppStore } from '@/store'
 import { StatCard } from '@/components/common/StatCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { formatBytes } from '@/lib/utils'
 import { getServerMetrics, getServerTunnelStatus } from '@/services/servers'
 import { ServerMetricsModal } from '@/components/server/ServerMetricsModal'
 import type { MetricsSnapshot } from '@/types'
@@ -149,13 +148,10 @@ export default function Dashboard() {
                                         {t('servers.peers')}
                                     </th>
                                     <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wider text-zinc-600">
-                                        CPU
+                                        {t('servers.loadAverage')}
                                     </th>
                                     <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wider text-zinc-600">
                                         RAM
-                                    </th>
-                                    <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wider text-zinc-600">
-                                        {t('servers.rxBytes')}/{t('servers.txBytes')}
                                     </th>
                                 </tr>
                             </thead>
@@ -194,16 +190,13 @@ export default function Dashboard() {
                                                 {server.interfaces?.length || 0}
                                             </td>
                                             <td className="px-5 py-3 text-right font-mono text-xs dark:text-zinc-400">
-                                                {metrics ? `${metrics.cpuPercent.toFixed(0)}%` : '—'}
-                                            </td>
-                                            <td className="px-5 py-3 text-right font-mono text-xs dark:text-zinc-400">
                                                 {metrics
-                                                    ? `${formatBytes(metrics.memUsedBytes)} / ${formatBytes(metrics.memTotalBytes)}`
+                                                    ? `${metrics.load1.toFixed(2)} / ${metrics.load5.toFixed(2)} / ${metrics.load15.toFixed(2)}`
                                                     : '—'}
                                             </td>
                                             <td className="px-5 py-3 text-right font-mono text-xs dark:text-zinc-400">
-                                                {metrics
-                                                    ? `↓${formatBytes(metrics.netRxBytes)} ↑${formatBytes(metrics.netTxBytes)}`
+                                                {metrics && metrics.memTotalBytes > 0
+                                                    ? `${((metrics.memUsedBytes / metrics.memTotalBytes) * 100).toFixed(0)}%`
                                                     : '—'}
                                             </td>
                                         </tr>

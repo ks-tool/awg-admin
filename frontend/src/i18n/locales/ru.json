@@ -47,6 +47,7 @@
     "publicKey": "Публичный ключ",
     "rxBytes": "Входящий",
     "txBytes": "Исходящий",
+    "loadAverage": "Ср. нагрузка (1 / 5 / 15)",
     "metricsTitle": "История метрик",
     "metricsCpu": "CPU",
     "metricsMemory": "Память",
