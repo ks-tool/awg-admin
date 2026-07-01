@@ -213,6 +213,10 @@ A **peer** is a single VPN client belonging to a user. *Add peer*:
 - **Allowed IPs** — the peer's addresses; leave blank to auto-assign a free
   host address on the interface's subnet.
 - **Endpoint** — optional, for peers that should be dialed at a fixed address.
+- **DNS** — optional client-side DNS for this peer's generated config (one or
+  more comma-separated servers, e.g. `1.1.1.1, 8.8.8.8`). It becomes the
+  `DNS = …` line in the client's config; leave it blank to fall back to the
+  interface's DNS. It's a client setting, never pushed to the agent.
 - **Private key** — optional; leave it blank to have a fresh key generated for
   the peer. Fill it in only to import an existing key.
 - **Pre-shared key** — optional extra symmetric key for post-quantum-ish

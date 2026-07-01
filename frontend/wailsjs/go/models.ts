@@ -579,6 +579,7 @@ export namespace models {
 	    pk: number[];
 	    interface: number[];
 	    disabled?: boolean;
+	    dns?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Peer(source);
@@ -590,6 +591,7 @@ export namespace models {
 	        this.pk = source["pk"];
 	        this.interface = source["interface"];
 	        this.disabled = source["disabled"];
+	        this.dns = source["dns"];
 	    }
 	}
 	
@@ -864,6 +866,7 @@ export namespace service {
 	    InterfaceID: number[];
 	    AllowedIPs: string[];
 	    Endpoint: string;
+	    DNS: string[];
 	    PrivateKey: string;
 	    PresharedKey: string;
 	    WithPresharedKey: boolean;
@@ -879,6 +882,7 @@ export namespace service {
 	        this.InterfaceID = source["InterfaceID"];
 	        this.AllowedIPs = source["AllowedIPs"];
 	        this.Endpoint = source["Endpoint"];
+	        this.DNS = source["DNS"];
 	        this.PrivateKey = source["PrivateKey"];
 	        this.PresharedKey = source["PresharedKey"];
 	        this.WithPresharedKey = source["WithPresharedKey"];

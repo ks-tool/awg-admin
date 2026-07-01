@@ -35,4 +35,9 @@ type Peer struct {
 	PrivateKey  agentmodels.Key `json:"pk"`
 	InterfaceId uuid.UUID       `json:"interface"`
 	Disabled    bool            `json:"disabled,omitempty"`
+	// DNS is the client-side DNS for this peer's generated wg-quick config
+	// (the `[Interface] DNS = …` line). Admin-only: it's never pushed to the
+	// agent (DNS is a client setting). Empty falls back to the owning
+	// interface's DNS in GetPeerConfig.
+	DNS []string `json:"dns,omitempty"`
 }

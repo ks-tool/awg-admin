@@ -230,4 +230,5 @@ export interface Peer {
   pk: Key;
   interface: string;
   disabled?: boolean;
+  dns?: string[];
 }

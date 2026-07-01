@@ -77,8 +77,14 @@ func (s *Service) GetPeerConfig(userID string, key string) (string, error) {
 	if len(ifacePeer.AllowedIPs) > 0 {
 		_, _ = fmt.Fprintf(&b, "Address = %s\n", strings.Join(ifacePeer.AllowedIPs, ", "))
 	}
-	if len(iface.DNS) > 0 {
-		_, _ = fmt.Fprintf(&b, "DNS = %s\n", strings.Join(iface.DNS, ", "))
+	// A per-peer DNS overrides the interface's; fall back to the interface's
+	// when the peer doesn't set one.
+	dns := peer.DNS
+	if len(dns) == 0 {
+		dns = iface.DNS
+	}
+	if len(dns) > 0 {
+		_, _ = fmt.Fprintf(&b, "DNS = %s\n", strings.Join(dns, ", "))
 	}
 	writeAmneziaParams(&b, iface.InterfaceConfig)
 

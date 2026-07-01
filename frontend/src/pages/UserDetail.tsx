@@ -139,6 +139,7 @@ const INITIAL_PEER_FORM = {
     interfaceId: '',
     allowedIps: '',
     endpoint: '',
+    dns: '',
     privateKey: '',
     presharedKey: '',
     withPresharedKey: true,
@@ -261,6 +262,18 @@ function AddPeerModal({
                         value={form.endpoint}
                         onChange={handleChange}
                         placeholder="203.0.113.0:51820"
+                        disabled={loading}
+                        className={inputs.primary}
+                    />
+                </FormField>
+
+                <FormField label={`${t('peers.dns')} (${t('common.optional')})`}>
+                    <input
+                        type="text"
+                        name="dns"
+                        value={form.dns}
+                        onChange={handleChange}
+                        placeholder={t('peers.dnsPlaceholder')}
                         disabled={loading}
                         className={inputs.primary}
                     />
@@ -432,11 +445,17 @@ export default function UserDetail() {
                 .map(ip => ip.trim())
                 .filter(Boolean);
 
+            const dnsArray = form.dns
+                .split(',')
+                .map(d => d.trim())
+                .filter(Boolean);
+
             const success = await addPeer(selectedUserId, {
                 name: form.name,
                 interfaceId: form.interfaceId,
                 allowedIps: allowedIpsArray,
                 endpoint: form.endpoint || undefined,
+                dns: dnsArray.length ? dnsArray : undefined,
                 privateKey: form.privateKey.trim() || undefined,
                 presharedKey: form.withPresharedKey ? undefined : form.presharedKey.trim() || undefined,
                 withPresharedKey: form.withPresharedKey,

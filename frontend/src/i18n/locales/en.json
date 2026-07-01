@@ -268,6 +268,8 @@
     "selectServerFirst": "Select a server first",
     "interfaceRequired": "Interface is required",
     "allowedIpsAutoPlaceholder": "192.168.1.0/24, 10.0.0.1/32 (leave empty to auto-assign)",
+    "dns": "DNS",
+    "dnsPlaceholder": "1.1.1.1, 8.8.8.8 (leave empty to use the interface DNS)",
     "privateKey": "Private Key",
     "privateKeyPlaceholder": "Leave empty to generate a new key",
     "presharedKey": "Preshared Key",

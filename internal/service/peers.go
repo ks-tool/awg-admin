@@ -40,6 +40,9 @@ type AddPeerInput struct {
 	InterfaceID uuid.UUID
 	AllowedIPs  []string
 	Endpoint    string
+	// DNS sets the peer's client-side DNS (the wg-quick `[Interface] DNS`
+	// line). Empty falls back to the interface's DNS when rendering the config.
+	DNS []string
 	// PrivateKey, when non-empty, is the peer's private key to use as-is
 	// (base64 WireGuard key). Empty means generate a fresh one.
 	PrivateKey string
@@ -106,7 +109,7 @@ func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) 
 		}
 	}
 
-	peer := &models.Peer{Name: in.Name, PrivateKey: privKey, InterfaceId: in.InterfaceID}
+	peer := &models.Peer{Name: in.Name, PrivateKey: privKey, InterfaceId: in.InterfaceID, DNS: in.DNS}
 
 	ifacePeer := agentmodels.InterfacePeer{
 		Key:        privKey.PublicKey(),
