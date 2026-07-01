@@ -227,9 +227,8 @@ export default function Tunnels() {
                 title={t('nav.tunnels')}
                 icon={Waypoints}
                 actions={
-                    <button onClick={() => setWizardOpen(true)} className={cn('inline-flex items-center gap-2', buttons.primary)}>
-                        <Plus size={16} />
-                        {t('tunnels.newTunnel')}
+                    <button onClick={() => setWizardOpen(true)} className={buttons.primary}>
+                        <Plus size={14} />
                     </button>
                 }
             />

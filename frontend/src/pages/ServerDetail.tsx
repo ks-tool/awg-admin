@@ -171,9 +171,12 @@ function InterfaceFormModal({
                 </FormField>
 
                 <FormField label={t('servers.interfaces.privateKey')}>
-                    <textarea
-                        name="pk" value={form.pk} onChange={handleChange}
-                        placeholder={t('servers.interfaces.privateKeyPlaceholder')} disabled={loading} rows={3}
+                    <input
+                        type="text"
+                        name="pk"
+                        value={form.pk}
+                        onChange={handleChange}
+                        placeholder={t('servers.interfaces.privateKeyPlaceholder')} disabled={loading}
                         className={cn(inputs.primary, 'resize-none font-mono text-xs')}
                     />
                 </FormField>

@@ -22,7 +22,8 @@ import {CopyButton} from '@/components/common/CopyButton'
 import {SearchBar} from '@/components/common/SearchBar'
 import {PageHeader} from '@/components/layout/PageHeader'
 import {useNavigation} from '@/contexts/NavigationContext'
-import {useAutoRefresh} from "@/hooks/useAutoRefresh.tsx";
+import {useAutoRefresh} from "@/hooks/useAutoRefresh";
+import {buttons} from "@/components/common/Modal";
 
 export default function Servers() {
     const { t } = useTranslation()
@@ -59,7 +60,7 @@ export default function Servers() {
                 actions={
                     <button 
                         onClick={handleAddServer}
-                        className="rounded-lg px-4 py-2 text-sm font-medium transition-colors bg-sky-100 text-sky-700 border border-sky-200 hover:bg-sky-200 dark:bg-sky-500/15 dark:text-sky-400 dark:border-sky-500/25 dark:hover:bg-sky-500/20"
+                        className={buttons.primary}
                         title={t('servers.addServer')}
                     >
                         <Plus size={14} />
@@ -89,9 +90,9 @@ export default function Servers() {
                     <div
                         key={server.id}
                         onClick={() => handleServerClick(server.id)}
-                        className="group rounded-xl border border-border bg-card dark:border-white/5 dark:bg-white/3 p-5 transition-all cursor-pointer"
+                        className="group flex min-h-[7rem] items-center rounded-xl border border-border bg-card dark:border-white/5 dark:bg-white/3 p-5 transition-all cursor-pointer"
                     >
-                        <div className="flex flex-wrap items-start gap-6">
+                        <div className="flex w-full flex-wrap items-start gap-6">
                             {/* Name + description */}
                             <div className="min-w-56">
                                 <div className="font-semibold text-muted-foreground mb-1">{server.name}</div>

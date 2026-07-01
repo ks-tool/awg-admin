@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, Server, Network, Users, Cable, RefreshCw } from 'lucide-react'
+import {LayoutDashboard, Server, Network, Users, Waypoints, RefreshCw} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { StatCard } from '@/components/common/StatCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
@@ -121,7 +121,7 @@ export default function Dashboard() {
                     <StatCard
                         label={t('dashboard.totalTunnels')}
                         value={stats.totalTunnels}
-                        icon={Cable}
+                        icon={Waypoints}
                         accent="amber"
                     />
                 </div>

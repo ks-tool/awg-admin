@@ -172,6 +172,9 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
 
     const handleRemove = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
+        // Close the (portaled, z-60) dropdown so it doesn't overlay the confirm
+        // modal's buttons.
+        setOpen(false);
         setRemoveConfirmId(id);
     };
 
@@ -195,6 +198,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
 
     const handleRefresh = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
+        setOpen(false);
         setRefreshConfirmId(id);
     };
 

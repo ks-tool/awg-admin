@@ -21,6 +21,7 @@ import { StatusBadge } from '@/components/common/StatusBadge'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useNavigation } from '@/contexts/NavigationContext'
 import {useAutoRefresh} from "@/hooks/useAutoRefresh";
+import {buttons} from "@/components/common/Modal";
 
 export default function Users() {
     const { t } = useTranslation()
@@ -48,7 +49,7 @@ export default function Users() {
                 actions={
                     <button 
                         onClick={handleAddUser}
-                        className="rounded-lg px-4 py-2 text-sm font-medium transition-colors bg-sky-100 text-sky-700 border border-sky-200 hover:bg-sky-200 dark:bg-sky-500/15 dark:text-sky-400 dark:border-sky-500/25 dark:hover:bg-sky-500/20"
+                        className={buttons.primary}
                         title={t('users.addUser')}
                     >
                         <Plus size={14} />

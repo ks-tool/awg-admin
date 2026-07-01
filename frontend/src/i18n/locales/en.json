@@ -8,7 +8,6 @@
     "settings": "Settings"
   },
   "tunnels": {
-    "newTunnel": "New tunnel",
     "noTunnels": "No tunnels yet",
     "entry": "Entry",
     "exit": "Exit",
@@ -27,7 +26,7 @@
     "selectServer": "Select a server…",
     "selectInterface": "Select an interface…",
     "inTunnel": "in a tunnel",
-    "entryHint": "Clients connect here; their traffic will exit via the exit server.",
+    "entryHint": "Clients connect here.",
     "exitWarning": "This interface is reconfigured as a dedicated exit — its current config is replaced.",
     "subnet": "Tunnel subnet",
     "subnetHint": "Leave empty to reuse the entry's subnet or auto-generate a free one.",
