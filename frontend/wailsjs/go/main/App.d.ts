@@ -41,6 +41,8 @@ export function DeployAgent(arg1:string,arg2:string):Promise<void>;
 
 export function GenerateAgentTLS(arg1:string):Promise<models.Server>;
 
+export function GenerateInterfaceDefaults():Promise<models.InterfaceConfig>;
+
 export function GetDeployStatus(arg1:string):Promise<models.DeployStatus>;
 
 export function GetInterface(arg1:string,arg2:string):Promise<models.Interface>;

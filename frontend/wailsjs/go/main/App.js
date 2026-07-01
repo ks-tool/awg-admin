@@ -78,6 +78,10 @@ export function GenerateAgentTLS(arg1) {
   return window['go']['main']['App']['GenerateAgentTLS'](arg1);
 }
 
+export function GenerateInterfaceDefaults() {
+  return window['go']['main']['App']['GenerateInterfaceDefaults']();
+}
+
 export function GetDeployStatus(arg1) {
   return window['go']['main']['App']['GetDeployStatus'](arg1);
 }

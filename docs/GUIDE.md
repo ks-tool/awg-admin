@@ -157,7 +157,9 @@ so a server you've muted stays muted after the agent restarts.
 ## Interfaces
 
 On the server page you can create, edit and delete WireGuard/AmneziaWG
-interfaces. Fields:
+interfaces. The form has two tabs.
+
+**General** tab:
 
 - **Name** — the interface name (`wg0`, `awg0`, …). Required.
 - **Address** — the interface's own address in CIDR form (e.g. `10.0.0.1/24`).
@@ -168,9 +170,20 @@ interfaces. Fields:
 - **Listen port** — the UDP port the interface listens on (default `51820`).
 - **Private key** — leave blank to have one generated automatically.
 
-**AmneziaWG obfuscation** parameters (the `Jc/Jmin/Jmax/S1–S4/H1–H4/…` junk-
-packet and header-obfuscation values that make traffic harder to fingerprint)
-are generated for you when the interface is created — no manual tuning needed.
+**Amnezia** tab — the `Jc/Jmin/Jmax`, `S1–S4`, `H1–H4` and `I1–I5` junk-packet
+and header-obfuscation values that make AmneziaWG traffic harder to fingerprint:
+
+- **Amnezia Interface** — a checkbox at the top, **ticked by default**. While
+  ticked, all the obfuscation parameters below are pre-filled with freshly
+  generated values (the same set the app would otherwise apply on its own), and
+  every field stays editable if you want to tune them by hand.
+- **Untick it** to create a plain **WireGuard** interface instead: the
+  obfuscation parameters are then ignored and the interface behaves as vanilla
+  WireGuard.
+
+On edit the tab reflects what the interface already has — the box is ticked
+(showing the stored values) for an AmneziaWG interface, unticked for a plain
+WireGuard one.
 
 Interfaces that are part of a [tunnel](#multi-hop-tunnels-exit-nodes) are locked
 against editing/deletion in the UI; remove the tunnel first.

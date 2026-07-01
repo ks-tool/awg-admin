@@ -44,6 +44,13 @@ func (h *Handler) interfaceList(w http.ResponseWriter, r bunrouter.Request) erro
 	return bunrouter.JSON(w, list)
 }
 
+// interfaceDefaults returns a freshly generated InterfaceConfig (private key +
+// AmneziaWG obfuscation params) used to pre-fill the add-interface form's
+// "Amnezia" tab. Server-independent, hence mounted outside the /servers group.
+func (h *Handler) interfaceDefaults(w http.ResponseWriter, r bunrouter.Request) error {
+	return bunrouter.JSON(w, h.svc.GenerateInterfaceDefaults())
+}
+
 func (h *Handler) interfaceCreate(w http.ResponseWriter, r bunrouter.Request) error {
 	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
 

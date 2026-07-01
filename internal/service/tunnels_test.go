@@ -46,9 +46,15 @@ func TestBuildAndRemoveTunnel(t *testing.T) {
 	srv1 := tunnelTestServer(t, svc, "relay")
 	srv2 := tunnelTestServer(t, svc, "exit")
 
-	entry, err := svc.CreateInterface(srv1.ID.String(), agentmodels.InterfaceConfig{
+	// Build the entry as an AmneziaWG interface (obfuscation params are opt-in
+	// now — CreateInterface no longer auto-generates them), matching what the UI
+	// sends via GenerateInterfaceDefaults, so the tunnel has params to copy to
+	// the exit.
+	entryCfg := agentmodels.InterfaceConfig{
 		Interface: "awg0", Address: "172.23.24.2/24", ListenPort: 53053,
-	})
+	}
+	agentmodels.GenerateAmneziaParams(&entryCfg)
+	entry, err := svc.CreateInterface(srv1.ID.String(), entryCfg)
 	if err != nil {
 		t.Fatalf("CreateInterface entry: %v", err)
 	}

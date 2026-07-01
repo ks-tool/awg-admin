@@ -105,6 +105,30 @@ export async function createInterface(
 }
 
 /**
+ * Get a freshly generated interface config (private key + AmneziaWG obfuscation
+ * params) to pre-fill the add-interface form's "Amnezia" tab.
+ */
+export async function getInterfaceDefaults(): Promise<InterfaceConfig | null> {
+  const client = getClient();
+
+  if (client) {
+    const { data, error } = await client.getInterfaceDefaults();
+    if (error) {
+      console.error('Failed to generate interface defaults (bindings):', error);
+      return null;
+    }
+    return data as unknown as InterfaceConfig;
+  }
+
+  const { data, error } = await get<InterfaceConfig>('/interfaces/defaults');
+  if (error) {
+    console.error('Failed to generate interface defaults:', error);
+    return null;
+  }
+  return data;
+}
+
+/**
  * Update interface configuration
  */
 export async function updateInterfaceConfig(

@@ -37,7 +37,7 @@ import {PageHeader} from '@/components/layout/PageHeader';
 import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {CopyButton} from '@/components/common/CopyButton';
-import {updateInterfaceConfig} from '@/services/interfaces';
+import {getInterfaceDefaults, updateInterfaceConfig} from '@/services/interfaces';
 import {
     deleteAgentInterface,
     deployAgent,
@@ -119,11 +119,39 @@ const INITIAL_INTERFACE_FORM = {
     addr: '',
     listen: '51820',
     pk: '',
+    // AmneziaWG obfuscation. `amnezia` toggles whether these are sent at all;
+    // when off the interface is plain WireGuard. The individual params are held
+    // as strings for input binding and converted on submit.
+    amnezia: true,
+    jc: '', jmin: '', jmax: '',
+    s1: '', s2: '', s3: '', s4: '',
+    h1: '', h2: '', h3: '', h4: '',
+    i1: '', i2: '', i3: '', i4: '', i5: '',
 };
 type InterfaceFormData = typeof INITIAL_INTERFACE_FORM;
 
+// The AmneziaWG param field names, split by value type, so the form and the
+// submit mapper stay in sync with a single source of truth.
+const AMNEZIA_NUM_FIELDS = ['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4'] as const;
+const AMNEZIA_STR_FIELDS = ['h1', 'h2', 'h3', 'h4', 'i1', 'i2', 'i3', 'i4', 'i5'] as const;
+
+// amneziaToForm projects an interface config's Amnezia params onto the form's
+// string fields (used both to seed the edit form and to apply generated
+// defaults on add). Missing/nil params become empty strings.
+function amneziaToForm(cfg: Partial<InterfaceConfig>) {
+    const s = (v: number | string | undefined | null) =>
+        v === undefined || v === null ? '' : String(v);
+    return {
+        jc: s(cfg.jc), jmin: s(cfg.jmin), jmax: s(cfg.jmax),
+        s1: s(cfg.s1), s2: s(cfg.s2), s3: s(cfg.s3), s4: s(cfg.s4),
+        h1: s(cfg.h1), h2: s(cfg.h2), h3: s(cfg.h3), h4: s(cfg.h4),
+        i1: s(cfg.i1), i2: s(cfg.i2), i3: s(cfg.i3), i4: s(cfg.i4), i5: s(cfg.i5),
+    };
+}
+
 function InterfaceFormModal({
     title,
+    mode,
     initialValues,
     onSubmit,
     onClose,
@@ -131,6 +159,7 @@ function InterfaceFormModal({
     submitLabel,
 }: {
     title: string;
+    mode: 'add' | 'edit';
     initialValues: InterfaceFormData;
     onSubmit: (data: InterfaceFormData) => Promise<void>;
     onClose: () => void;
@@ -139,12 +168,30 @@ function InterfaceFormModal({
 }) {
     const {t} = useTranslation();
     const [form, setForm] = useState(initialValues);
+    const [tab, setTab] = useState<'general' | 'amnezia'>('general');
 
     useEffect(() => setForm(initialValues), [initialValues]);
 
+    // On add, pre-fill the Amnezia tab with server-generated obfuscation params
+    // (kept identical to what CreateInterface would apply). Edit keeps whatever
+    // the existing interface already has (seeded via initialValues).
+    useEffect(() => {
+        if (mode !== 'add') return;
+        let cancelled = false;
+        (async () => {
+            const defaults = await getInterfaceDefaults();
+            if (cancelled || !defaults) return;
+            setForm(prev => ({...prev, ...amneziaToForm(defaults)}));
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [mode]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const {name, value} = e.target;
-        setForm(prev => ({...prev, [name]: value}));
+        const {name, value, type} = e.target;
+        const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+        setForm(prev => ({...prev, [name]: val}));
     };
 
     const handleSubmit = async () => {
@@ -152,37 +199,135 @@ function InterfaceFormModal({
         await onSubmit(form);
     };
 
+    const tabButton = (key: 'general' | 'amnezia', label: string) => (
+        <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={cn(
+                '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                tab === key
+                    ? 'border-sky-500 text-foreground dark:text-zinc-100'
+                    : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
+            )}
+        >
+            {label}
+        </button>
+    );
+
+    const amneziaNum = (name: (typeof AMNEZIA_NUM_FIELDS)[number]) => (
+        <FormField key={name} label={name.toUpperCase()}>
+            <input
+                type="number"
+                name={name}
+                value={form[name] as string}
+                onChange={handleChange}
+                disabled={loading || !form.amnezia}
+                className={inputs.primary}
+            />
+        </FormField>
+    );
+
+    const amneziaStr = (name: (typeof AMNEZIA_STR_FIELDS)[number]) => (
+        <FormField key={name} label={name.toUpperCase()}>
+            <input
+                type="text"
+                name={name}
+                value={form[name] as string}
+                onChange={handleChange}
+                disabled={loading || !form.amnezia}
+                className={cn(inputs.primary, 'font-mono text-xs')}
+            />
+        </FormField>
+    );
+
+    const sectionTitle = 'mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-zinc-500';
+
     return (
         <Modal title={title} onClose={onClose} loading={loading}>
+            <div className="mb-4 flex gap-1 border-b border-border dark:border-white/10">
+                {tabButton('general', t('servers.interfaces.tabGeneral'))}
+                {tabButton('amnezia', t('servers.interfaces.tabAmnezia'))}
+            </div>
+
             <div className="space-y-4">
-                <FormField label={t('servers.interfaces.name')}>
-                    <input type="text" name="iface" value={form.iface} onChange={handleChange}
-                           placeholder="wg0" disabled={loading} className={inputs.primary}/>
-                </FormField>
+                <div className={tab === 'general' ? 'space-y-4' : 'hidden'}>
+                    <FormField label={t('servers.interfaces.name')}>
+                        <input type="text" name="iface" value={form.iface} onChange={handleChange}
+                               placeholder="wg0" disabled={loading} className={inputs.primary}/>
+                    </FormField>
 
-                <FormField label={t('servers.interfaces.addr')}>
+                    <FormField label={t('servers.interfaces.addr')}>
+                        <div>
+                            <input type="text" name="addr" value={form.addr} onChange={handleChange}
+                                   placeholder="10.0.0.1/24" disabled={loading} className={inputs.primary}/>
+                            <p className="mt-1 text-xs text-muted-foreground">{t('servers.interfaces.addrHint')}</p>
+                        </div>
+                    </FormField>
+
+                    <FormField label={t('servers.interfaces.port')}>
+                        <input type="number" name="listen" value={form.listen} onChange={handleChange}
+                               min="1" max="65535" disabled={loading} className={inputs.primary}/>
+                    </FormField>
+
+                    <FormField label={t('servers.interfaces.privateKey')}>
+                        <input
+                            type="text"
+                            name="pk"
+                            value={form.pk}
+                            onChange={handleChange}
+                            placeholder={t('servers.interfaces.privateKeyPlaceholder')} disabled={loading}
+                            className={cn(inputs.primary, 'resize-none font-mono text-xs')}
+                        />
+                    </FormField>
+                </div>
+
+                <div className={tab === 'amnezia' ? 'space-y-4' : 'hidden'}>
+                    <FormField label="">
+                        <label className="flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                name="amnezia"
+                                checked={form.amnezia}
+                                onChange={handleChange}
+                                disabled={loading}
+                                className="rounded border-input bg-background text-sky-500 focus:ring-sky-500 focus:ring-offset-0 disabled:opacity-50 dark:border-white/10 dark:bg-white/5"
+                            />
+                            <span className="ml-3 text-sm font-medium text-foreground dark:text-zinc-300">
+                                {t('servers.interfaces.amneziaInterface')}
+                            </span>
+                        </label>
+                    </FormField>
+                    <p className="text-xs text-muted-foreground">{t('servers.interfaces.amneziaHint')}</p>
+
                     <div>
-                        <input type="text" name="addr" value={form.addr} onChange={handleChange}
-                               placeholder="10.0.0.1/24" disabled={loading} className={inputs.primary}/>
-                        <p className="mt-1 text-xs text-muted-foreground">{t('servers.interfaces.addrHint')}</p>
+                        <h4 className={sectionTitle}>{t('servers.interfaces.junkPackets')}</h4>
+                        <div className="space-y-3">
+                            {AMNEZIA_NUM_FIELDS.slice(0, 3).map(amneziaNum)}
+                        </div>
                     </div>
-                </FormField>
 
-                <FormField label={t('servers.interfaces.port')}>
-                    <input type="number" name="listen" value={form.listen} onChange={handleChange}
-                           min="1" max="65535" disabled={loading} className={inputs.primary}/>
-                </FormField>
+                    <div>
+                        <h4 className={sectionTitle}>{t('servers.interfaces.packetPadding')}</h4>
+                        <div className="space-y-3">
+                            {AMNEZIA_NUM_FIELDS.slice(3).map(amneziaNum)}
+                        </div>
+                    </div>
 
-                <FormField label={t('servers.interfaces.privateKey')}>
-                    <input
-                        type="text"
-                        name="pk"
-                        value={form.pk}
-                        onChange={handleChange}
-                        placeholder={t('servers.interfaces.privateKeyPlaceholder')} disabled={loading}
-                        className={cn(inputs.primary, 'resize-none font-mono text-xs')}
-                    />
-                </FormField>
+                    <div>
+                        <h4 className={sectionTitle}>{t('servers.interfaces.magicHeaders')}</h4>
+                        <div className="space-y-3">
+                            {AMNEZIA_STR_FIELDS.slice(0, 4).map(amneziaStr)}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 className={sectionTitle}>{t('servers.interfaces.signatures')}</h4>
+                        <div className="space-y-3">
+                            {AMNEZIA_STR_FIELDS.slice(4).map(amneziaStr)}
+                        </div>
+                    </div>
+                </div>
 
                 <div className="flex gap-3 pt-4">
                     <button onClick={handleSubmit} disabled={loading || !form.iface.trim()}
@@ -682,6 +827,22 @@ export default function ServerDetail() {
             pk: form.pk,
         };
 
+        // Only carry the AmneziaWG obfuscation params when the interface is an
+        // Amnezia one; otherwise they're omitted, so the backend stores a plain
+        // WireGuard interface (and, on edit, strips any previously-set params).
+        if (form.amnezia) {
+            const num = (v: string) => {
+                const n = parseInt(v, 10);
+                return Number.isFinite(n) ? n : undefined;
+            };
+            const str = (v: string) => {
+                const trimmed = v.trim();
+                return trimmed === '' ? undefined : trimmed;
+            };
+            for (const f of AMNEZIA_NUM_FIELDS) config[f] = num(form[f]);
+            for (const f of AMNEZIA_STR_FIELDS) config[f] = str(form[f]);
+        }
+
         let ok = false;
         if (interfaceModal?.mode === 'add' && selectedServerId) {
             ok = !!(await createInterface(selectedServerId, config));
@@ -909,6 +1070,8 @@ export default function ServerDetail() {
                                                             addr: iface.addr ?? '',
                                                             listen: String(iface.listen ?? 51820),
                                                             pk: iface.pk ?? '',
+                                                            amnezia: iface.jc != null || iface.jmin != null || iface.jmax != null,
+                                                            ...amneziaToForm(iface),
                                                         },
                                                         interfaceId: iface.id,
                                                     })}
@@ -955,6 +1118,7 @@ export default function ServerDetail() {
                     title={interfaceModal.mode === 'add'
                         ? t('servers.interfaces.addTitle')
                         : t('servers.interfaces.editTitle')}
+                    mode={interfaceModal.mode}
                     initialValues={interfaceModal.initialValues}
                     onSubmit={handleInterfaceSubmit}
                     onClose={() => setInterfaceModal(null)}

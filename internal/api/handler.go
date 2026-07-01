@@ -96,6 +96,9 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *sessionStore {
 		gr.DELETE("/:tunnelID", h.tunnelDelete)
 	})
 
+	// Server-independent: generated defaults for a new interface form.
+	protected.GET("/interfaces/defaults", h.interfaceDefaults)
+
 	protected.WithGroup("/servers", func(gr *bunrouter.Group) {
 		gr.POST("", h.serverCreate)
 		gr.GET("/", h.serverList)

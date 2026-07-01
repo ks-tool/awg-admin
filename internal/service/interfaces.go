@@ -100,12 +100,20 @@ func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfi
 		}
 	}
 	in.Peers = nil // peers managed via Peers API only
-	// Generates a private key when none was supplied (and AWG obfuscation
-	// params when not already set) — done here rather than only in
-	// internal/api's HTTP handler so the Wails desktop App, which calls
-	// this method directly and bypasses internal/api entirely, gets the
-	// same behavior instead of persisting an all-zero private key.
-	agentmodels.GenerateAmneziaParams(&in)
+	// Every interface needs a private key; generate one when the caller didn't
+	// supply it. Done here rather than only in internal/api's HTTP handler so
+	// the Wails desktop App, which calls this method directly and bypasses
+	// internal/api entirely, gets the same behavior instead of persisting an
+	// all-zero private key. The AmneziaWG obfuscation params
+	// (jc/jmin/jmax/s1..s4/h1..h4/i1..i5) are NOT auto-generated here: the
+	// caller decides. The UI's "Amnezia Interface" toggle sends a generated set
+	// (see GenerateInterfaceDefaults) for an Amnezia interface, or omits them
+	// entirely for a plain WireGuard one.
+	if agentmodels.IsEmpty(in.PrivateKey) {
+		if in.PrivateKey, err = agentmodels.GeneratePrivateKey(); err != nil {
+			return nil, fmt.Errorf("generate key: %w", err)
+		}
+	}
 	iface := &models.Interface{
 		ID:              uuid.New(),
 		InterfaceConfig: in,
@@ -115,6 +123,16 @@ func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfi
 	}
 	s.pushInterface(sID, iface)
 	return iface, nil
+}
+
+// GenerateInterfaceDefaults returns a fresh InterfaceConfig populated with a
+// generated private key and a full set of AmneziaWG obfuscation parameters. The
+// add-interface form calls it to pre-fill the "Amnezia" tab; it touches no
+// storage and reaches no agent, so it's safe to call on every modal open.
+func (s *Service) GenerateInterfaceDefaults() agentmodels.InterfaceConfig {
+	var cfg agentmodels.InterfaceConfig
+	agentmodels.GenerateAmneziaParams(&cfg)
+	return cfg
 }
 
 // UpdateInterfaceConfig replaces all config fields but always preserves peers.

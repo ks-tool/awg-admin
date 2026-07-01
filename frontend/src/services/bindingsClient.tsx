@@ -445,6 +445,19 @@ export const bindingsClient = {
         }
     },
 
+    async getInterfaceDefaults(): Promise<ApiResponse<models.InterfaceConfig>> {
+        try {
+            const data = await AppBindings.GenerateInterfaceDefaults();
+            return { data };
+        } catch (error) {
+            console.error('Bindings GenerateInterfaceDefaults failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async updateInterfaceConfig(serverId: string, interfaceId: string, config: any): Promise<ApiResponse<models.Interface>> {
         try {
             const data = await AppBindings.UpdateInterfaceConfig(serverId, interfaceId, config);
