@@ -450,7 +450,7 @@ export default function UserDetail() {
                 .map(d => d.trim())
                 .filter(Boolean);
 
-            const success = await addPeer(selectedUserId, {
+            await addPeer(selectedUserId, {
                 name: form.name,
                 interfaceId: form.interfaceId,
                 allowedIps: allowedIpsArray,
@@ -461,16 +461,15 @@ export default function UserDetail() {
                 withPresharedKey: form.withPresharedKey,
             });
 
-            if (success) {
-                toast.success(t('peers.peerAdded'));
-                setShowAddPeerModal(false);
-                await refreshData();
-            } else {
-                toast.error(t('peers.addPeerError'));
-            }
+            // addPeer resolves only on success (it throws otherwise, caught
+            // below) and already refreshes the store's data on success.
+            toast.success(t('peers.peerAdded'));
+            setShowAddPeerModal(false);
         } catch (error) {
+            // Surface the specific backend reason (e.g. a duplicate or
+            // out-of-subnet IP) instead of a generic failure.
             console.error('Failed to add peer:', error);
-            toast.error(t('peers.addPeerError'));
+            toast.error(error instanceof Error && error.message ? error.message : t('peers.addPeerError'));
         } finally {
             setAddPeerLoading(false);
         }

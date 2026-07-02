@@ -94,6 +94,8 @@ func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) 
 			return nil, err
 		}
 		in.AllowedIPs = []string{fmt.Sprintf("%s/32", ip.String())}
+	} else if err := s.validatePeerAllowedIPs(in.InterfaceID, in.AllowedIPs); err != nil {
+		return nil, err
 	}
 
 	var privKey agentmodels.Key
@@ -187,46 +189,110 @@ func (s *Service) DeletePeer(userID string, key string) (*models.User, error) {
 	return &sanitized, nil
 }
 
-// nextFreeIP picks the first host address in the interface's subnet that's
-// not already used by the interface itself or one of its peers (see
-// storage.Interfaces.UsedIPs), for auto-assigning AllowedIPs when the caller
-// of AddPeer left it empty.
-func (s *Service) nextFreeIP(ifaceID uuid.UUID) (net.IP, error) {
+// interfaceUsage loads the interface owning ifaceID and returns its subnet along
+// with the set of host IPs already taken on it — the interface's own address and
+// every existing peer's AllowedIPs. Shared by nextFreeIP (auto-assign a free
+// address) and validatePeerAllowedIPs (validate an explicit one). The interface's
+// own host address is included in the used set, so a peer is never handed (or
+// allowed to claim) the IP the interface itself uses.
+func (s *Service) interfaceUsage(ifaceID uuid.UUID) (*net.IPNet, map[string]bool, error) {
 	srv, err := s.findServerByInterface(ifaceID)
 	if err != nil {
+		return nil, nil, err
+	}
+	iface, err := s.store.Servers().Interfaces(srv.ID).Get(ifaceID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("interface: %w", err)
+	}
+	hostIP, network, err := net.ParseCIDR(iface.Address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("interface has no valid address: %w", err)
+	}
+
+	used := map[string]bool{hostIP.String(): true}
+	for _, peer := range iface.Peers {
+		for _, cidr := range peer.AllowedIPs {
+			if ip, _ := parseAllowedIP(cidr); ip != nil {
+				used[ip.String()] = true
+			}
+		}
+	}
+	return network, used, nil
+}
+
+// parseAllowedIP parses an AllowedIPs entry, returning its address and whether
+// it's a single host — a /32 (IPv4) or /128 (IPv6) CIDR, or a bare IP — rather
+// than a broader route CIDR. nil address if it parses as neither.
+func parseAllowedIP(s string) (net.IP, bool) {
+	if ip, ipnet, err := net.ParseCIDR(s); err == nil {
+		ones, bits := ipnet.Mask.Size()
+		return ip, ones == bits
+	}
+	if ip := net.ParseIP(s); ip != nil {
+		return ip, true
+	}
+	return nil, false
+}
+
+// validatePeerAllowedIPs rejects the two mistakes admins hit when supplying a
+// peer's addresses by hand: a host address outside the interface's subnet, and a
+// host address already taken by the interface itself or another peer (two peers
+// sharing one IP). Only the peer's own tunnel address (a host entry) is checked;
+// a broader route CIDR — a LAN behind a site-to-site peer (see the Endpoint
+// field) — is legitimately outside the subnet and passes through untouched. When
+// AllowedIPs is left empty, nextFreeIP picks an address that can't hit either, so
+// this only runs for explicitly-supplied ones.
+func (s *Service) validatePeerAllowedIPs(ifaceID uuid.UUID, allowedIPs []string) error {
+	network, used, err := s.interfaceUsage(ifaceID)
+	if err != nil {
+		return err
+	}
+	seen := make(map[string]bool)
+	for _, raw := range allowedIPs {
+		ip, isHost := parseAllowedIP(raw)
+		if ip == nil {
+			return invalidInput("allowed IP %q is not a valid IP address or CIDR", raw)
+		}
+		if !isHost {
+			continue // routed CIDR — allowed outside the subnet
+		}
+		if !network.Contains(ip) {
+			return invalidInput("allowed IP %q is not in the interface subnet %s", ip, network.String())
+		}
+		key := ip.String()
+		if used[key] || seen[key] {
+			return invalidInput("allowed IP %q is already in use on this interface", ip)
+		}
+		seen[key] = true
+	}
+	return nil
+}
+
+// nextFreeIP picks the first host address in the interface's subnet that isn't
+// already used by the interface itself or one of its peers, for auto-assigning
+// AllowedIPs when the caller of AddPeer left it empty.
+func (s *Service) nextFreeIP(ifaceID uuid.UUID) (net.IP, error) {
+	network, used, err := s.interfaceUsage(ifaceID)
+	if err != nil {
 		return nil, err
-	}
-	ifaces := s.store.Servers().Interfaces(srv.ID)
-
-	iface, err := ifaces.Get(ifaceID)
-	if err != nil {
-		return nil, fmt.Errorf("interface: %w", err)
-	}
-	_, network, err := net.ParseCIDR(iface.Address)
-	if err != nil {
-		return nil, fmt.Errorf("interface has no valid address: %w", err)
-	}
-
-	used, err := ifaces.UsedIPs(ifaceID)
-	if err != nil {
-		return nil, fmt.Errorf("used IPs: %w", err)
-	}
-	usedSet := make(map[string]bool, len(used))
-	for _, u := range used {
-		usedSet[u.IP.String()] = true
 	}
 
 	networkIP := network.IP.Mask(network.Mask)
 	broadcast := broadcastIP(network)
+	// On a /31 (RFC 3021 point-to-point) or /32 there's no network/broadcast
+	// address to reserve — every address is usable — so only skip the ends on
+	// larger subnets.
+	ones, bits := network.Mask.Size()
+	skipEnds := bits-ones >= 2
 	for ip := cloneIP(networkIP); network.Contains(ip); incIP(ip) {
-		if ip.Equal(networkIP) || ip.Equal(broadcast) {
+		if skipEnds && (ip.Equal(networkIP) || ip.Equal(broadcast)) {
 			continue
 		}
-		if !usedSet[ip.String()] {
+		if !used[ip.String()] {
 			return ip, nil
 		}
 	}
-	return nil, fmt.Errorf("no free IP addresses available on interface %s", iface.Interface)
+	return nil, fmt.Errorf("no free IP addresses available on interface subnet %s", network.String())
 }
 
 func cloneIP(ip net.IP) net.IP {

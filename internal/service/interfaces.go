@@ -26,6 +26,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// ValidationError marks an error as caused by bad user input (a malformed field
+// or a uniqueness conflict) rather than an internal fault, so the HTTP layer can
+// map it to a 4xx instead of a 500 (see internal/api's handleErr). Its message
+// is the user-facing explanation.
+type ValidationError struct{ Msg string }
+
+func (e *ValidationError) Error() string { return e.Msg }
+
+// invalidInput builds a ValidationError with a formatted message.
+func invalidInput(format string, args ...any) error {
+	return &ValidationError{Msg: fmt.Sprintf(format, args...)}
+}
+
 // validateInterfaceConfig checks the fields the agent needs to bring the
 // interface up, so a bad config is rejected up front instead of being stored
 // and only surfacing later as a confusing best-effort push warning. The
@@ -35,14 +48,68 @@ import (
 // "agent returned 500: invalid CIDR address:".
 func validateInterfaceConfig(cfg agentmodels.InterfaceConfig) error {
 	if len(cfg.Interface) == 0 {
-		return fmt.Errorf("interface name is required")
+		return invalidInput("interface name is required")
 	}
 	if cfg.Address != "" {
 		if _, _, err := net.ParseCIDR(cfg.Address); err != nil {
-			return fmt.Errorf("interface address %q must be a CIDR like 10.0.0.1/24", cfg.Address)
+			return invalidInput("interface address %q must be a CIDR like 10.0.0.1/24", cfg.Address)
 		}
 	}
 	return nil
+}
+
+// validateInterfaceUnique rejects a create/update whose name, listen port, or
+// subnet collides with another interface ON THE SAME SERVER — the conflicts that
+// would otherwise fail (or silently misbehave) on the agent's host: two links
+// can't share a name or bind the same UDP port, and overlapping subnets break
+// routing. Listen port 0 is exempt (it means "no fixed port" — an exit-node
+// interface dials out, so several can legitimately have it). excludeID is the
+// interface being updated, skipped in the scan; pass uuid.Nil on create.
+func (s *Service) validateInterfaceUnique(sID uuid.UUID, cfg agentmodels.InterfaceConfig, excludeID uuid.UUID, old *models.Interface) error {
+	existing, err := s.store.Servers().Interfaces(sID).List()
+	if err != nil {
+		return err
+	}
+
+	// On update, only re-validate a field that actually changed: an unchanged
+	// name/port/subnet was already accepted, so re-checking it would wrongly
+	// block an unrelated edit if a conflict slipped in via a bypass path
+	// (BuildTunnel/ImportInterface persist directly) or predates this validation.
+	checkName := old == nil || old.Interface != cfg.Interface
+	checkPort := old == nil || old.ListenPort != cfg.ListenPort
+	checkSubnet := old == nil || old.Address != cfg.Address
+
+	var newNet *net.IPNet
+	if checkSubnet && cfg.Address != "" {
+		if _, newNet, err = net.ParseCIDR(cfg.Address); err != nil {
+			return invalidInput("interface address %q must be a CIDR like 10.0.0.1/24", cfg.Address)
+		}
+	}
+
+	for i := range existing {
+		other := existing[i]
+		if other.ID == excludeID {
+			continue
+		}
+		if checkName && other.Interface == cfg.Interface {
+			return invalidInput("interface name %q is already used on this server", cfg.Interface)
+		}
+		if checkPort && cfg.ListenPort != 0 && other.ListenPort == cfg.ListenPort {
+			return invalidInput("listen port %d is already used by interface %q on this server", cfg.ListenPort, other.Interface)
+		}
+		if newNet != nil && other.Address != "" {
+			if _, otherNet, perr := net.ParseCIDR(other.Address); perr == nil && netsOverlap(newNet, otherNet) {
+				return invalidInput("subnet %s overlaps interface %q (%s) on this server", cfg.Address, other.Interface, other.Address)
+			}
+		}
+	}
+	return nil
+}
+
+// netsOverlap reports whether two IP networks intersect — true when either one
+// contains the other's base address.
+func netsOverlap(a, b *net.IPNet) bool {
+	return a.Contains(b.IP) || b.Contains(a.IP)
 }
 
 // defaultInterfaceAddress allocates the first host address (.1) of the next
@@ -98,6 +165,9 @@ func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfi
 		if in.Address, err = s.defaultInterfaceAddress(); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.validateInterfaceUnique(sID, in, uuid.Nil, nil); err != nil {
+		return nil, err
 	}
 	in.Peers = nil // peers managed via Peers API only
 	// Every interface needs a private key; generate one when the caller didn't
@@ -164,6 +234,9 @@ func (s *Service) UpdateInterfaceConfig(serverID, ifaceID string, cfg agentmodel
 		if cfg.Address, err = s.defaultInterfaceAddress(); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.validateInterfaceUnique(sID, cfg, iID, iface); err != nil {
+		return nil, err
 	}
 	cfg.Peers = iface.Peers // immutable via this endpoint
 	iface.InterfaceConfig = cfg

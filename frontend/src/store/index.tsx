@@ -359,8 +359,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       return success
     } catch (error) {
+      // Re-throw so the caller can surface the specific reason (e.g. a duplicate
+      // or out-of-subnet IP) to the user instead of a generic failure.
       console.error('Failed to add peer:', error)
-      return false
+      throw error
     }
   },
 
@@ -411,8 +413,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       return iface
     } catch (error) {
+      // Re-throw so the caller can surface the specific reason (e.g. a
+      // validation conflict like a duplicate name/port/subnet) to the user,
+      // rather than a generic failure.
       console.error('Failed to create interface:', error)
-      return null
+      throw error
     }
   },
 

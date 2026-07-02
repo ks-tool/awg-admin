@@ -179,11 +179,17 @@ func pubKey(r bunrouter.Request) (string, error) {
 
 func handleErr(err error, fields map[string]any) error {
 	var status int
+	var validationErr *service.ValidationError
 	switch {
 	case storage.IsNotFound(err):
 		status = http.StatusNotFound
 	case storage.IsAlreadyExists(err):
 		status = http.StatusConflict
+	case errors.As(err, &validationErr):
+		// Bad user input (malformed field or a uniqueness conflict) — a client
+		// error, not an internal fault; return 400 with the message and don't
+		// log it at error level.
+		status = http.StatusBadRequest
 	default:
 		log.Error().Fields(fields).Err(err).Send()
 		return err

@@ -183,16 +183,14 @@ export async function addPeer(userId: string, input: AddPeerInput): Promise<bool
   if (client) {
     const { error } = await client.addPeer(userId, input);
     if (error) {
-      console.error(`Failed to add peer to user ${userId} (bindings):`, error);
-      return false;
+      throw new Error(String(error));
     }
     return true;
   }
-  
+
   const { error } = await post<void, AddPeerInput>(`/users/${userId}/peers`, input);
   if (error) {
-    console.error(`Failed to add peer to user ${userId}:`, error);
-    return false;
+    throw new Error(String(error));
   }
   return true;
 }

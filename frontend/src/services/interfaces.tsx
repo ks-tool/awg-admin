@@ -87,8 +87,7 @@ export async function createInterface(
   if (client) {
     const { data, error } = await client.createInterface(serverId, config);
     if (error) {
-      console.error(`Failed to create interface on server ${serverId} (bindings):`, error);
-      return null;
+      throw new Error(String(error));
     }
     return data as unknown as Interface;
   }
@@ -98,8 +97,7 @@ export async function createInterface(
     config
   );
   if (error) {
-    console.error(`Failed to create interface on server ${serverId}:`, error);
-    return null;
+    throw new Error(String(error));
   }
   return data;
 }
@@ -141,8 +139,7 @@ export async function updateInterfaceConfig(
   if (client) {
     const { data, error } = await client.updateInterfaceConfig(serverId, interfaceId, config);
     if (error) {
-      console.error(`Failed to update interface ${interfaceId} config (bindings):`, error);
-      return null;
+      throw new Error(String(error));
     }
     return data as unknown as Interface;
   }
@@ -152,8 +149,7 @@ export async function updateInterfaceConfig(
     config
   );
   if (error) {
-    console.error(`Failed to update interface ${interfaceId} config:`, error);
-    return null;
+    throw new Error(String(error));
   }
   return data;
 }

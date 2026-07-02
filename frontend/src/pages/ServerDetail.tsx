@@ -918,19 +918,23 @@ export default function ServerDetail() {
             for (const f of AMNEZIA_STR_FIELDS) config[f] = str(form[f]);
         }
 
-        let ok = false;
-        if (interfaceModal?.mode === 'add' && selectedServerId) {
-            ok = !!(await createInterface(selectedServerId, config));
-        } else if (interfaceModal?.mode === 'edit' && interfaceModal.interfaceId) {
-            ok = !!(await updateInterfaceConfig(selectedServerId!, interfaceModal.interfaceId, config));
-        }
-
-        if (ok) {
-            toast.success(interfaceModal?.mode === 'add' ? t('servers.interfaces.added') : t('servers.interfaces.updated'));
+        const isAdd = interfaceModal?.mode === 'add';
+        try {
+            if (isAdd && selectedServerId) {
+                await createInterface(selectedServerId, config);
+            } else if (interfaceModal?.mode === 'edit' && interfaceModal.interfaceId) {
+                await updateInterfaceConfig(selectedServerId!, interfaceModal.interfaceId, config);
+            } else {
+                return;
+            }
+            toast.success(isAdd ? t('servers.interfaces.added') : t('servers.interfaces.updated'));
             setInterfaceModal(null);
             await loadInterfaces();
-        } else {
-            toast.error(interfaceModal?.mode === 'add' ? t('servers.interfaces.addError') : t('servers.interfaces.updateError'));
+        } catch (err) {
+            // Surface the specific backend reason (e.g. a name/port/subnet
+            // conflict) instead of a generic failure.
+            const fallback = isAdd ? t('servers.interfaces.addError') : t('servers.interfaces.updateError');
+            toast.error(err instanceof Error && err.message ? err.message : fallback);
         }
     };
 

@@ -312,11 +312,15 @@ func TestSyncServerResendsAllInterfaces(t *testing.T) {
 		t.Fatalf("CreateServer: %v", err)
 	}
 
-	for _, name := range []string{"wg0", "wg1"} {
-		if _, err = svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
-			Interface: name, Address: "10.0.0.1/24", ListenPort: 51820,
-		}); err != nil {
-			t.Fatalf("CreateInterface(%s): %v", name, err)
+	// Distinct name/port/subnet per interface — two on one server can't share a
+	// listen port or an overlapping subnet (see validateInterfaceUnique).
+	ifaceCfgs := []agentmodels.InterfaceConfig{
+		{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820},
+		{Interface: "wg1", Address: "10.0.1.1/24", ListenPort: 51821},
+	}
+	for _, cfg := range ifaceCfgs {
+		if _, err = svc.CreateInterface(srv.ID.String(), cfg); err != nil {
+			t.Fatalf("CreateInterface(%s): %v", cfg.Interface, err)
 		}
 	}
 
