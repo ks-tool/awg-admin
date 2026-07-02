@@ -235,7 +235,7 @@
       "privateKey": "Private Key (Optional)",
       "privateKeyPlaceholder": "Enter Wireguard private key",
       "enabled": "Activate interface",
-      "enabledHint": "When on, the agent brings this interface up (and raises it on startup). Turn off to keep the config but tear the interface down on the agent.",
+      "enabledHint": "The deactivated interface is not created on the server when the agent starts.",
       "disabledBadge": "Disabled",
       "tabGeneral": "General",
       "tabAmnezia": "Amnezia",
