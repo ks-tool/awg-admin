@@ -73,7 +73,7 @@ func New() *Backend {
 // over the UAPI socket, matching the kernel backend's lifecycle. The amnezia
 // flag is irrelevant here: the amneziawg-go device serves both plain WireGuard
 // and AmneziaWG, deciding per the obfuscation params pushed over the UAPI.
-func (b *Backend) Add(iface string, amnezia bool) error {
+func (b *Backend) Add(iface string, _ bool) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -96,9 +96,14 @@ func (b *Backend) Add(iface string, amnezia bool) error {
 		dev.Close()
 		return fmt.Errorf("open UAPI socket for %q: %w", iface, err)
 	}
+	// UAPIListen wraps the socket via net.FileListener, which dups the fd — so
+	// once it succeeds fileUAPI is a redundant descriptor (closing it doesn't
+	// affect the listener). Close it on every path to avoid leaking one fd per
+	// interface Add over the agent's lifetime.
+	defer func() { _ = fileUAPI.Close() }()
+
 	uapiListener, err := ipc.UAPIListen(iface, fileUAPI)
 	if err != nil {
-		_ = fileUAPI.Close()
 		dev.Close()
 		return fmt.Errorf("listen UAPI socket for %q: %w", iface, err)
 	}
