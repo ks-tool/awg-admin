@@ -128,6 +128,34 @@ func (h *Handler) peerDelete(w http.ResponseWriter, r bunrouter.Request) error {
 	return bunrouter.JSON(w, users.Peers)
 }
 
+func (h *Handler) peerSetDisabled(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	uID, err := userID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["user_id"] = uID
+
+	var req struct {
+		PublicKey string `json:"publicKey"`
+		Disabled  bool   `json:"disabled"`
+	}
+	if err = decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	fields["pub_key"] = req.PublicKey
+	fields["disabled"] = req.Disabled
+	log.Debug().Fields(fields).Msg("setting peer disabled state")
+
+	u, err := h.svc.SetPeerDisabled(uID, req.PublicKey, req.Disabled)
+	if err != nil {
+		return handleErr(err, fields)
+	}
+
+	return bunrouter.JSON(w, u)
+}
+
 func (h *Handler) peerMigrate(w http.ResponseWriter, r bunrouter.Request) error {
 	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
 

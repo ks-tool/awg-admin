@@ -693,4 +693,17 @@ export const bindingsClient = {
             };
         }
     },
+
+    async setPeerDisabled(userId: string, publicKey: string, disabled: boolean): Promise<ApiResponse<models.User>> {
+        try {
+            const data = await AppBindings.SetPeerDisabled(userId, publicKey, disabled);
+            return { data };
+        } catch (error) {
+            console.error('Bindings SetPeerDisabled failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
 };

@@ -189,6 +189,71 @@ func (s *Service) DeletePeer(userID string, key string) (*models.User, error) {
 	return &sanitized, nil
 }
 
+// SetPeerDisabled activates or deactivates a peer, mirroring the interface-level
+// Disabled toggle. A deactivated peer keeps its stored config (keys, address,
+// PSK, keepalive) but is dropped from the InterfaceConfig pushed to the agent
+// (ToAmneziaConfig omits it), so it's removed from the live WireGuard device and
+// can't connect until reactivated. Both the user's models.Peer and the owning
+// interface's InterfacePeer carry the flag; both are updated in one storage
+// write, then the interface is re-pushed. Returns the updated (sanitized) user.
+func (s *Service) SetPeerDisabled(userID, publicKey string, disabled bool) (*models.User, error) {
+	uID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, invalidInput("invalid user id %q", userID)
+	}
+	pk, err := agentmodels.ParseKey(publicKey)
+	if err != nil {
+		return nil, invalidInput("invalid peer public key")
+	}
+
+	peer, err := s.store.Users().Peers(uID).Get(pk)
+	if err != nil {
+		return nil, err
+	}
+	ifaceID := peer.InterfaceId
+
+	// The InterfacePeer (AllowedIPs/PSK/keepalive/endpoint) lives on the owning
+	// interface's config — read it so only Disabled changes and the rest carries
+	// over unchanged through the upsert.
+	iface, _, err := s.getInterfaceByID(ifaceID)
+	if err != nil {
+		return nil, fmt.Errorf("load interface: %w", err)
+	}
+	var ifacePeer *agentmodels.InterfacePeer
+	for i := range iface.Peers {
+		if iface.Peers[i].Key == pk {
+			cp := iface.Peers[i]
+			ifacePeer = &cp
+			break
+		}
+	}
+	if ifacePeer == nil {
+		return nil, invalidInput("peer not found on its interface")
+	}
+
+	peer.Disabled = disabled
+	ifacePeer.Disabled = disabled
+
+	ps := s.store.Users().Peers(uID)
+	if ext, ok := ps.(interface {
+		SetWithIfacePeer(*models.Peer, agentmodels.InterfacePeer) error
+	}); ok {
+		if err = ext.SetWithIfacePeer(peer, *ifacePeer); err != nil {
+			return nil, err
+		}
+	} else if err = ps.Set(peer); err != nil {
+		return nil, err
+	}
+
+	s.pushInterfaceByID(ifaceID)
+	u, err := s.store.Users().Get(uID)
+	if err != nil {
+		return nil, err
+	}
+	sanitized := sanitizeUser(*u)
+	return &sanitized, nil
+}
+
 // MigratePeer moves a peer to a different interface, preserving its keys, name,
 // DNS and preshared key. Its address is kept when it's still inside the target
 // interface's subnet and free there (e.g. moving between a tunnel's members,
@@ -282,6 +347,7 @@ func (s *Service) MigratePeer(userID, publicKey, targetIfaceID string) (*models.
 		PresharedKey:      srcIfacePeer.PresharedKey,
 		AllowedIPs:        newAllowedIPs,
 		Endpoint:          srcIfacePeer.Endpoint,
+		Disabled:          srcIfacePeer.Disabled,
 		KeepaliveInterval: srcIfacePeer.KeepaliveInterval,
 	}
 	ps := s.store.Users().Peers(uID)

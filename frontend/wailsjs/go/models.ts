@@ -149,6 +149,7 @@ export namespace models {
 	    psk?: number[];
 	    ips: string[];
 	    endpoint?: string;
+	    disabled?: boolean;
 	    keepalive: number;
 	
 	    static createFrom(source: any = {}) {
@@ -161,6 +162,7 @@ export namespace models {
 	        this.psk = source["psk"];
 	        this.ips = source["ips"];
 	        this.endpoint = source["endpoint"];
+	        this.disabled = source["disabled"];
 	        this.keepalive = source["keepalive"];
 	    }
 	}

@@ -303,6 +303,14 @@ Its address is kept when it still fits the target interface's subnet and is free
 there — e.g. moving between a tunnel's two members, which share a subnet —
 otherwise a free address on the target is assigned; both interfaces are re-pushed.
 
+You can **deactivate a peer** (the ⏻ toggle on a peer) without deleting it. A
+deactivated peer keeps its stored config — keys, address, pre-shared key — but is
+removed from the live interface on the agent, so that client can no longer
+connect until you reactivate it. Mirrors the interface-level *Activate* switch
+above, one client at a time: handy for temporarily revoking access without
+throwing away the peer or its address. Its config/QR code stay available, but a
+deactivated peer isn't on the device, so it reports no traffic in the metrics.
+
 Deleting a peer revokes it on the agent (removes it from the interface) and drops
 it from the peer metrics, so it no longer shows in the metrics history.
 

@@ -245,3 +245,30 @@ export async function migratePeer(userId: string, publicKey: Key, interfaceId: s
   }
   return true;
 }
+
+/**
+ * Activate or deactivate a peer. A deactivated peer keeps its stored config but
+ * is dropped from the interface config pushed to the agent, so it's removed from
+ * the live WireGuard device and can't connect until reactivated. Throws the
+ * backend message on failure so the caller can surface the specific reason.
+ */
+export async function setPeerDisabled(userId: string, publicKey: Key, disabled: boolean): Promise<boolean> {
+  const client = getClient();
+
+  if (client) {
+    const { error } = await client.setPeerDisabled(userId, publicKey, disabled);
+    if (error) {
+      throw new Error(String(error));
+    }
+    return true;
+  }
+
+  const { error } = await post<void, { publicKey: Key; disabled: boolean }>(
+    `/users/${userId}/peers/disabled`,
+    { publicKey, disabled },
+  );
+  if (error) {
+    throw new Error(String(error));
+  }
+  return true;
+}

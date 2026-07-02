@@ -251,6 +251,14 @@ export interface InterfacePeer {
   psk?: Key;
   ips: string[];
   endpoint?: string;
+  /**
+   * Disabled deactivates this peer: it's kept in the stored InterfaceConfig
+   * but omitted from the device config applied via wgctrl (ToAmneziaConfig /
+   * ToWireguardPeers), so with ReplacePeers the peer is removed from the live
+   * interface and can't connect until reactivated. Zero value (false) keeps
+   * the peer active, so configs written before this field existed stay up.
+   */
+  disabled?: boolean;
   keepalive: number /* time in nanoseconds (time.Duration) */;
 }
 export interface DeviceInfo {

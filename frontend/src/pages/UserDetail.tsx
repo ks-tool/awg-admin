@@ -18,12 +18,12 @@ import * as React from 'react';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {ArrowLeft, ArrowRightLeft, Download, Key, Plus, QrCode, Trash2, User as UserIcon, UserPen} from 'lucide-react';
+import {ArrowLeft, ArrowRightLeft, Download, Key, Plus, Power, PowerOff, QrCode, Trash2, User as UserIcon, UserPen} from 'lucide-react';
 import {PageHeader} from '@/components/layout/PageHeader';
 import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {listInterfaces} from '@/services/interfaces';
-import {getPeerConfig, getPeerQRCode, migratePeer, savePeerQRCode} from '@/services/peers';
+import {getPeerConfig, getPeerQRCode, migratePeer, savePeerQRCode, setPeerDisabled} from '@/services/peers';
 import {CopyButton} from '@/components/common/CopyButton';
 import {StatusBadge} from '@/components/common/StatusBadge';
 import {Container} from '@/components/common/Container';
@@ -366,6 +366,7 @@ export default function UserDetail() {
     const [addPeerLoading, setAddPeerLoading] = useState(false);
     const [deletePeerKey, setDeletePeerKey] = useState<string | null>(null);
     const [deletePeerLoading, setDeletePeerLoading] = useState(false);
+    const [togglingPeerKey, setTogglingPeerKey] = useState<string | null>(null);
     const [peerToMigrate, setPeerToMigrate] = useState<{publicKey: string; name: string; currentInterface: string} | null>(null);
     const [migrateTarget, setMigrateTarget] = useState('');
     const [migrateLoading, setMigrateLoading] = useState(false);
@@ -496,6 +497,21 @@ export default function UserDetail() {
         } finally {
             setDeletePeerLoading(false);
             setDeletePeerKey(null);
+        }
+    };
+
+    const handleTogglePeerDisabled = async (publicKey: string, disabled: boolean) => {
+        if (!selectedUserId) return;
+        setTogglingPeerKey(publicKey);
+        try {
+            await setPeerDisabled(selectedUserId, publicKey, disabled);
+            toast.success(disabled ? t('peers.deactivated') : t('peers.activated'));
+            await refreshData();
+        } catch (error) {
+            console.error('Failed to toggle peer:', error);
+            toast.error(error instanceof Error && error.message ? error.message : t('peers.toggleError'));
+        } finally {
+            setTogglingPeerKey(null);
         }
     };
 
@@ -713,6 +729,19 @@ export default function UserDetail() {
                                                 title={t('peers.migrateTooltip')}
                                             >
                                                 <ArrowRightLeft size={16}/>
+                                            </button>
+                                            <button
+                                                onClick={() => handleTogglePeerDisabled(peer.pk, !peer.disabled)}
+                                                disabled={togglingPeerKey === peer.pk}
+                                                className={cn(
+                                                    'p-1 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+                                                    peer.disabled
+                                                        ? 'text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/10'
+                                                        : 'text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/10',
+                                                )}
+                                                title={peer.disabled ? t('peers.activateTooltip') : t('peers.deactivateTooltip')}
+                                            >
+                                                {peer.disabled ? <Power size={16}/> : <PowerOff size={16}/>}
                                             </button>
                                             <button
                                                 onClick={() => setDeletePeerKey(peer.pk)}

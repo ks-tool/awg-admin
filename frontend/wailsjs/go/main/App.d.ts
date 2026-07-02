@@ -103,6 +103,8 @@ export function SetBasicAuthEnabled(arg1:boolean):Promise<void>;
 
 export function SetDebugLogging(arg1:boolean):Promise<void>;
 
+export function SetPeerDisabled(arg1:string,arg2:string,arg3:boolean):Promise<models.User>;
+
 export function SetServerMonitoring(arg1:string,arg2:boolean):Promise<models.Server>;
 
 export function StartTunnels():Promise<void>;

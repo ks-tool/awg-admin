@@ -202,6 +202,10 @@ export function SetDebugLogging(arg1) {
   return window['go']['main']['App']['SetDebugLogging'](arg1);
 }
 
+export function SetPeerDisabled(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetPeerDisabled'](arg1, arg2, arg3);
+}
+
 export function SetServerMonitoring(arg1, arg2) {
   return window['go']['main']['App']['SetServerMonitoring'](arg1, arg2);
 }

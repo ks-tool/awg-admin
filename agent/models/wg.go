@@ -149,6 +149,13 @@ type InterfaceConfig struct {
 func (awg InterfaceConfig) ToAmneziaConfig() *wgtypes.Config {
 	peers := make([]wgtypes.PeerConfig, 0, len(awg.Peers))
 	for _, peer := range awg.Peers {
+		if peer.Disabled {
+			// Deactivated peer: omit it so, with ReplacePeers, it's dropped from
+			// the live device and can't connect. The stored config keeps it
+			// (desired state), so reactivating re-adds it. Mirrors the
+			// interface-level Disabled handling in service.Handler.One.
+			continue
+		}
 		peers = append(peers, peer.PeerConfig())
 	}
 
@@ -296,6 +303,9 @@ func GenerateAmneziaParams(cfg *InterfaceConfig) {
 func (awg InterfaceConfig) ToWireguardPeers() []wgtypes.PeerConfig {
 	peers := make([]wgtypes.PeerConfig, 0, len(awg.Peers))
 	for _, peer := range awg.Peers {
+		if peer.Disabled {
+			continue // deactivated peer: omitted from the device config (see ToAmneziaConfig)
+		}
 		peers = append(peers, peer.PeerConfig())
 	}
 	return peers
@@ -306,6 +316,13 @@ type InterfacePeer struct {
 	PresharedKey *Key     `json:"psk,omitempty"`
 	AllowedIPs   []string `json:"ips"`
 	Endpoint     string   `json:"endpoint,omitempty"`
+
+	// Disabled deactivates this peer: it's kept in the stored InterfaceConfig
+	// but omitted from the device config applied via wgctrl (ToAmneziaConfig /
+	// ToWireguardPeers), so with ReplacePeers the peer is removed from the live
+	// interface and can't connect until reactivated. Zero value (false) keeps
+	// the peer active, so configs written before this field existed stay up.
+	Disabled bool `json:"disabled,omitempty"`
 
 	KeepaliveInterval time.Duration `json:"keepalive"`
 }
