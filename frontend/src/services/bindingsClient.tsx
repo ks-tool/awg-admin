@@ -680,4 +680,17 @@ export const bindingsClient = {
             };
         }
     },
+
+    async migratePeer(userId: string, publicKey: string, interfaceId: string): Promise<ApiResponse<models.User>> {
+        try {
+            const data = await AppBindings.MigratePeer(userId, publicKey, interfaceId);
+            return { data };
+        } catch (error) {
+            console.error('Bindings MigratePeer failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
 };

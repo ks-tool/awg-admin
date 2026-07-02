@@ -84,6 +84,7 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *sessionStore {
 
 			gr.WithGroup("/peers", func(gr *bunrouter.Group) {
 				gr.POST("", h.peerAdd)
+				gr.POST("/migrate", h.peerMigrate)
 				gr.GET("/*pubkey", h.peerGet)
 				gr.DELETE("/*pubkey", h.peerDelete)
 			})

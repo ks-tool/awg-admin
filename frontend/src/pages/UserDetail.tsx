@@ -18,12 +18,12 @@ import * as React from 'react';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {ArrowLeft, Download, Key, Plus, QrCode, Trash2, User as UserIcon, UserPen} from 'lucide-react';
+import {ArrowLeft, ArrowRightLeft, Download, Key, Plus, QrCode, Trash2, User as UserIcon, UserPen} from 'lucide-react';
 import {PageHeader} from '@/components/layout/PageHeader';
 import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {listInterfaces} from '@/services/interfaces';
-import {getPeerConfig, getPeerQRCode, savePeerQRCode} from '@/services/peers';
+import {getPeerConfig, getPeerQRCode, migratePeer, savePeerQRCode} from '@/services/peers';
 import {CopyButton} from '@/components/common/CopyButton';
 import {StatusBadge} from '@/components/common/StatusBadge';
 import {Container} from '@/components/common/Container';
@@ -31,7 +31,7 @@ import {FormField} from '@/components/common/FormField';
 import {buttons, inputs, Modal} from '@/components/common/Modal';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {cn} from '@/lib/utils';
-import type {Server} from '@/types';
+import type {Interface, Server} from '@/types';
 
 // ---------------------------------------------------------------------------
 // Peer QR code modal
@@ -348,6 +348,7 @@ export default function UserDetail() {
     const {
         users,
         servers,
+        interfaces,
         selectedUserId,
         setSelectedUser,
         updateUser,
@@ -365,6 +366,9 @@ export default function UserDetail() {
     const [addPeerLoading, setAddPeerLoading] = useState(false);
     const [deletePeerKey, setDeletePeerKey] = useState<string | null>(null);
     const [deletePeerLoading, setDeletePeerLoading] = useState(false);
+    const [peerToMigrate, setPeerToMigrate] = useState<{publicKey: string; name: string; currentInterface: string} | null>(null);
+    const [migrateTarget, setMigrateTarget] = useState('');
+    const [migrateLoading, setMigrateLoading] = useState(false);
     const [showDeleteUserConfirm, setShowDeleteUserConfirm] = useState(false);
     const [deleteUserLoading, setDeleteUserLoading] = useState(false);
     const [formData, setFormData] = useState({
@@ -523,6 +527,34 @@ export default function UserDetail() {
     const getServerForInterface = (interfaceId: string) =>
         servers.find(server => server.interfaces?.includes(interfaceId));
 
+    // Every interface across all servers, labelled "server/iface", for the
+    // migrate-peer picker (the target is filtered to exclude the peer's own
+    // interface at render time).
+    const interfaceOptions = servers.flatMap(server =>
+        (server.interfaces ?? [])
+            .map(id => interfaces.get(id))
+            .filter((i): i is Interface => !!i)
+            .map(i => ({id: i.id, label: `${server.name}/${i.iface}`})),
+    );
+
+    const handleMigratePeer = async () => {
+        if (!selectedUserId || !peerToMigrate || !migrateTarget) return;
+        setMigrateLoading(true);
+        try {
+            await migratePeer(selectedUserId, peerToMigrate.publicKey, migrateTarget);
+            toast.success(t('peers.migrated'));
+            setPeerToMigrate(null);
+            await refreshData();
+        } catch (error) {
+            // Surface the specific backend reason (e.g. no free address on the
+            // target) instead of a generic failure.
+            console.error('Failed to migrate peer:', error);
+            toast.error(error instanceof Error && error.message ? error.message : t('peers.migrateError'));
+        } finally {
+            setMigrateLoading(false);
+        }
+    };
+
     /* ---- Render: empty state ---------------------------------------------- */
 
     if (!user) {
@@ -676,6 +708,13 @@ export default function UserDetail() {
                                                 <QrCode size={16}/>
                                             </button>
                                             <button
+                                                onClick={() => { setMigrateTarget(''); setPeerToMigrate({publicKey: peer.pk, name: peer.name, currentInterface: peer.interface}); }}
+                                                className="p-1 text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300 rounded transition-colors"
+                                                title={t('peers.migrateTooltip')}
+                                            >
+                                                <ArrowRightLeft size={16}/>
+                                            </button>
+                                            <button
                                                 onClick={() => setDeletePeerKey(peer.pk)}
                                                 className="p-1 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/10 rounded transition-colors"
                                                 title={t('peers.deletePeerTooltip')}
@@ -740,6 +779,39 @@ export default function UserDetail() {
                     loading={deletePeerLoading}
                 />
             )}
+
+            {peerToMigrate && (() => {
+                const targets = interfaceOptions.filter((o) => o.id !== peerToMigrate.currentInterface);
+                return (
+                    <Modal title={t('peers.migrateTitle')} onClose={() => setPeerToMigrate(null)} loading={migrateLoading}>
+                        <p className="text-sm text-muted-foreground dark:text-zinc-400 mb-4">
+                            {t('peers.migrateHint', {name: peerToMigrate.name})}
+                        </p>
+                        {targets.length === 0 ? (
+                            <p className="text-sm text-muted-foreground dark:text-zinc-500">{t('peers.migrateNoTargets')}</p>
+                        ) : (
+                            <FormField label={t('servers.interface')}>
+                                <select
+                                    value={migrateTarget}
+                                    onChange={(e) => setMigrateTarget(e.target.value)}
+                                    className={inputs.primary}
+                                >
+                                    <option value="">{t('tunnels.selectInterface')}</option>
+                                    {targets.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                                </select>
+                            </FormField>
+                        )}
+                        <div className="flex justify-end gap-2 mt-6">
+                            <button onClick={() => setPeerToMigrate(null)} disabled={migrateLoading} className={buttons.secondary}>
+                                {t('common.cancel')}
+                            </button>
+                            <button onClick={handleMigratePeer} disabled={migrateLoading || !migrateTarget || targets.length === 0} className={buttons.primary}>
+                                {t('peers.migrate')}
+                            </button>
+                        </div>
+                    </Modal>
+                );
+            })()}
         </div>
     );
 }

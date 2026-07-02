@@ -297,6 +297,12 @@ For each peer you get:
 - **QR code** — the same config as a scannable QR for the mobile apps, with a
   button to **save it as a PNG** file (native save dialog in the desktop app).
 
+You can **move a peer to another interface** (the ⇄ action on a peer, then pick a
+target from any server): its keys, name, DNS and pre-shared key are preserved.
+Its address is kept when it still fits the target interface's subnet and is free
+there — e.g. moving between a tunnel's two members, which share a subnet —
+otherwise a free address on the target is assigned; both interfaces are re-pushed.
+
 Deleting a peer revokes it on the agent (removes it from the interface) and drops
 it from the peer metrics, so it no longer shows in the metrics history.
 
@@ -313,13 +319,18 @@ Build one from the **Tunnels** page with the wizard:
    relay). It must have a listen port and a CIDR address.
 2. **Exit** — pick a second server + interface to become the dedicated exit.
    Note its config is replaced to serve this role.
-3. **Review** — optionally set the shared subnet between the two servers (leave
-   blank to auto-allocate a free `/24`), then build.
+3. **Review** — the tunnel's shared subnet is shown for confirmation. It is
+   **always the entry interface's own subnet** (the exit is placed on it), not a
+   value you pick, then build.
 
 Amnezia Admin reconfigures both interfaces and pushes them: the relay gets
 policy-routing rules and a gateway peer pointing at the exit; the exit gets NAT
 (masquerade) and dials back to the relay. Clients need no config change — their
 existing tunnel to the relay now exits via the second server.
+
+Because the exit sits on the entry's subnet, the two members share **one address
+pool**: a peer you add to either end gets an address that's unique across both.
+You can add client peers to the exit interface too, not just the relay.
 
 **Removing** a tunnel reverts both interfaces to empty (clears the added peers,
 hooks and routing) rather than deleting them, so the interfaces remain for

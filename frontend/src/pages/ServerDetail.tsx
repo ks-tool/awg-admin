@@ -613,6 +613,7 @@ export default function ServerDetail() {
     const {navigate} = useNavigation();
     const {
         servers,
+        users,
         selectedServerId,
         setSelectedServer,
         updateServer,
@@ -1167,7 +1168,7 @@ export default function ServerDetail() {
                                                     <Edit2 size={16}/>
                                                 </button>
                                                 <button
-                                                    onClick={() => setDeleteInterfaceId(iface.id)}
+                                                    onClick={() => { setDeleteInterfaceConfirmed(false); setDeleteInterfaceId(iface.id); }}
                                                     disabled={!!iface.tunnel}
                                                     className="p-1 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/10 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                                                     title={iface.tunnel ? t('servers.interfaces.inTunnelTooltip') : t('servers.interfaces.deleteTooltip')}
@@ -1250,7 +1251,16 @@ export default function ServerDetail() {
 
             {deleteInterfaceId && (() => {
                 const iface = serverInterfaces.find((i) => i.id === deleteInterfaceId);
-                const peerCount = iface?.peers?.length ?? 0;
+                // Count from the reactive store's users (peers live under users,
+                // tagged with their interface id — the same thing the backend
+                // cascade-deletes), so a peer added on the Users page is seen
+                // even though serverInterfaces was loaded on mount. iface.peers is
+                // a fallback for when the users list hasn't loaded yet.
+                const usersPeerCount = users.reduce(
+                    (n, u) => n + (u.peers?.filter((p) => p.interface === deleteInterfaceId).length ?? 0),
+                    0,
+                );
+                const peerCount = Math.max(usersPeerCount, iface?.peers?.length ?? 0);
                 const closeDelete = () => {
                     setDeleteInterfaceId(null);
                     setDeleteInterfaceConfirmed(false);

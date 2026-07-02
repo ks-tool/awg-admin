@@ -217,3 +217,31 @@ export async function deletePeer(userId: string, publicKey: Key): Promise<boolea
   }
   return true;
 }
+
+/**
+ * Move a peer to a different interface. Its keys/name/DNS/PSK are preserved; its
+ * address is kept when it still fits the target interface's subnet and is free
+ * there (e.g. between a tunnel's members, which share a subnet), otherwise the
+ * backend auto-assigns a free one. Throws the backend message on failure so the
+ * caller can surface the specific reason.
+ */
+export async function migratePeer(userId: string, publicKey: Key, interfaceId: string): Promise<boolean> {
+  const client = getClient();
+
+  if (client) {
+    const { error } = await client.migratePeer(userId, publicKey, interfaceId);
+    if (error) {
+      throw new Error(String(error));
+    }
+    return true;
+  }
+
+  const { error } = await post<void, { publicKey: Key; interfaceId: string }>(
+    `/users/${userId}/peers/migrate`,
+    { publicKey, interfaceId },
+  );
+  if (error) {
+    throw new Error(String(error));
+  }
+  return true;
+}

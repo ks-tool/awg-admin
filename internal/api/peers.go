@@ -127,3 +127,30 @@ func (h *Handler) peerDelete(w http.ResponseWriter, r bunrouter.Request) error {
 	w.WriteHeader(http.StatusNoContent)
 	return bunrouter.JSON(w, users.Peers)
 }
+
+func (h *Handler) peerMigrate(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	uID, err := userID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["user_id"] = uID
+
+	var req struct {
+		PublicKey   string `json:"publicKey"`
+		InterfaceID string `json:"interfaceId"`
+	}
+	if err = decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	fields["interface_id"] = req.InterfaceID
+	log.Debug().Fields(fields).Msg("migrating peer to another interface")
+
+	u, err := h.svc.MigratePeer(uID, req.PublicKey, req.InterfaceID)
+	if err != nil {
+		return handleErr(err, fields)
+	}
+
+	return bunrouter.JSON(w, u)
+}
