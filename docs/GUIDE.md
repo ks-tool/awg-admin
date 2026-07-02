@@ -307,9 +307,9 @@ first.
 ## Dashboard and metrics
 
 The **Dashboard** shows totals (servers, peers, users, tunnels) and a per-server
-table with an **agent status** badge, an **agent type** column, **load average
-(1/5/15)** and **RAM %**. Clicking a server opens the **metrics modal** with two
-tabs:
+table with an **agent status** badge, an **agent type** column, a **peers** count,
+**load average (1/5/15)** and **RAM %**. Clicking a server opens the **metrics
+modal** with two tabs:
 
 - **System** — host CPU/RAM/load/network over time.
 - **Peers** — a per-peer activity table with a compact sparkline of each peer's
