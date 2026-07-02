@@ -32,15 +32,24 @@ function calculateStats(
   allPeers: PeerInfo[],
   interfaces: Map<string, Interface>,
 ): DashboardStats {
-  let activePeers = 0
   let totalRxBytes = 0
   let totalTxBytes = 0
 
-  // Count active peers and sum bytes
+  // Sum traffic across all peers.
   allPeers.forEach((peer) => {
-    if (peer.online) activePeers++
     totalRxBytes += peer.rx || 0
     totalTxBytes += peer.tx || 0
+  })
+
+  // Active peers = the ones that aren't deactivated (models.Peer.disabled — a
+  // deactivated peer is kept but dropped from the live interface, so it can't
+  // connect). Counted from `users`, since that's where the disabled flag lives;
+  // the flattened allPeers PeerInfo list carries only placeholder online/rx/tx.
+  let activePeers = 0
+  users.forEach((u) => {
+    for (const p of u.peers ?? []) {
+      if (!p.disabled) activePeers++
+    }
   })
 
   // A tunnel is a group of interfaces sharing a non-empty tunnel id (see

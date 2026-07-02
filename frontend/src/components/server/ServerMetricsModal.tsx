@@ -32,6 +32,7 @@ import {Modal} from '@/components/common/Modal';
 import {getServerMetricsHistory} from '@/services/servers';
 import {useAppStore} from '@/store';
 import {cn, formatBytes} from '@/lib/utils';
+import {b64ToHex} from '@/lib/peers';
 import type {PeerHistoryPoint, SystemHistory, SystemHistoryPoint} from '@/types';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -103,21 +104,6 @@ function activitySeries(points: PeerHistoryPoint[]): number[] {
 }
 
 const shortKey = (pk: string) => (pk.length > 12 ? `${pk.slice(0, 10)}…` : pk);
-
-// The admin exposes a peer's public key base64-encoded (WireGuard's string
-// form, the `pk` field after sanitizePeer swaps the private key for the
-// public one), while the agent keys its per-peer history by the SAME public
-// key hex-encoded (hex.EncodeToString). Convert to hex so the two match.
-function b64ToHex(b64: string): string {
-    try {
-        const bin = atob(b64);
-        let hex = '';
-        for (let i = 0; i < bin.length; i++) hex += bin.charCodeAt(i).toString(16).padStart(2, '0');
-        return hex;
-    } catch {
-        return '';
-    }
-}
 
 // Sparkline is a small inline area chart that fills the width of its container
 // — deliberately short (not a full Chart.js instance per row, which would be
