@@ -6,9 +6,10 @@ name: release
 # Produces, all attached to the same GitHub Release for the tag:
 #   - awg-admin (standalone web server): linux/darwin/windows, amd64/arm64
 #     archives — built by GoReleaser (see .goreleaser.yaml).
-#   - awg-agent: linux only, amd64/arm64 — built by GoReleaser.
-#   - a multi-arch (amd64+arm64) Docker image of the standalone server,
-#     pushed to GHCR.
+#   - awg-agent (kernel/amneziawg-dkms) and awg-agent-userspace
+#     (userspace/amneziawg-go): linux only, amd64/arm64 — built by GoReleaser.
+#   - multi-arch (amd64+arm64) Docker images pushed to GHCR — the standalone
+#     server and the userspace agent — also built by GoReleaser.
 #   - the Wails desktop app for Windows (.exe + NSIS installer), macOS
 #     (.app + .dmg, universal binary) and Linux (binary).
 on:
@@ -25,7 +26,10 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------
-  # awg-admin + awg-agent binaries, checksums, changelog, GitHub Release.
+  # Everything GoReleaser owns: awg-admin + awg-agent + awg-agent-userspace
+  # binaries, archives, checksums, changelog, the GitHub Release, and the
+  # multi-arch Docker images (standalone server + userspace agent) pushed
+  # to GHCR (see the dockers/docker_manifests pipes in .goreleaser.yaml).
   # ---------------------------------------------------------------------
   goreleaser:
     runs-on: ubuntu-latest
@@ -44,29 +48,14 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Docker image names must be lowercase; GHCR is keyed off the repo owner.
+      - name: Compute image names (lowercase)
+        run: |
+          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_ADMIN=ghcr.io/$owner/awg-admin" >> "$GITHUB_ENV"
+          echo "IMAGE_AGENT_USERSPACE=ghcr.io/$owner/awg-agent-userspace" >> "$GITHUB_ENV"
 
-  # ---------------------------------------------------------------------
-  # Multi-arch Docker image of the standalone server. Built directly with
-  # buildx rather than through GoReleaser's `dockers` pipe: the Dockerfile
-  # compiles the frontend and Go binary from source itself (see
-  # Dockerfile), so there's no prebuilt binary for GoReleaser to hand it.
-  # ---------------------------------------------------------------------
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Compute image name (lowercase)
-        id: image
-        run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
-
+      # arm64 images are built under QEMU emulation via buildx (use: buildx).
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -76,14 +65,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - uses: goreleaser/goreleaser-action@v6
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ steps.image.outputs.name }}:${{ github.ref_name }}
-            ${{ steps.image.outputs.name }}:latest
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------
   # Wails desktop app, one job per target OS (the webview bindings can

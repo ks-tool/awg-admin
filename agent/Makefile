@@ -8,5 +8,10 @@ GO_BUILD_FLAGS := -ldflags=$(GO_LD_FLAGS) -gcflags=$(GO_GC_FLAGS) -trimpath -o $
 
 .PHONY: build
 build:
-	@echo 'Build agent ...'
+	@echo 'Build agent (kernel / amneziawg-dkms) ...'
 	@GOEXPERIMENT=jsonv2 CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) cmd/awg-agent.go
+
+.PHONY: build-userspace
+build-userspace:
+	@echo 'Build agent (userspace / amneziawg-go) ...'
+	@GOEXPERIMENT=jsonv2 CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) ./cmd/awg-agent-userspace

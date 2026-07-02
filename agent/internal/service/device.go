@@ -23,103 +23,96 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-type Device string
+// NetlinkBackend is the default Backend: it drives interfaces through the
+// AmneziaWG (or plain WireGuard) kernel module over netlink — RTM_NEWLINK to
+// create the link, address/MTU/up on it, RTM_DELLINK to remove it. It's what
+// the standard `awg-agent` binary uses.
+//
+// A userspace build can embed NetlinkBackend and override only Add/Delete/Exists
+// to manage an amneziawg-go process instead: the address/MTU/up operations work
+// unchanged on the TUN that amneziawg-go creates, since it's an ordinary link
+// as far as netlink is concerned.
+type NetlinkBackend struct{}
 
-// newTypedLink builds a link handle of a specific netlink kind. Only Add()
-// needs the kind (it's what the kernel uses to pick the driver at creation);
-// every other op below addresses an existing device by name, so its kind is
-// irrelevant there — those use newGenericLink.
-func newTypedLink(dev Device, kind string) *netlink.GenericLink {
+// genericLink builds a netlink link handle for iface of the given kind. The
+// kind only matters for Add (the kernel uses it to pick the driver at creation);
+// every other operation addresses the link by name (netlink resolves the index),
+// so the kind passed there is irrelevant.
+func genericLink(iface, kind string) *netlink.GenericLink {
 	return &netlink.GenericLink{
 		LinkAttrs: netlink.LinkAttrs{
-			Name: string(dev),
+			Name: iface,
 		},
 		LinkType: kind,
 	}
 }
 
-func newGenericLink(dev Device) *netlink.GenericLink {
-	return newTypedLink(dev, "wireguard")
-}
-
-// Add creates the interface link, preferring the AmneziaWG kernel module (kind
-// "amneziawg") so the obfuscation params are actually honored. Hosts that only
-// have the mainline WireGuard module — or whose amnezia module doesn't allow
-// creating a link over netlink (returns EINVAL/EOPNOTSUPP) — fall back to a
-// plain "wireguard" link so the agent still comes up. The fallback is logged at
-// warn level because on such a host obfuscation silently won't apply.
-func (dev Device) Add() error {
-	err := netlink.LinkAdd(newTypedLink(dev, "amneziawg"))
+// Add creates the interface's link, preferring the AmneziaWG kernel module
+// (kind "amneziawg") so the obfuscation params are actually honored. Hosts that
+// only have the mainline WireGuard module — or whose amnezia module doesn't
+// allow creating a link over netlink (returns EINVAL/EOPNOTSUPP) — fall back to
+// a plain "wireguard" link so the agent still comes up. The fallback is logged
+// at warn level because on such a host obfuscation silently won't apply.
+func (NetlinkBackend) Add(iface string) error {
+	err := netlink.LinkAdd(genericLink(iface, "amneziawg"))
 	if err == nil {
 		return nil
 	}
 
-	wgErr := netlink.LinkAdd(newTypedLink(dev, "wireguard"))
+	wgErr := netlink.LinkAdd(genericLink(iface, "wireguard"))
 	if wgErr != nil {
-		return fmt.Errorf("create link %q: amneziawg kind: %v; wireguard kind: %w", dev, err, wgErr)
+		return fmt.Errorf("create link %q: amneziawg kind: %v; wireguard kind: %w", iface, err, wgErr)
 	}
-	log.Warn().Str("interface", string(dev)).Err(err).Msg(
+	log.Warn().Str("interface", iface).Err(err).Msg(
 		"AmneziaWG-kind link creation failed; created a plain WireGuard link instead — traffic obfuscation will NOT be applied on this host")
 	return nil
 }
 
-func (dev Device) Delete() error {
-	return netlink.LinkDel(newGenericLink(dev))
+func (NetlinkBackend) Delete(iface string) error {
+	return netlink.LinkDel(genericLink(iface, "wireguard"))
 }
 
-func (dev Device) Up() error {
-	return netlink.LinkSetUp(newGenericLink(dev))
+func (NetlinkBackend) Exists(iface string) bool {
+	_, err := netlink.LinkByName(iface)
+	return err == nil
 }
 
-func (dev Device) Down() error {
-	return netlink.LinkSetDown(newGenericLink(dev))
+func (NetlinkBackend) Up(iface string) error {
+	return netlink.LinkSetUp(genericLink(iface, "wireguard"))
 }
 
-func (dev Device) Get() (netlink.Link, error) {
-	return netlink.LinkByName(string(dev))
+func (NetlinkBackend) Down(iface string) error {
+	return netlink.LinkSetDown(genericLink(iface, "wireguard"))
 }
 
-func (dev Device) SetMTU(mtu int) error {
-	return netlink.LinkSetMTU(newGenericLink(dev), mtu)
+func (NetlinkBackend) SetMTU(iface string, mtu int) error {
+	return netlink.LinkSetMTU(genericLink(iface, "wireguard"), mtu)
 }
 
-func (dev Device) AddrList() ([]netlink.Addr, error) {
-	return netlink.AddrList(newGenericLink(dev), 0)
-}
-
-func (dev Device) AddrAdd(s string) error {
+func (NetlinkBackend) AddrAdd(iface, s string) error {
 	addr, err := netlink.ParseAddr(s)
 	if err != nil {
 		return err
 	}
-	return netlink.AddrAdd(newGenericLink(dev), addr)
+	return netlink.AddrAdd(genericLink(iface, "wireguard"), addr)
 }
 
-func (dev Device) AddrDel(s string) error {
-	addr, err := netlink.ParseAddr(s)
-	if err != nil {
-		return err
-	}
-	return netlink.AddrDel(newGenericLink(dev), addr)
-}
-
-// SyncAddr makes want dev's only address, removing every other address
-// already assigned to it first. netlink's AddrReplace only adds-or-updates
-// the one address it's given — it has nothing to do with whatever *other*
-// addresses are already on the link, so calling it alone after an admin
-// edits an interface's addr leaves the old one still assigned alongside the
-// new one (see InterfaceUpdate).
-func (dev Device) SyncAddr(want string) error {
-	wantAddr, err := netlink.ParseAddr(want)
+// SyncAddr makes s the interface's only address, removing every other address
+// already assigned to it first. netlink's AddrReplace only adds-or-updates the
+// one address it's given — it has nothing to do with whatever *other* addresses
+// are already on the link, so calling it alone after an admin edits an
+// interface's addr leaves the old one still assigned alongside the new one.
+func (NetlinkBackend) SyncAddr(iface, s string) error {
+	wantAddr, err := netlink.ParseAddr(s)
 	if err != nil {
 		return err
 	}
 
-	existing, err := dev.AddrList()
+	link := genericLink(iface, "wireguard")
+	existing, err := netlink.AddrList(link, 0)
 	if err != nil {
 		return err
 	}
-	link := newGenericLink(dev)
 	for _, addr := range existing {
 		if addr.IPNet.String() == wantAddr.IPNet.String() {
 			continue

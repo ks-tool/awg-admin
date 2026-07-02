@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+#
+# GoReleaser (dockers_v2) image for the standalone web server. The prebuilt
+# `awg-admin` binary (frontend already embedded via //go:embed) is laid out in
+# the build context per platform — `<ctx>/linux/amd64/awg-admin`,
+# `<ctx>/linux/arm64/awg-admin` — so `$TARGETPLATFORM` picks the right arch. This
+# is a runtime-only image; see the repo-root Dockerfile for the from-source
+# build used by `docker build .`.
+FROM alpine:3.23
+
+RUN apk add --no-cache ca-certificates
+
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/awg-admin /awg-admin
+
+ENV HOME=/data
+WORKDIR /data
+VOLUME ["/data"]
+
+EXPOSE 8080
+ENTRYPOINT ["/awg-admin"]

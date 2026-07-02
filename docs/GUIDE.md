@@ -115,6 +115,16 @@ any failure.
 In the **desktop** app you can also pick a local agent binary from disk with a
 native file picker, instead of relying on a downloaded one.
 
+The agent needs AmneziaWG present on the server, and ships in two builds:
+`awg-agent` drives the **AmneziaWG kernel module** (install and load
+`amneziawg-dkms`, i.e. `modprobe amneziawg`), while `awg-agent-userspace` runs a
+userspace **amneziawg-go** process per interface for hosts without the kernel
+module. Both speak the identical API; only how the interface link is created
+differs. Note the versions must match: if the kernel module is AmneziaWG 1.0 but
+the generated obfuscation params are 2.0-style (`H1–H4` ranges, `I1–I5`),
+applying the config fails — upgrade the module to 2.0, or deactivate the
+interface (see [Interfaces](#interfaces)) to keep its config without applying it.
+
 ### Agent sources (deploy presets)
 
 An **agent source** is a reusable, named preset describing where to get the

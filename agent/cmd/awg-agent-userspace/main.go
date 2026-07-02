@@ -16,20 +16,26 @@
   limitations under the License.
 */
 
-// Command awg-agent is the standard agent: it manages interfaces through the
-// AmneziaWG/WireGuard kernel module (the default service.NetlinkBackend). For a
-// userspace (amneziawg-go) build see cmd/awg-agent-userspace.
+// Command awg-agent-userspace is the agent built to drive interfaces through a
+// userspace amneziawg-go process instead of the kernel module — for hosts
+// without a (matching) AmneziaWG kernel module. It's identical to awg-agent
+// except it wires in the userspace backend before starting. The amneziawg-go
+// binary must be installed on the host; set AWG_AGENT_USERSPACE_BIN to point at
+// it, otherwise "amneziawg-go" is resolved on $PATH.
 package main
 
 import (
+	"os"
+
 	"github.com/ks-tool/awg-admin/agent/internal/agent"
+	"github.com/ks-tool/awg-admin/agent/internal/service"
+	"github.com/ks-tool/awg-admin/agent/internal/userspace"
 )
 
-// version is set at build time via -ldflags "-X main.version=...". See the
-// "agent" build in .goreleaser.yaml.
+// version is set at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
 func main() {
-	// Default backend (kernel/amneziawg-dkms) — no SetBackend needed.
+	service.SetBackend(userspace.New(os.Getenv("AWG_AGENT_USERSPACE_BIN")))
 	agent.Run(version)
 }

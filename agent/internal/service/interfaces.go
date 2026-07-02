@@ -27,9 +27,7 @@ import (
 )
 
 func InterfaceCreate(cfg models.InterfaceConfig) error {
-	dev := Device(cfg.Interface)
-
-	if err := dev.Add(); err != nil {
+	if err := backend.Add(cfg.Interface); err != nil {
 		return err
 	}
 	// PreUp runs after the link exists (so interface-referencing rules such as
@@ -38,15 +36,15 @@ func InterfaceCreate(cfg models.InterfaceConfig) error {
 	if err := runHooks(cfg.Interface, "PreUp", cfg.PreUp); err != nil {
 		return err
 	}
-	if err := dev.AddrAdd(cfg.Address); err != nil {
+	if err := backend.AddrAdd(cfg.Interface, cfg.Address); err != nil {
 		return err
 	}
 	if cfg.MTU > 0 {
-		if err := dev.SetMTU(cfg.MTU); err != nil {
+		if err := backend.SetMTU(cfg.Interface, cfg.MTU); err != nil {
 			return err
 		}
 	}
-	if err := dev.Up(); err != nil {
+	if err := backend.Up(cfg.Interface); err != nil {
 		return err
 	}
 
@@ -62,8 +60,6 @@ func InterfaceCreate(cfg models.InterfaceConfig) error {
 // case only the new up-hooks run. The teardown side is best-effort so a rule
 // that's already gone doesn't block the update.
 func InterfaceUpdate(prev *models.InterfaceConfig, cfg models.InterfaceConfig) error {
-	dev := Device(cfg.Interface)
-
 	if prev != nil {
 		if err := runHooks(cfg.Interface, "PreDown", prev.PreDown); err != nil {
 			log.Warn().Err(err).Str("interface", cfg.Interface).Msg("reconcile PreDown hook failed, continuing")
@@ -73,15 +69,15 @@ func InterfaceUpdate(prev *models.InterfaceConfig, cfg models.InterfaceConfig) e
 		}
 	}
 
-	if err := dev.SyncAddr(cfg.Address); err != nil {
+	if err := backend.SyncAddr(cfg.Interface, cfg.Address); err != nil {
 		return err
 	}
 	if cfg.MTU > 0 {
-		if err := dev.SetMTU(cfg.MTU); err != nil {
+		if err := backend.SetMTU(cfg.Interface, cfg.MTU); err != nil {
 			return err
 		}
 	}
-	if err := dev.Up(); err != nil {
+	if err := backend.Up(cfg.Interface); err != nil {
 		return err
 	}
 
@@ -101,23 +97,21 @@ func InterfaceUpdate(prev *models.InterfaceConfig, cfg models.InterfaceConfig) e
 // PreUp/PostUp (which abort on failure), are best-effort: removing the link is
 // the whole point here, so a failing hook is logged and teardown continues.
 func InterfaceDelete(cfg models.InterfaceConfig) error {
-	dev := Device(cfg.Interface)
-
-	if _, err := dev.Get(); err != nil {
+	if !backend.Exists(cfg.Interface) {
 		return nil
 	}
 
 	if err := runHooks(cfg.Interface, "PreDown", cfg.PreDown); err != nil {
 		log.Warn().Err(err).Str("interface", cfg.Interface).Msg("PreDown hook failed, continuing teardown")
 	}
-	if err := dev.Down(); err != nil {
+	if err := backend.Down(cfg.Interface); err != nil {
 		return err
 	}
 	if err := runHooks(cfg.Interface, "PostDown", cfg.PostDown); err != nil {
 		log.Warn().Err(err).Str("interface", cfg.Interface).Msg("PostDown hook failed, continuing teardown")
 	}
 
-	return dev.Delete()
+	return backend.Delete(cfg.Interface)
 }
 
 // runHooks runs the shell commands of one lifecycle phase (PreUp/PostUp/
@@ -141,7 +135,5 @@ func runHooks(iface, phase string, cmds []string) error {
 }
 
 func IsInterfaceExist(cfg models.InterfaceConfig) bool {
-	dev := Device(cfg.Interface)
-	_, err := dev.Get()
-	return err == nil
+	return backend.Exists(cfg.Interface)
 }
