@@ -65,21 +65,23 @@ export async function listAgentSources(): Promise<AgentSource[] | null> {
 }
 
 /**
- * Saves a new deploy preset. Exactly one of url/path should be non-empty:
+ * Saves a new deploy preset. Exactly one of url/path/image should be non-empty:
  * url is fetched over the network (by the managed server itself, or by
  * awg-admin when cacheLocally is set), path reads the binary directly from
- * awg-admin's own filesystem (no caching, cacheLocally is ignored for it).
+ * awg-admin's own filesystem, image is a Docker image run as a container on the
+ * server (cacheLocally is ignored for path/image).
  */
 export async function createAgentSource(
     name: string,
     url: string,
     path: string,
+    image: string,
     cacheLocally: boolean,
 ): Promise<AgentSource | null> {
     const client = getClient();
 
     if (client) {
-        const {data, error} = await client.createAgentSource(name, url, path, cacheLocally);
+        const {data, error} = await client.createAgentSource(name, url, path, image, cacheLocally);
         if (error) {
             console.error('Failed to create agent source (bindings):', error);
             return null;
@@ -87,9 +89,9 @@ export async function createAgentSource(
         return data as unknown as AgentSource;
     }
 
-    const {data, error} = await post<AgentSource, {name: string; url: string; path: string; cacheLocally: boolean}>(
+    const {data, error} = await post<AgentSource, {name: string; url: string; path: string; image: string; cacheLocally: boolean}>(
         '/agent-sources',
-        {name, url, path, cacheLocally},
+        {name, url, path, image, cacheLocally},
     );
     if (error) {
         console.error('Failed to create agent source:', error);

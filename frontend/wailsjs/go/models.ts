@@ -88,6 +88,7 @@ export namespace models {
 	    url?: string;
 	    path?: string;
 	    cacheLocally?: boolean;
+	    image?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentSource(source);
@@ -100,6 +101,7 @@ export namespace models {
 	        this.url = source["url"];
 	        this.path = source["path"];
 	        this.cacheLocally = source["cacheLocally"];
+	        this.image = source["image"];
 	    }
 	}
 	

@@ -17,12 +17,14 @@
 */
 
 // Command awg-agent is the standard agent: it manages interfaces through the
-// AmneziaWG/WireGuard kernel module (the default service.NetlinkBackend). For a
+// AmneziaWG/WireGuard kernel module (the kernel.Backend, netlink). For a
 // userspace (amneziawg-go) build see cmd/awg-agent-userspace.
 package main
 
 import (
 	"github.com/ks-tool/awg-admin/agent/internal/agent"
+	"github.com/ks-tool/awg-admin/agent/internal/kernel"
+	"github.com/ks-tool/awg-admin/agent/internal/service"
 )
 
 // version is set at build time via -ldflags "-X main.version=...". See the
@@ -30,6 +32,6 @@ import (
 var version = "dev"
 
 func main() {
-	// Default backend (kernel/amneziawg-dkms) — no SetBackend needed.
+	service.SetBackend(kernel.New())
 	agent.Run(version)
 }

@@ -268,9 +268,21 @@ func (s *Service) DeployAgent(id string, agentSourceID string) error {
 		return fmt.Errorf("agent source: %w", err)
 	}
 
+	// The docker deploy publishes each interface's WireGuard ListenPort as a UDP
+	// port on the container; gather them from the desired state we already have.
+	// (Ignored by the systemd deploy, which runs on the host network directly.)
+	var udpPorts []uint16
+	if ifaces, e := s.store.Servers().Interfaces(sID).List(); e == nil {
+		for i := range ifaces {
+			if ifaces[i].ListenPort > 0 {
+				udpPorts = append(udpPorts, ifaces[i].ListenPort)
+			}
+		}
+	}
+
 	s.deployStatus.start(sID)
 	go func() {
-		err := deploy.ToAgent(context.Background(), *srv, *src, s.tunnels.PassphraseFor(sID), func(step string) {
+		err := deploy.ToAgent(context.Background(), *srv, *src, udpPorts, s.tunnels.PassphraseFor(sID), func(step string) {
 			s.deployStatus.setStep(sID, step)
 		})
 		s.deployStatus.finish(sID, err)

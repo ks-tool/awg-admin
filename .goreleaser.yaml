@@ -5,7 +5,7 @@
 #   - awg-agent: the per-server daemon (agent/cmd/awg-agent.go), kernel/
 #     amneziawg-dkms backend — linux only, amd64 and arm64.
 #   - awg-agent-userspace: the same daemon built to drive a userspace
-#     amneziawg-go process per interface (agent/cmd/awg-agent-userspace) —
+#     amneziawg-go process per interface (agent/cmd/awg-agent-userspace.go) —
 #     linux only, amd64 and arm64.
 #
 # Docker images (linux amd64+arm64, pushed to GHCR) are built here via the
@@ -71,7 +71,7 @@ builds:
 
   - id: agent-userspace
     dir: agent
-    main: ./cmd/awg-agent-userspace
+    main: ./cmd/awg-agent-userspace.go
     binary: awg-agent-userspace
     env:
       - CGO_ENABLED=0

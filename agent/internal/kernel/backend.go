@@ -14,7 +14,13 @@
   limitations under the License.
 */
 
-package service
+// Package kernel is the service.Backend that drives interfaces through the
+// AmneziaWG (or plain WireGuard) kernel module over netlink — RTM_NEWLINK to
+// create the link, address/MTU/up on it, RTM_DELLINK to remove it. It's what
+// the standard awg-agent binary wires in via service.SetBackend. Keeping it in
+// its own package confines the vishvananda/netlink dependency to the kernel
+// build, so the userspace agent (agent/internal/userspace) doesn't pull it in.
+package kernel
 
 import (
 	"fmt"
@@ -23,21 +29,16 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-// NetlinkBackend is the default Backend: it drives interfaces through the
-// AmneziaWG (or plain WireGuard) kernel module over netlink — RTM_NEWLINK to
-// create the link, address/MTU/up on it, RTM_DELLINK to remove it. It's what
-// the standard `awg-agent` binary uses.
-//
-// A userspace build can embed NetlinkBackend and override only Add/Delete/Exists
-// to manage an amneziawg-go process instead: the address/MTU/up operations work
-// unchanged on the TUN that amneziawg-go creates, since it's an ordinary link
-// as far as netlink is concerned.
-type NetlinkBackend struct{}
+// Backend implements service.Backend against the kernel module via netlink.
+type Backend struct{}
+
+// New returns the kernel backend.
+func New() Backend { return Backend{} }
 
 // genericLink builds a netlink link handle for iface of the given kind. The
-// kind only matters for Add (the kernel uses it to pick the driver at creation);
-// every other operation addresses the link by name (netlink resolves the index),
-// so the kind passed there is irrelevant.
+// kind only matters for Add (the kernel uses it to pick the driver at
+// creation); every other operation addresses the link by name (netlink
+// resolves the index), so the kind passed there is irrelevant.
 func genericLink(iface, kind string) *netlink.GenericLink {
 	return &netlink.GenericLink{
 		LinkAttrs: netlink.LinkAttrs{
@@ -47,13 +48,18 @@ func genericLink(iface, kind string) *netlink.GenericLink {
 	}
 }
 
-// Add creates the interface's link, preferring the AmneziaWG kernel module
-// (kind "amneziawg") so the obfuscation params are actually honored. Hosts that
-// only have the mainline WireGuard module — or whose amnezia module doesn't
-// allow creating a link over netlink (returns EINVAL/EOPNOTSUPP) — fall back to
-// a plain "wireguard" link so the agent still comes up. The fallback is logged
-// at warn level because on such a host obfuscation silently won't apply.
-func (NetlinkBackend) Add(iface string) error {
+// Add creates the interface's link with the kind the config asks for: a plain
+// WireGuard interface (amnezia false) is created as kind "wireguard" directly.
+// An AmneziaWG interface (amnezia true) is created as kind "amneziawg" so the
+// obfuscation params are honored, falling back to a plain "wireguard" link on
+// hosts that only have the mainline module — or whose amnezia module doesn't
+// allow creating a link over netlink (EINVAL/EOPNOTSUPP). That fallback is
+// logged at warn level because obfuscation silently won't apply there.
+func (Backend) Add(iface string, amnezia bool) error {
+	if !amnezia {
+		return netlink.LinkAdd(genericLink(iface, "wireguard"))
+	}
+
 	err := netlink.LinkAdd(genericLink(iface, "amneziawg"))
 	if err == nil {
 		return nil
@@ -68,28 +74,28 @@ func (NetlinkBackend) Add(iface string) error {
 	return nil
 }
 
-func (NetlinkBackend) Delete(iface string) error {
+func (Backend) Delete(iface string) error {
 	return netlink.LinkDel(genericLink(iface, "wireguard"))
 }
 
-func (NetlinkBackend) Exists(iface string) bool {
+func (Backend) Exists(iface string) bool {
 	_, err := netlink.LinkByName(iface)
 	return err == nil
 }
 
-func (NetlinkBackend) Up(iface string) error {
+func (Backend) Up(iface string) error {
 	return netlink.LinkSetUp(genericLink(iface, "wireguard"))
 }
 
-func (NetlinkBackend) Down(iface string) error {
+func (Backend) Down(iface string) error {
 	return netlink.LinkSetDown(genericLink(iface, "wireguard"))
 }
 
-func (NetlinkBackend) SetMTU(iface string, mtu int) error {
+func (Backend) SetMTU(iface string, mtu int) error {
 	return netlink.LinkSetMTU(genericLink(iface, "wireguard"), mtu)
 }
 
-func (NetlinkBackend) AddrAdd(iface, s string) error {
+func (Backend) AddrAdd(iface, s string) error {
 	addr, err := netlink.ParseAddr(s)
 	if err != nil {
 		return err
@@ -102,7 +108,7 @@ func (NetlinkBackend) AddrAdd(iface, s string) error {
 // one address it's given — it has nothing to do with whatever *other* addresses
 // are already on the link, so calling it alone after an admin edits an
 // interface's addr leaves the old one still assigned alongside the new one.
-func (NetlinkBackend) SyncAddr(iface, s string) error {
+func (Backend) SyncAddr(iface, s string) error {
 	wantAddr, err := netlink.ParseAddr(s)
 	if err != nil {
 		return err

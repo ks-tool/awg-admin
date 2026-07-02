@@ -192,9 +192,9 @@ export const bindingsClient = {
         }
     },
 
-    async createAgentSource(name: string, url: string, path: string, cacheLocally: boolean): Promise<ApiResponse<models.AgentSource>> {
+    async createAgentSource(name: string, url: string, path: string, image: string, cacheLocally: boolean): Promise<ApiResponse<models.AgentSource>> {
         try {
-            const data = await AppBindings.CreateAgentSource(name, url, path, cacheLocally);
+            const data = await AppBindings.CreateAgentSource(name, url, path, image, cacheLocally);
             return { data };
         } catch (error) {
             console.error('Bindings CreateAgentSource failed:', error);

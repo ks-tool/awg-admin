@@ -14,55 +14,67 @@
   limitations under the License.
 */
 
-// Package deploy installs the awg-agent binary on a managed server over
-// SSH: it gets the binary onto the server (either having the server
-// download it itself, or uploading a locally-cached copy — see
-// models.AgentSource), uploads the systemd unit, an env file with the
-// agent's configuration, and — when mTLS is enabled — the CA/server
-// certificates, then enables and starts the service.
+// Package deploy installs the awg-agent onto a managed server over SSH. It
+// supports two methods, chosen by the models.AgentSource being deployed:
+//
+//   - systemd (binary): the agent runs as a systemd unit on the host, driving
+//     the AmneziaWG kernel module — see systemd.go. Used for a URL/Path source.
+//   - docker (image): the agent runs as a Docker container from the source's
+//     image (the userspace amneziawg-go build) — see docker.go. Used when the
+//     source is an Image.
+//
+// ToAgent connects and dispatches to the right method; each runs its own
+// pre-deploy check (kernel module for systemd, `docker info` for docker) so a
+// missing prerequisite fails fast with an actionable message.
 package deploy
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/ks-tool/awg-admin/internal/sshclient"
 	"github.com/ks-tool/awg-admin/models"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/crypto/ssh"
 )
 
-//go:embed assets/awg-agent.service
-var systemdUnit []byte
-
+// Paths shared by both deploy methods: the agent's config dir on the server and
+// the mTLS material written into it (method-specific paths live in systemd.go /
+// docker.go).
 const (
-	remoteBinPath        = "/usr/local/bin/awg-agent"
-	remoteUnitPath       = "/etc/systemd/system/awg-agent.service"
-	remoteEnvPath        = "/etc/awg-agent/awg-agent.env"
-	remoteDBPath         = "/var/lib/awg-agent"
+	remoteConfigDir      = "/etc/awg-agent"
 	remoteCACertPath     = "/etc/awg-agent/ca.pem"
 	remoteServerCertPath = "/etc/awg-agent/server.pem"
 	remoteServerKeyPath  = "/etc/awg-agent/server-key.pem"
 )
 
-// ToAgent gets the agent binary onto srv's host (per src.CacheLocally —
-// see models.AgentSource's doc comment), uploads the systemd unit,
-// configuration and (if configured) mTLS certificates over SSH, then
-// enables and starts the awg-agent service. passphrase decrypts srv.SSH's
-// key when it's passphrase-protected (see sshclient.Dial); pass "" when
-// none is cached. onStep, if non-nil, is called with a stable step-name
-// key ("connect", "upload_binary", "upload_unit", "upload_env",
-// "upload_tls", "start_service") right before each step runs, so a caller
-// can surface deploy progress (e.g. Service.DeployAgent's in-memory
-// status, polled by the frontend) — the names are deliberately untranslated
-// keys, not human-readable text, so the UI can localize them itself.
-func ToAgent(ctx context.Context, srv models.Server, src models.AgentSource, passphrase string, onStep func(string)) error {
+// stepFunc reports (and logs) the current deploy step; failFunc logs and
+// returns a failed step's error. Both are closures created in ToAgent and
+// handed to the per-method deploy functions so progress/errors flow back
+// through the same onStep callback and logger.
+type (
+	stepFunc func(name string) *zerolog.Event
+	failFunc func(name string, err error) error
+)
+
+// ToAgent deploys the agent to srv over SSH, dispatching to the systemd or
+// docker method based on src (an Image source → docker, otherwise systemd).
+// udpPorts are the WireGuard ListenPorts of the server's interfaces, published
+// by the docker method so remote clients can reach them (ignored by systemd,
+// which runs on the host network directly). passphrase decrypts srv.SSH's key
+// when it's passphrase-protected (see sshclient.Dial); pass "" when none is
+// cached. onStep, if non-nil, is called with a stable step-name key right
+// before each step runs, so a caller can surface deploy progress (e.g.
+// Service.DeployAgent's in-memory status, polled by the frontend) — the names
+// are deliberately untranslated keys, not human-readable text, so the UI can
+// localize them itself. Step keys: "connect"; systemd: "check_kernel_module",
+// "upload_binary", "upload_unit", "upload_env", "upload_tls", "start_service";
+// docker: "check_docker", "upload_tls", "start_container".
+func ToAgent(ctx context.Context, srv models.Server, src models.AgentSource, udpPorts []uint16, passphrase string, onStep func(string)) error {
 	l := log.With().Str("server_id", srv.ID.String()).Logger()
-	l.Info().Str("agent_source", src.Name).Bool("cache_locally", src.CacheLocally).Msg("deploying agent")
+	l.Info().Str("agent_source", src.Name).Bool("cache_locally", src.CacheLocally).Bool("docker", len(src.Image) > 0).Msg("deploying agent")
 
 	step := func(name string) *zerolog.Event {
 		if onStep != nil {
@@ -82,95 +94,23 @@ func ToAgent(ctx context.Context, srv models.Server, src models.AgentSource, pas
 	}
 	defer func() { _ = client.Close() }()
 
-	step("upload_binary").Msg("deploy step")
-	switch {
-	case len(src.Path) > 0:
-		// The binary is already on awg-admin's own filesystem — read it
-		// directly and upload the bytes, no download/caching involved.
-		binary, err := os.ReadFile(src.Path)
-		if err != nil {
-			return failed("upload_binary", fmt.Errorf("read agent binary: %w", err))
-		}
-		if len(binary) == 0 {
-			return failed("upload_binary", fmt.Errorf("agent binary source is empty"))
-		}
-		if err := sshclient.UploadFile(client, remoteBinPath, 0o755, binary); err != nil {
-			return failed("upload_binary", fmt.Errorf("upload agent binary: %w", err))
-		}
-	case src.CacheLocally:
-		// awg-admin fetches (or reuses a previously cached copy of) the
-		// binary itself and uploads the bytes over the same SSH
-		// connection — for servers without outbound internet access to
-		// src.URL.
-		binary, err := fetchCached(ctx, src)
-		if err != nil {
-			return failed("upload_binary", fmt.Errorf("fetch agent binary: %w", err))
-		}
-		if len(binary) == 0 {
-			return failed("upload_binary", fmt.Errorf("agent binary source is empty"))
-		}
-		if err := sshclient.UploadFile(client, remoteBinPath, 0o755, binary); err != nil {
-			return failed("upload_binary", fmt.Errorf("upload agent binary: %w", err))
-		}
-	default:
-		// The server downloads src.URL itself (curl/wget) — awg-admin's
-		// own machine never sees the bytes.
-		if err := sshclient.DownloadFile(client, src.URL, remoteBinPath, 0o755); err != nil {
-			return failed("upload_binary", fmt.Errorf("download agent binary on server: %w", err))
-		}
+	if len(src.Image) > 0 {
+		return deployDocker(client, srv, src, udpPorts, step, failed)
 	}
-
-	step("upload_unit").Msg("deploy step")
-	if err := sshclient.UploadFile(client, remoteUnitPath, 0o644, systemdUnit); err != nil {
-		return failed("upload_unit", fmt.Errorf("upload systemd unit: %w", err))
-	}
-
-	step("upload_env").Msg("deploy step")
-	if err := sshclient.UploadFile(client, remoteEnvPath, 0o600, []byte(buildEnvFile(srv))); err != nil {
-		return failed("upload_env", fmt.Errorf("upload env file: %w", err))
-	}
-
-	if tls := srv.Agent.TLS; !tls.IsZero() {
-		step("upload_tls").Msg("deploy step")
-		if err := sshclient.UploadFile(client, remoteCACertPath, 0o644, []byte(tls.CA.Certificate)); err != nil {
-			return failed("upload_tls", fmt.Errorf("upload CA certificate: %w", err))
-		}
-		if err := sshclient.UploadFile(client, remoteServerCertPath, 0o644, []byte(tls.Server.Certificate)); err != nil {
-			return failed("upload_tls", fmt.Errorf("upload server certificate: %w", err))
-		}
-		if err := sshclient.UploadFile(client, remoteServerKeyPath, 0o600, []byte(tls.Server.PrivateKey)); err != nil {
-			return failed("upload_tls", fmt.Errorf("upload server key: %w", err))
-		}
-	}
-
-	step("start_service").Msg("deploy step")
-	// "restart" (not "enable --now") so a redeploy over an already-running
-	// agent actually picks up the freshly uploaded binary/config instead of
-	// leaving the old process running untouched; restarting a unit that
-	// isn't currently active is equivalent to starting it, so this also
-	// covers the "agent was stopped" case in the same command.
-	if _, err := sshclient.Run(client, "systemctl daemon-reload && systemctl enable awg-agent && systemctl restart awg-agent"); err != nil {
-		return failed("start_service", fmt.Errorf("start agent service: %w", err))
-	}
-
-	l.Info().Msg("agent deployed")
-	return nil
+	return deploySystemd(ctx, client, srv, src, step, failed)
 }
 
-func buildEnvFile(srv models.Server) string {
-	addr := srv.Agent.Address
-	if len(addr) == 0 {
-		addr = "127.0.0.1:8080"
+// uploadAgentTLS writes the CA + server cert/key into the agent's config dir on
+// the server — shared by the systemd and docker deploy paths.
+func uploadAgentTLS(client *ssh.Client, tls *models.AgentTLS) error {
+	if err := sshclient.UploadFile(client, remoteCACertPath, 0o644, []byte(tls.CA.Certificate)); err != nil {
+		return fmt.Errorf("upload CA certificate: %w", err)
 	}
-
-	var b strings.Builder
-	b.WriteString("AWG_AGENT_ADDR=" + addr + "\n")
-	b.WriteString("AWG_AGENT_DB=" + remoteDBPath + "\n")
-
-	if tls := srv.Agent.TLS; !tls.IsZero() {
-		b.WriteString("AWG_AGENT_TLS_CERT=" + remoteServerCertPath + "\n")
-		b.WriteString("AWG_AGENT_TLS_KEY=" + remoteServerKeyPath + "\n")
-		b.WriteString("AWG_AGENT_TLS_CLIENT_CA=" + remoteCACertPath + "\n")
+	if err := sshclient.UploadFile(client, remoteServerCertPath, 0o644, []byte(tls.Server.Certificate)); err != nil {
+		return fmt.Errorf("upload server certificate: %w", err)
 	}
-	return b.String()
+	if err := sshclient.UploadFile(client, remoteServerKeyPath, 0o600, []byte(tls.Server.PrivateKey)); err != nil {
+		return fmt.Errorf("upload server key: %w", err)
+	}
+	return nil
 }

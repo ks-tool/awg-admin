@@ -33,22 +33,29 @@ func (s *Service) ListAgentSources() ([]models.AgentSource, error) {
 	return s.store.AgentSources().List()
 }
 
-// CreateAgentSource saves a new named deploy preset. Exactly one of url or
-// path must be set: url is fetched (by the managed server itself, or by
-// awg-admin when cacheLocally is set — see models.AgentSource), path reads
-// the binary directly from awg-admin's own filesystem. cacheLocally is
-// ignored (forced false) when path is set, since there's nothing to cache.
-func (s *Service) CreateAgentSource(name, url, path string, cacheLocally bool) (*models.AgentSource, error) {
+// CreateAgentSource saves a new named deploy preset. Exactly one of url, path
+// or image must be set: url is fetched (by the managed server itself, or by
+// awg-admin when cacheLocally is set — see models.AgentSource), path reads the
+// binary directly from awg-admin's own filesystem, and image is a Docker image
+// run as a container on the server. cacheLocally is ignored (forced false) for
+// path (nothing to cache) and image (Docker pulls it itself).
+func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally bool) (*models.AgentSource, error) {
 	if len(name) == 0 {
 		return nil, fmt.Errorf("agent source name is required")
 	}
-	if len(url) == 0 && len(path) == 0 {
-		return nil, fmt.Errorf("agent source requires a URL or a local file path")
+	set := 0
+	for _, v := range []string{url, path, image} {
+		if len(v) > 0 {
+			set++
+		}
 	}
-	if len(url) > 0 && len(path) > 0 {
-		return nil, fmt.Errorf("agent source can't have both a URL and a local file path")
+	if set == 0 {
+		return nil, fmt.Errorf("agent source requires a URL, a local file path or a Docker image")
 	}
-	if len(path) > 0 {
+	if set > 1 {
+		return nil, fmt.Errorf("agent source must have exactly one of a URL, a local file path or a Docker image")
+	}
+	if len(path) > 0 || len(image) > 0 {
 		cacheLocally = false
 	}
 
@@ -57,6 +64,7 @@ func (s *Service) CreateAgentSource(name, url, path string, cacheLocally bool) (
 		Name:         name,
 		URL:          url,
 		Path:         path,
+		Image:        image,
 		CacheLocally: cacheLocally,
 	}
 	if err := s.store.AgentSources().Set(src); err != nil {

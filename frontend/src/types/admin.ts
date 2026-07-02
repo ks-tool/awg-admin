@@ -48,6 +48,14 @@ export interface AgentSource {
    * internet access to URL, at the cost of awg-admin's own bandwidth.
    */
   cacheLocally?: boolean;
+  /**
+   * Image, when set instead of URL/Path, is a Docker image reference (e.g.
+   * ghcr.io/ks-tool/awg-agent-userspace:latest). Deploying such a source runs
+   * the agent as a Docker container on the server rather than as a systemd
+   * unit — for hosts using the userspace amneziawg-go image. Exactly one of
+   * URL, Path or Image is set; CacheLocally is always false for it.
+   */
+  image?: string;
 }
 
 //////////

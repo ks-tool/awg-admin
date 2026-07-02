@@ -115,15 +115,32 @@ any failure.
 In the **desktop** app you can also pick a local agent binary from disk with a
 native file picker, instead of relying on a downloaded one.
 
-The agent needs AmneziaWG present on the server, and ships in two builds:
-`awg-agent` drives the **AmneziaWG kernel module** (install and load
-`amneziawg-dkms`, i.e. `modprobe amneziawg`), while `awg-agent-userspace` runs a
-userspace **amneziawg-go** process per interface for hosts without the kernel
-module. Both speak the identical API; only how the interface link is created
-differs. Note the versions must match: if the kernel module is AmneziaWG 1.0 but
-the generated obfuscation params are 2.0-style (`H1–H4` ranges, `I1–I5`),
-applying the config fails — upgrade the module to 2.0, or deactivate the
-interface (see [Interfaces](#interfaces)) to keep its config without applying it.
+#### Server prerequisites
+
+The agent ships in two builds, each needing different things on the server —
+pick the matching [agent source](#agent-sources-deploy-presets):
+
+- **`awg-agent` (systemd, kernel).** Drives the kernel module directly, so the
+  server needs it installed:
+  - the **AmneziaWG kernel module** for AmneziaWG interfaces — install
+    `amneziawg-dkms` per the
+    [amneziawg-linux-kernel-module README](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module/blob/master/README.md)
+    and load it (`modprobe amneziawg`). The deploy pre-checks this and fails
+    fast with a clear message if it's missing;
+  - **WireGuard** itself if you also create plain (non-Amnezia) interfaces —
+    see [wireguard.com/install](https://www.wireguard.com/install/).
+- **`awg-agent-userspace` (Docker).** Runs the agent as a container with an
+  in-process userspace WireGuard (the amneziawg-go library is compiled in) — no
+  kernel module required, for hosts where you can't install one. It only needs
+  **Docker** — see [docs.docker.com/engine/install](https://docs.docker.com/engine/install/)
+  (the deploy runs the container with `/dev/net/tun` + `NET_ADMIN` for you). The
+  deploy pre-checks `docker info` and fails fast if Docker isn't available.
+
+Both builds speak the identical API; only how the interface link is created
+differs. Versions must match: an AmneziaWG 1.0 kernel module rejects 2.0-style
+obfuscation params (`H1–H4` ranges, `I1–I5`) — upgrade the module to 2.0, or
+deactivate the interface (see [Interfaces](#interfaces)) to keep its config
+without applying it.
 
 ### Agent sources (deploy presets)
 

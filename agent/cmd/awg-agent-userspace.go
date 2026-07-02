@@ -16,17 +16,16 @@
   limitations under the License.
 */
 
-// Command awg-agent-userspace is the agent built to drive interfaces through a
-// userspace amneziawg-go process instead of the kernel module — for hosts
-// without a (matching) AmneziaWG kernel module. It's identical to awg-agent
-// except it wires in the userspace backend before starting. The amneziawg-go
-// binary must be installed on the host; set AWG_AGENT_USERSPACE_BIN to point at
-// it, otherwise "amneziawg-go" is resolved on $PATH.
+// Command awg-agent-userspace is the agent built to drive interfaces through an
+// in-process userspace WireGuard device (the amneziawg-go library) instead of
+// the kernel module — for hosts without a (matching) AmneziaWG kernel module.
+// It's a self-contained binary (amneziawg-go is compiled in, no external
+// process) and is otherwise identical to awg-agent; it just wires in the
+// userspace backend before starting. It needs /dev/net/tun and CAP_NET_ADMIN
+// at runtime to create and manage the TUN interfaces.
 package main
 
 import (
-	"os"
-
 	"github.com/ks-tool/awg-admin/agent/internal/agent"
 	"github.com/ks-tool/awg-admin/agent/internal/service"
 	"github.com/ks-tool/awg-admin/agent/internal/userspace"
@@ -36,6 +35,6 @@ import (
 var version = "dev"
 
 func main() {
-	service.SetBackend(userspace.New(os.Getenv("AWG_AGENT_USERSPACE_BIN")))
+	service.SetBackend(userspace.New())
 	agent.Run(version)
 }

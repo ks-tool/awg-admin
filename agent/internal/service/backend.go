@@ -17,28 +17,34 @@
 package service
 
 // Backend abstracts the OS-level lifecycle of a WireGuard/AmneziaWG interface —
-// the one part of the agent that differs between the AmneziaWG kernel module
-// (amneziawg-dkms, driven over netlink) and the userspace implementation
-// (amneziawg-go, driven as a child process). Everything else the agent does is
-// backend-agnostic and stays as-is:
+// the one part of the agent that differs between the two builds:
 //
-//   - pushing the device config and reading peer stats via wgctrl, which already
-//     speaks both the kernel genl family and the userspace UAPI socket;
+//   - kernel (agent/internal/kernel): the AmneziaWG kernel module, driven over
+//     netlink (vishvananda/netlink). Wired in by cmd/awg-agent.
+//   - userspace (agent/internal/userspace): an in-process amneziawg-go TUN,
+//     with address/up/mtu done via the `ip` command (no netlink dependency, the
+//     way jwg / awg-quick's userspace path do it). Wired in by
+//     cmd/awg-agent-userspace.
+//
+// Keeping this an interface (rather than either build importing the other) is
+// what lets the userspace agent avoid pulling in vishvananda/netlink at all.
+// Everything else the agent does is backend-agnostic:
+//
+//   - pushing the device config and reading peer stats via wgctrl, which speaks
+//     both the kernel genl family and the userspace UAPI socket;
 //   - running PreUp/PostUp/PreDown/PostDown hooks (plain `sh -c`);
 //   - storing interface configs (agent/storage).
-//
-// The address / MTU / up-down operations are plain netlink on an existing link,
-// and a userspace TUN behaves identically to a kernel wg link there — so a
-// userspace Backend can embed NetlinkBackend and override only Add/Delete/Exists
-// (how the link comes into existence and goes away), reusing the rest.
 type Backend interface {
-	// Add brings the interface's OS link into existence. Kernel: netlink
-	// RTM_NEWLINK (type "amneziawg"/"wireguard"). Userspace: start the
-	// amneziawg-go process that creates the TUN.
-	Add(iface string) error
-	// Delete removes the OS link. Kernel: netlink RTM_DELLINK. Userspace: stop
-	// the amneziawg-go process. Idempotent: a link that's already gone is not an
-	// error.
+	// Add brings the interface's OS link into existence. amnezia selects the
+	// interface type: true creates an AmneziaWG link (obfuscation-capable),
+	// false a plain WireGuard one — driven by the admin's "Amnezia Interface"
+	// toggle (see models.InterfaceConfig.IsAmnezia). Kernel: netlink RTM_NEWLINK
+	// with the matching kind. Userspace: the amneziawg-go device serves both, so
+	// the TUN is created the same way regardless.
+	Add(iface string, amnezia bool) error
+	// Delete removes the OS link. Kernel: netlink RTM_DELLINK. Userspace: close
+	// the amneziawg-go device (which removes the TUN). Idempotent: a link that's
+	// already gone is not an error.
 	Delete(iface string) error
 	// Exists reports whether the interface's OS link is present.
 	Exists(iface string) bool
@@ -54,15 +60,14 @@ type Backend interface {
 	SyncAddr(iface, addr string) error
 }
 
-// backend is the active link backend for this process. It defaults to the
-// kernel (AmneziaWG-dkms) backend; a userspace build swaps it out at startup
-// via SetBackend. A process serves exactly one backend for its whole lifetime,
-// so a package-level value — set once before interfaces are loaded — is all
-// this needs (the agent is a single-purpose, single-process daemon).
-var backend Backend = NetlinkBackend{}
+// backend is the active link backend for this process. There is no default: a
+// process serves exactly one backend, and its main MUST select it via
+// SetBackend before loading interfaces (cmd/awg-agent → kernel,
+// cmd/awg-agent-userspace → userspace). Kept out of this package so `service`
+// itself stays free of any particular backend's dependencies (notably netlink).
+var backend Backend
 
 // SetBackend selects the link backend for this process. Call it once, early in
-// main (before loading interfaces) — e.g. a userspace build wiring in an
-// amneziawg-go backend. Not safe to call concurrently with interface
+// main, before loading interfaces. Not safe to call concurrently with interface
 // operations.
 func SetBackend(b Backend) { backend = b }

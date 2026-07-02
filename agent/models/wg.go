@@ -176,6 +176,18 @@ func (awg InterfaceConfig) ToAmneziaConfig() *wgtypes.Config {
 	}
 }
 
+// IsAmnezia reports whether this is an AmneziaWG interface (as opposed to a
+// plain WireGuard one), i.e. any obfuscation parameter is set. The admin's
+// "Amnezia Interface" toggle drives this: when on it sends a generated param
+// set, when off it sends none. The backend uses it to pick the kernel link kind
+// ("amneziawg" vs "wireguard").
+func (awg InterfaceConfig) IsAmnezia() bool {
+	return awg.Jc != nil || awg.Jmin != nil || awg.Jmax != nil ||
+		awg.S1 != nil || awg.S2 != nil || awg.S3 != nil || awg.S4 != nil ||
+		awg.H1 != nil || awg.H2 != nil || awg.H3 != nil || awg.H4 != nil ||
+		awg.I1 != nil || awg.I2 != nil || awg.I3 != nil || awg.I4 != nil || awg.I5 != nil
+}
+
 // GenerateAmneziaParams populates the config with obfuscation values optimized for AWG 2.0.
 func GenerateAmneziaParams(cfg *InterfaceConfig) {
 	// A missing private key is generated unconditionally, independent of

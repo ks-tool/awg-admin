@@ -27,7 +27,7 @@ import (
 )
 
 func InterfaceCreate(cfg models.InterfaceConfig) error {
-	if err := backend.Add(cfg.Interface); err != nil {
+	if err := backend.Add(cfg.Interface, cfg.IsAmnezia()); err != nil {
 		return err
 	}
 	// PreUp runs after the link exists (so interface-referencing rules such as

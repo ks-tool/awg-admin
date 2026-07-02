@@ -1,49 +1,37 @@
 # syntax=docker/dockerfile:1
 #
-# GoReleaser image for the userspace agent (awg-agent-userspace): it drives each
-# interface through a userspace amneziawg-go process instead of the kernel
-# module, for hosts without a (matching) AmneziaWG kernel module.
+# GoReleaser (dockers_v2) image for the userspace agent (awg-agent-userspace):
+# it drives each interface through an in-process userspace WireGuard device — the
+# amneziawg-go library is compiled into the binary — for hosts without a
+# (matching) AmneziaWG kernel module. The binary is self-contained, so this is a
+# runtime-only image (no build stage).
 #
-# GoReleaser (dockers_v2) lays the prebuilt `awg-agent-userspace` binary out in
-# the build context per platform (`<ctx>/linux/amd64/…`, `<ctx>/linux/arm64/…`),
-# selected below via `$TARGETPLATFORM`; amneziawg-go isn't part of this repo, so
-# a builder stage compiles it from its upstream module and the runtime stage
-# bundles it.
+# GoReleaser lays the prebuilt binary out in the build context per platform
+# (`<ctx>/linux/amd64/…`, `<ctx>/linux/arm64/…`), selected below via
+# `$TARGETPLATFORM`; buildx sets it from `docker build --platform`.
 #
 # Run with the privileges a userspace WireGuard needs, e.g.:
-#   docker run --cap-add NET_ADMIN --device /dev/net/tun \
-#     -e AWG_AGENT_ADDR=0.0.0.0:8080 -p 8080:8080 -v awg-agent:/data \
-#     ghcr.io/<owner>/awg-agent-userspace:latest
-
-# amneziawg-go: the userspace AmneziaWG implementation the agent launches per
-# interface. Built on the native BUILDPLATFORM and cross-compiled to the target
-# arch (far faster than emulating the whole toolchain under QEMU).
-FROM --platform=$BUILDPLATFORM golang:1.26.3-alpine3.23 AS amneziawg-go
-ARG AMNEZIAWG_GO_VERSION=latest
-ARG TARGETOS
-ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go install github.com/amnezia-vpn/amneziawg-go@${AMNEZIAWG_GO_VERSION} \
- && install -D "$(find /go/bin -type f -name amneziawg-go | head -1)" /out/amneziawg-go
-
+#   docker run -d --cap-add NET_ADMIN --cap-add NET_RAW \
+#     --device /dev/net/tun --sysctl net.ipv4.ip_forward=1 \
+#     -p 127.0.0.1:8080:8080 -p 51820:51820/udp \
+#     -v awg-agent-data:/data ghcr.io/<owner>/awg-agent-userspace:latest
+# (the "Deploy agent" flow with a Docker-image source builds this command for
+# you — see internal/deploy/docker.go.)
 FROM alpine:3.23
 
 # iproute2/iptables: the agent runs interface PreUp/PostUp/PreDown/PostDown hooks
 # via `sh -c` (policy routing, NAT); ca-certificates for outbound TLS. The host
-# must also provide /dev/net/tun and CAP_NET_ADMIN at runtime for amneziawg-go.
+# must also provide /dev/net/tun and CAP_NET_ADMIN at runtime for the TUN.
 RUN apk add --no-cache ca-certificates iproute2 iptables
 
-COPY --from=amneziawg-go /out/amneziawg-go /usr/local/bin/amneziawg-go
-# GoReleaser lays the prebuilt agent binary out per platform (dockers_v2).
 ARG TARGETPLATFORM
-COPY $TARGETPLATFORM/awg-agent-userspace /usr/local/bin/awg-agent-userspace
+COPY $TARGETPLATFORM/awg-agent-userspace /usr/local/bin/awg-agent
 
-ENV AWG_AGENT_USERSPACE_BIN=/usr/local/bin/amneziawg-go \
-    AWG_AGENT_DB=/data \
+ENV AWG_AGENT_DB=/data \
     AWG_AGENT_ADDR=0.0.0.0:8080 \
     HOME=/data
 WORKDIR /data
 VOLUME ["/data"]
 
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/awg-agent-userspace"]
+ENTRYPOINT ["/usr/local/bin/awg-agent"]

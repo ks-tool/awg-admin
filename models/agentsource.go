@@ -41,4 +41,11 @@ type AgentSource struct {
 	// every deploy that uses this source — for servers without outbound
 	// internet access to URL, at the cost of awg-admin's own bandwidth.
 	CacheLocally bool `json:"cacheLocally,omitempty"`
+	// Image, when set instead of URL/Path, is a Docker image reference (e.g.
+	// ghcr.io/ks-tool/awg-agent-userspace:latest). Deploying such a source runs
+	// the agent as a Docker container on the server (see deploy.ToAgent's docker
+	// path) rather than as a systemd unit — for hosts using the userspace
+	// amneziawg-go image. Exactly one of URL, Path or Image is set; CacheLocally
+	// is meaningless here (Docker pulls the image itself) and is always false.
+	Image string `json:"image,omitempty"`
 }

@@ -49,10 +49,11 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
     const [sources, setSources] = useState<AgentSource[]>([]);
     const [open, setOpen] = useState(false);
     const [adding, setAdding] = useState(false);
-    const [sourceType, setSourceType] = useState<'url' | 'path'>('url');
+    const [sourceType, setSourceType] = useState<'url' | 'path' | 'image'>('url');
     const [name, setName] = useState('');
     const [url, setUrl] = useState('');
     const [path, setPath] = useState('');
+    const [image, setImage] = useState('');
     const [cacheLocally, setCacheLocally] = useState(false);
     const [saving, setSaving] = useState(false);
     const [refreshingId, setRefreshingId] = useState<string | null>(null);
@@ -144,6 +145,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
         if (!name.trim()) return toast.error(t('servers.sourceNameRequired'));
         if (sourceType === 'url' && !url.trim()) return toast.error(t('servers.sourceUrlRequired'));
         if (sourceType === 'path' && !path.trim()) return toast.error(t('servers.sourcePathRequired'));
+        if (sourceType === 'image' && !image.trim()) return toast.error(t('servers.sourceImageRequired'));
 
         setSaving(true);
         try {
@@ -151,6 +153,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                 name.trim(),
                 sourceType === 'url' ? url.trim() : '',
                 sourceType === 'path' ? path.trim() : '',
+                sourceType === 'image' ? image.trim() : '',
                 cacheLocally,
             );
             if (src) {
@@ -160,6 +163,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                 setName('');
                 setUrl('');
                 setPath('');
+                setImage('');
                 setCacheLocally(false);
                 setSourceType('url');
             } else {
@@ -232,7 +236,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                     >
                         <span className="truncate">
                             {selected
-                                ? `${selected.path ? '↳ ' : selected.cacheLocally ? '*' : ''}${selected.name}`
+                                ? `${selected.image ? '🐳 ' : selected.path ? '↳ ' : selected.cacheLocally ? '*' : ''}${selected.name}`
                                 : t('servers.selectSource')}
                         </span>
                         <ChevronDown size={14} className="shrink-0 ml-2"/>
@@ -260,7 +264,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                                     onClick={() => handleSelect(s.id)}
                                     className="flex items-center justify-between gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted dark:hover:bg-white/5"
                                 >
-                                    <span className="truncate">{s.path ? '↳ ' : s.cacheLocally ? '*' : ''}{s.name}</span>
+                                    <span className="truncate">{s.image ? '🐳 ' : s.path ? '↳ ' : s.cacheLocally ? '*' : ''}{s.name}</span>
                                     <div className="flex items-center gap-1 shrink-0">
                                         {s.cacheLocally && (
                                             <button
@@ -312,8 +316,8 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                         />
                     </FormField>
 
-                    <div className="flex gap-4">
-                        {(['url', 'path'] as const).map(type => (
+                    <div className="flex flex-wrap gap-4">
+                        {(['url', 'path', 'image'] as const).map(type => (
                             <label key={type} className="flex items-center">
                                 <input
                                     type="radio"
@@ -323,13 +327,17 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                                     className="rounded border-input bg-background dark:border-white/10 dark:bg-white/5 text-sky-500"
                                 />
                                 <span className="ml-2 text-sm text-foreground dark:text-zinc-300">
-                                    {type === 'url' ? t('servers.sourceTypeUrl') : t('servers.sourceTypePath')}
+                                    {type === 'url'
+                                        ? t('servers.sourceTypeUrl')
+                                        : type === 'path'
+                                            ? t('servers.sourceTypePath')
+                                            : t('servers.sourceTypeImage')}
                                 </span>
                             </label>
                         ))}
                     </div>
 
-                    {sourceType === 'url' ? (
+                    {sourceType === 'url' && (
                         <>
                             <FormField label="URL">
                                 <input
@@ -358,7 +366,9 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                                 {t('servers.cacheLocallyHint')}
                             </p>
                         </>
-                    ) : (
+                    )}
+
+                    {sourceType === 'path' && (
                         <FormField label={t('servers.sourcePath')}>
                             <div>
                                 <div className="flex gap-2">
@@ -384,6 +394,24 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                                 </div>
                                 <p className="text-xs text-muted-foreground dark:text-zinc-500 mt-2">
                                     {t('servers.sourcePathHint')}
+                                </p>
+                            </div>
+                        </FormField>
+                    )}
+
+                    {sourceType === 'image' && (
+                        <FormField label={t('servers.sourceImage')}>
+                            <div>
+                                <input
+                                    type="text"
+                                    value={image}
+                                    onChange={e => setImage(e.target.value)}
+                                    placeholder="ghcr.io/ks-tool/awg-agent-userspace:latest"
+                                    disabled={saving}
+                                    className={cn(inputs.primary, 'font-mono text-xs')}
+                                />
+                                <p className="text-xs text-muted-foreground dark:text-zinc-500 mt-2">
+                                    {t('servers.sourceImageHint')}
                                 </p>
                             </div>
                         </FormField>
