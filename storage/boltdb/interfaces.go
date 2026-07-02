@@ -112,6 +112,15 @@ func (i *interfaces) Delete(id uuid.UUID) error {
 			return storage.ErrNotFound
 		}
 
+		// Peers live under users, each tagged with its InterfaceId — remove the
+		// ones bound to this interface so deleting it doesn't leave orphaned peer
+		// records behind (which would keep showing in the peer metrics). Mirrors
+		// servers.Delete's cascade; same transaction, so the interface and its
+		// peers are removed atomically.
+		if err = cascadeDeletePeers(tx.Bucket(bktUsers), []uuid.UUID{id}); err != nil {
+			return fmt.Errorf("cascade delete peers: %w", err)
+		}
+
 		newList := make([]uuid.UUID, 0, len(srv.Interfaces))
 		for _, existing := range srv.Interfaces {
 			if existing != id {

@@ -318,6 +318,19 @@ func (c *Collector) collectPeers(now time.Time) {
 		return
 	}
 
+	// Reconcile the store to the interfaces that actually exist: evict any
+	// database (interface) that's no longer present, so a deleted interface's
+	// peers can't linger in /metrics or /metrics/history — whether resurrected
+	// from the on-disk checkpoint after an ungraceful restart, or re-created by
+	// a sample that raced the delete handler's ForgetInterface. systemDB holds
+	// host stats (not an interface), so it's always kept.
+	keep := make(map[string]struct{}, len(ifaces)+1)
+	keep[systemDB] = struct{}{}
+	for _, cfg := range ifaces {
+		keep[cfg.Interface] = struct{}{}
+	}
+	c.store.retainOnly(keep)
+
 	for _, cfg := range ifaces {
 		dev, err := c.awg.Device(cfg.Interface)
 		if err != nil {
@@ -339,6 +352,17 @@ func (c *Collector) collectPeers(now time.Time) {
 			c.store.write(db, key+"/handshake", now, float64(handshake))
 		}
 	}
+}
+
+// ForgetInterface immediately drops all retained peer metrics for the named
+// interface — collectPeers stores each interface's peers under a database named
+// after it (see db := cfg.Interface), so dropping that database evicts them from
+// both /metrics and /metrics/history at once. Called when an interface is
+// deleted so its peers stop showing in the peer metrics right away, instead of
+// lingering until they age past the retention window. No-op if the interface has
+// no recorded metrics.
+func (c *Collector) ForgetInterface(name string) {
+	c.store.dropDB(name)
 }
 
 // Snapshot returns the most recently recorded value of every metric this

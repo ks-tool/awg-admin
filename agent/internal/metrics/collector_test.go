@@ -293,6 +293,50 @@ func TestStorePruneDropsStaleKeepsFresh(t *testing.T) {
 	}
 }
 
+func TestForgetInterfaceDropsPeersFromSnapshotAndHistory(t *testing.T) {
+	c := newTestCollector(t)
+	now := time.Now()
+	for _, iface := range []string{"wg0", "wg1"} {
+		c.store.write(iface, "deadbeef/rx", now, 1)
+		c.store.write(iface, "deadbeef/tx", now, 2)
+		c.store.write(iface, "deadbeef/handshake", now, float64(now.Unix()))
+	}
+
+	c.ForgetInterface("wg0")
+
+	snap := c.Snapshot()
+	if len(snap.Interfaces) != 1 || snap.Interfaces[0].Interface != "wg1" {
+		t.Fatalf("after ForgetInterface(wg0), snapshot Interfaces = %+v, want only wg1", snap.Interfaces)
+	}
+	for _, ih := range c.SystemHistory().Interfaces {
+		if ih.Interface == "wg0" {
+			t.Fatalf("wg0 still present in history after ForgetInterface: %+v", c.SystemHistory().Interfaces)
+		}
+	}
+}
+
+func TestStoreRetainOnlyDropsMissingInterfaces(t *testing.T) {
+	s := newStore(10)
+	now := time.Now()
+	s.write(systemDB, metricCPUPercent, now, 1)
+	s.write("wg0", "deadbeef/rx", now, 1)
+	s.write("wg1", "deadbeef/rx", now, 1)
+
+	// Keep only systemDB + wg0 — as collectPeers does with the live interface set.
+	s.retainOnly(map[string]struct{}{systemDB: {}, "wg0": {}})
+
+	got := make(map[string]bool)
+	for _, db := range s.databases() {
+		got[db] = true
+	}
+	if !got[systemDB] || !got["wg0"] {
+		t.Fatalf("retainOnly dropped a kept database: %v", s.databases())
+	}
+	if got["wg1"] {
+		t.Fatalf("retainOnly kept wg1, which was not in the keep set: %v", s.databases())
+	}
+}
+
 func TestDeltaUint64(t *testing.T) {
 	if got := deltaUint64(100, 150); got != 50 {
 		t.Errorf("deltaUint64(100, 150) = %d, want 50", got)

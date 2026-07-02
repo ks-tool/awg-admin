@@ -186,6 +186,14 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Drop this interface's retained peer metrics so its peers stop appearing in
+	// /metrics and /metrics/history immediately — otherwise they'd linger up to
+	// the retention window after the interface (and its device) are gone. Guarded:
+	// the collector is nil when metrics collection is disabled.
+	if h.collector != nil {
+		h.collector.ForgetInterface(iface)
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

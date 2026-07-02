@@ -178,6 +178,33 @@ func (s *store) series(db, metric string) []point {
 	return nil
 }
 
+// dropDB removes a whole database (all its metrics and their series) at once —
+// used to forget a deleted interface's peer metrics immediately instead of
+// waiting for prune to age each series past the retention window. No-op for a
+// database that was never recorded.
+func (s *store) dropDB(db string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.dbs, db)
+}
+
+// retainOnly drops every database whose name is not in keep. The collector runs
+// it each tick with the set of currently-existing interfaces (plus systemDB), so
+// metrics for an interface that no longer exists get evicted regardless of how
+// they got there — a delete whose dropDB was lost to an ungraceful restart (the
+// on-disk checkpoint is reloaded into memory on start), or a sample that raced
+// the delete handler and re-created the database. This bounds such staleness to
+// one collection interval instead of the full retention window.
+func (s *store) retainOnly(keep map[string]struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for db := range s.dbs {
+		if _, ok := keep[db]; !ok {
+			delete(s.dbs, db)
+		}
+	}
+}
+
 // databases returns every database name with at least one metric.
 func (s *store) databases() []string {
 	s.mu.Lock()

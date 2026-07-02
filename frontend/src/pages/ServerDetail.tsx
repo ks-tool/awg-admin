@@ -379,6 +379,12 @@ function ReconcileModal({serverId, onClose, onChanged}: {
     const [report, setReport] = useState<ReconcileReport | null>(null);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState<string | null>(null);
+    // Deleting a DB-only interface cascades its peers too (same as the normal
+    // delete), so it goes through the same peer-aware confirmation rather than
+    // firing immediately. dbDeleteConfirmed tracks the second stage when there
+    // are peers.
+    const [pendingDbDelete, setPendingDbDelete] = useState<{id: string; name: string; peerCount: number} | null>(null);
+    const [dbDeleteConfirmed, setDbDeleteConfirmed] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -462,6 +468,7 @@ function ReconcileModal({serverId, onClose, onChanged}: {
     const hasMismatch = report && (agentOnly.length > 0 || dbOnly.length > 0);
 
     return (
+        <>
         <Modal title={t('servers.reconcile.title')} onClose={onClose} size="lg">
             {loading ? (
                 <div className="flex items-center justify-center py-12 text-muted-foreground dark:text-zinc-400">
@@ -532,7 +539,10 @@ function ReconcileModal({serverId, onClose, onChanged}: {
                                                 {t('servers.reconcile.repush')}
                                             </button>
                                             <button
-                                                onClick={() => handleDeleteFromDB(iface.id, iface.iface)}
+                                                onClick={() => {
+                                                    setDbDeleteConfirmed(false);
+                                                    setPendingDbDelete({id: iface.id, name: iface.iface, peerCount: iface.peers?.length ?? 0});
+                                                }}
                                                 disabled={busy === `delete-db-${iface.id}`}
                                                 className={buttons.danger}
                                             >
@@ -553,6 +563,44 @@ function ReconcileModal({serverId, onClose, onChanged}: {
                 </button>
             </div>
         </Modal>
+
+        {pendingDbDelete && (() => {
+            const closeConfirm = () => {
+                setPendingDbDelete(null);
+                setDbDeleteConfirmed(false);
+            };
+            // Peers present → confirm twice (first spells out the cascade), else once.
+            if (pendingDbDelete.peerCount > 0 && !dbDeleteConfirmed) {
+                return (
+                    <ConfirmModal
+                        title={t('servers.reconcile.deleteFromDb')}
+                        message={t('servers.interfaces.confirmDeleteWithPeers', {
+                            count: pendingDbDelete.peerCount,
+                            name: pendingDbDelete.name,
+                        })}
+                        confirmLabel={t('common.continue')}
+                        onConfirm={() => setDbDeleteConfirmed(true)}
+                        onCancel={closeConfirm}
+                    />
+                );
+            }
+            return (
+                <ConfirmModal
+                    title={t('servers.reconcile.deleteFromDb')}
+                    message={pendingDbDelete.peerCount > 0
+                        ? t('servers.interfaces.confirmDeleteWithPeersFinal', {count: pendingDbDelete.peerCount})
+                        : t('servers.interfaces.confirmDelete')}
+                    onConfirm={async () => {
+                        const {id, name} = pendingDbDelete;
+                        closeConfirm();
+                        await handleDeleteFromDB(id, name);
+                    }}
+                    onCancel={closeConfirm}
+                    loading={busy === `delete-db-${pendingDbDelete.id}`}
+                />
+            );
+        })()}
+        </>
     );
 }
 
@@ -590,6 +638,10 @@ export default function ServerDetail() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteInterfaceId, setDeleteInterfaceId] = useState<string | null>(null);
+    // Second-stage flag: an interface that has peers requires confirming twice
+    // (the cascade deletes all of them), so this tracks that the first warning
+    // was acknowledged.
+    const [deleteInterfaceConfirmed, setDeleteInterfaceConfirmed] = useState(false);
     const [deleteInterfaceLoading, setDeleteInterfaceLoading] = useState(false);
     const [unlockLoading, setUnlockLoading] = useState(false);
     const [unlockError, setUnlockError] = useState<string | undefined>();
@@ -837,6 +889,7 @@ export default function ServerDetail() {
         } finally {
             setDeleteInterfaceLoading(false);
             setDeleteInterfaceId(null);
+            setDeleteInterfaceConfirmed(false);
         }
     };
 
@@ -1191,15 +1244,42 @@ export default function ServerDetail() {
                 />
             )}
 
-            {deleteInterfaceId && (
-                <ConfirmModal
-                    title={t('servers.interfaces.deleteTooltip')}
-                    message={t('servers.interfaces.confirmDelete')}
-                    onConfirm={handleDeleteInterface}
-                    onCancel={() => setDeleteInterfaceId(null)}
-                    loading={deleteInterfaceLoading}
-                />
-            )}
+            {deleteInterfaceId && (() => {
+                const iface = serverInterfaces.find((i) => i.id === deleteInterfaceId);
+                const peerCount = iface?.peers?.length ?? 0;
+                const closeDelete = () => {
+                    setDeleteInterfaceId(null);
+                    setDeleteInterfaceConfirmed(false);
+                };
+                // An interface with peers needs a double confirmation: the first
+                // dialog spells out that all its peers will be deleted too, the
+                // second is the final go-ahead. No peers → a single confirmation.
+                if (peerCount > 0 && !deleteInterfaceConfirmed) {
+                    return (
+                        <ConfirmModal
+                            title={t('servers.interfaces.deleteTooltip')}
+                            message={t('servers.interfaces.confirmDeleteWithPeers', {
+                                count: peerCount,
+                                name: iface?.iface ?? '',
+                            })}
+                            confirmLabel={t('common.continue')}
+                            onConfirm={() => setDeleteInterfaceConfirmed(true)}
+                            onCancel={closeDelete}
+                        />
+                    );
+                }
+                return (
+                    <ConfirmModal
+                        title={t('servers.interfaces.deleteTooltip')}
+                        message={peerCount > 0
+                            ? t('servers.interfaces.confirmDeleteWithPeersFinal', {count: peerCount})
+                            : t('servers.interfaces.confirmDelete')}
+                        onConfirm={handleDeleteInterface}
+                        onCancel={closeDelete}
+                        loading={deleteInterfaceLoading}
+                    />
+                );
+            })()}
         </div>
     );
 }

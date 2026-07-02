@@ -234,6 +234,66 @@ func TestInterfaceAndPeerMutationsPushToAgent(t *testing.T) {
 	}
 }
 
+func TestDeleteInterfaceCascadesPeers(t *testing.T) {
+	ts, tlsMaterial, fa := newFakeAgentTLS(t)
+	defer ts.Close()
+
+	svc := newTestService(t)
+
+	srv, err := svc.CreateServer(ServerInput{
+		Name:  "srv1",
+		SSH:   models.SSHConfig{Host: "example.invalid", User: "root", Password: "x"},
+		Agent: models.Agent{Address: ts.Listener.Addr().String(), TLS: tlsMaterial},
+	})
+	if err != nil {
+		t.Fatalf("CreateServer: %v", err)
+	}
+
+	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
+	})
+	if err != nil {
+		t.Fatalf("CreateInterface: %v", err)
+	}
+
+	user, err := svc.CreateUser(UserInput{Name: "u1"})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	for _, ip := range []string{"10.0.0.5/32", "10.0.0.6/32"} {
+		if _, err = svc.AddPeer(user.ID.String(), AddPeerInput{InterfaceID: iface.ID, AllowedIPs: []string{ip}}); err != nil {
+			t.Fatalf("AddPeer(%s): %v", ip, err)
+		}
+	}
+
+	peers, err := svc.ListPeers(user.ID.String())
+	if err != nil {
+		t.Fatalf("ListPeers: %v", err)
+	}
+	if len(peers) != 2 {
+		t.Fatalf("expected 2 peers before delete, got %d", len(peers))
+	}
+
+	if err = svc.DeleteInterface(srv.ID.String(), iface.ID.String()); err != nil {
+		t.Fatalf("DeleteInterface: %v", err)
+	}
+
+	// The interface's peers must be removed from the user's records too, not
+	// left orphaned — orphaned peer records are what kept them showing in the
+	// peer metrics after the interface was gone.
+	peers, err = svc.ListPeers(user.ID.String())
+	if err != nil {
+		t.Fatalf("ListPeers after delete: %v", err)
+	}
+	if len(peers) != 0 {
+		t.Fatalf("expected 0 peers after interface delete, got %d: %+v", len(peers), peers)
+	}
+
+	if _, ok := fa.get("wg0"); ok {
+		t.Fatal("agent still has interface after DeleteInterface")
+	}
+}
+
 func TestSyncServerResendsAllInterfaces(t *testing.T) {
 	ts, tlsMaterial, fa := newFakeAgentTLS(t)
 	defer ts.Close()
