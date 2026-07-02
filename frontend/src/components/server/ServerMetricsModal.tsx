@@ -166,6 +166,8 @@ type MetricsTab = 'system' | 'peers';
 export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
     const {t} = useTranslation();
     const users = useAppStore((s) => s.users);
+    const servers = useAppStore((s) => s.servers);
+    const interfacesById = useAppStore((s) => s.interfaces);
     const [history, setHistory] = useState<SystemHistory | null>(null);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<MetricsTab>('system');
@@ -200,13 +202,32 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         return m;
     }, [users]);
 
+    // Interface names on this server that belong to a tunnel. An unnamed peer on
+    // one of those is the tunnel's gateway peer (the other member's interface,
+    // added by the tunnel — not a user peer), so it's labelled as such instead of
+    // showing a bare short key.
+    const tunnelIfaceNames = useMemo(() => {
+        const server = servers.find((s) => s.id === serverId);
+        const names = new Set<string>();
+        for (const id of server?.interfaces ?? []) {
+            const iface = interfacesById.get(id);
+            if (iface?.tunnel) names.add(iface.iface);
+        }
+        return names;
+    }, [servers, interfacesById, serverId]);
+
     const peerRows = useMemo(() => {
         const rows = (history?.interfaces ?? []).flatMap((iface) =>
             iface.peers.map((peer) => {
                 const activity = activitySeries(peer.points);
+                const known = peerLabels.get(peer.publicKey);
+                const label = known
+                    ?? (tunnelIfaceNames.has(iface.interface)
+                        ? `${t('servers.metricsTunnelPeer')} · ${shortKey(peer.publicKey)}`
+                        : shortKey(peer.publicKey));
                 return {
                     publicKey: peer.publicKey,
-                    label: peerLabels.get(peer.publicKey) ?? shortKey(peer.publicKey),
+                    label,
                     activity,
                     total: activity.reduce((sum, v) => sum + v, 0),
                 };
@@ -214,7 +235,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         );
         // Busiest peers first, like Uptrace's GROUPS ordered by count.
         return rows.sort((a, b) => b.total - a.total);
-    }, [history, peerLabels]);
+    }, [history, peerLabels, tunnelIfaceNames, t]);
 
     const labels = points?.map(timeLabel) ?? [];
 
