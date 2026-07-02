@@ -116,7 +116,8 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *sessionStore {
 			gr.POST("/reconcile/delete-agent", h.serverDeleteAgentInterface)
 			gr.GET("/metrics", h.serverMetrics)
 			gr.GET("/metrics/history", h.serverMetricsHistory)
-			gr.GET("/tunnel-status", h.serverTunnelStatus)
+			gr.GET("/agent-status", h.serverAgentStatus)
+			gr.GET("/host-info", h.serverHostInfo)
 			gr.PATCH("/monitoring", h.serverSetMonitoring)
 			gr.POST("/ssh/unlock", h.serverUnlockSSH)
 

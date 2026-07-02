@@ -24,6 +24,9 @@ package kernel
 
 import (
 	"fmt"
+	"os/exec"
+
+	"github.com/ks-tool/awg-admin/agent/internal/service"
 
 	"github.com/rs/zerolog/log"
 	"github.com/vishvananda/netlink"
@@ -129,4 +132,33 @@ func (Backend) SyncAddr(iface, s string) error {
 	}
 
 	return netlink.AddrReplace(link, wantAddr)
+}
+
+// Info reports the kernel backend's capabilities on this host. A plain
+// WireGuard interface is always listed — kernel WireGuard support is a
+// prerequisite for running this build at all. An AmneziaWG interface is listed
+// only when the amneziawg kernel module is available (see amneziaModuleAvailable),
+// since without it Add falls back to a plain WireGuard link and obfuscation
+// wouldn't apply.
+func (Backend) Info() service.BackendInfo {
+	amnezia := amneziaModuleAvailable()
+	kinds := []string{"wireguard"}
+	if amnezia {
+		kinds = []string{"amneziawg", "wireguard"}
+	}
+	return service.BackendInfo{
+		Kind:           "kernel",
+		KernelModule:   amnezia,
+		InterfaceKinds: kinds,
+	}
+}
+
+// amneziaModuleAvailable reports whether the AmneziaWG kernel module can be
+// loaded on this host, probed the same way the systemd deploy pre-flight check
+// does (`modinfo amneziawg`). modinfo finds the module whether or not it's
+// currently loaded, so this answers "can an amneziawg link be created here" —
+// which is what determines whether obfuscation is available — rather than "is
+// one loaded right now".
+func amneziaModuleAvailable() bool {
+	return exec.Command("modinfo", "amneziawg").Run() == nil
 }

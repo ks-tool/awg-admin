@@ -131,6 +131,46 @@ func tunnelDropped(err error) bool {
 		errors.Is(err, context.DeadlineExceeded)
 }
 
+// pingAgent confirms srv's agent HTTP daemon actually answers, used by
+// ServerAgentStatus. It uses the lightest call — List (GET /interfaces/), which
+// has no metrics-collector dependency (unlike /metrics, which 503s when the
+// collector was never created) — and goes through callAgent so a stale SSH
+// tunnel is reopened-and-retried first.
+func (s *Service) pingAgent(srv *models.Server) error {
+	return s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		_, err := c.List(ctx)
+		return err
+	})
+}
+
+// ServerHostInfo fetches the host facts serverID's agent discovered at startup —
+// its backend, creatable interface kinds, Docker availability, whether it runs
+// in a container, kernel-module presence (see agentmodels.HostInfo) — for the
+// dashboard. Goes through callAgent so a stale SSH tunnel is reopened-and-retried
+// first. Best-effort from the frontend's side: an unreachable agent surfaces as
+// an error the caller treats as "no data".
+func (s *Service) ServerHostInfo(serverID string) (*agentmodels.HostInfo, error) {
+	sID, err := uuid.Parse(serverID)
+	if err != nil {
+		return nil, err
+	}
+	srv, err := s.store.Servers().Get(sID)
+	if err != nil {
+		return nil, err
+	}
+
+	var info *agentmodels.HostInfo
+	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		var iErr error
+		info, iErr = c.Info(ctx)
+		return iErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
+}
+
 // GetServerMetrics fetches the latest CPU/RAM/load/network/peer snapshot
 // from serverID's agent, for display on the frontend Dashboard.
 func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapshot, error) {

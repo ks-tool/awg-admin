@@ -69,32 +69,67 @@ func (s *Service) GetServer(id string) (*models.Server, error) {
 	return s.store.Servers().Get(sID)
 }
 
-// ServerTunnelOpen reports whether id currently has a live SSH tunnel open
-// (see sshclient.Manager), lazily (re)dialing one first if the cached entry
-// turned out to be dead — so polling this from the frontend is enough to
-// self-heal after the remote agent/sshd restarts, without requiring a
-// manual Sync or an admin process restart. Reconnect failures (e.g. a
-// passphrase the user hasn't supplied yet) are reported as "not open"
-// rather than as an error — this is a passive status check, not an action,
-// so it shouldn't surface a passphrase prompt on its own. Servers
-// configured with mTLS never have a tunnel — they're reached directly — so
-// this always reports false for them; callers should check
-// models.Server.Agent.TLS to tell "no tunnel needed" apart from "tunnel
-// down".
-func (s *Service) ServerTunnelOpen(id string) (bool, error) {
+// ServerAgentStatus reports a tri-state health for id's agent, for the
+// dashboard (see models.AgentStatus). It combines transport liveness (the SSH
+// tunnel, or the direct mTLS path) with an actual probe of the agent's HTTP API
+// (a lightweight List /interfaces/ via callAgent, which self-heals a dead SSH
+// tunnel by reopening it):
+//
+//   - AgentStatusOK       (green):  the agent is reachable and answering — which
+//     for an SSH server also means its tunnel is up.
+//   - AgentStatusDown     (red):    the SSH tunnel could not be brought up, or an
+//     mTLS agent is unreachable — the connection is
+//     simply down.
+//   - AgentStatusDegraded (amber):  the SSH tunnel is up but the agent behind it
+//     isn't answering, or the state is indeterminate.
+//
+// Any non-OK state is logged at error level (with server_id) so problems are
+// visible in the logs. This is a passive check: reconnect/passphrase failures
+// collapse into the status rather than surfacing as an error (or a passphrase
+// prompt) to the caller.
+func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	sID, err := uuid.Parse(id)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	srv, err := s.store.Servers().Get(sID)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	if !srv.Agent.TLS.IsZero() {
-		return false, nil
+
+	mtls := !srv.Agent.TLS.IsZero()
+
+	// For SSH servers the tunnel must be up before the agent can be reached at
+	// all; a tunnel that won't open is "down" (red), distinct from a live tunnel
+	// with a silent agent (degraded).
+	if !mtls {
+		if _, err := s.tunnels.Ensure(sID, srv.SSH, srv.Agent.Address); err != nil {
+			log.Error().Err(err).Str("server_id", id).Msg("agent status: SSH tunnel to agent is down")
+			return models.AgentStatusDown, nil
+		}
 	}
-	_, err = s.tunnels.Ensure(sID, srv.SSH, srv.Agent.Address)
-	return err == nil, nil
+
+	// Transport is available (mTLS direct, or a live SSH tunnel) — probe the
+	// agent's HTTP API to confirm the daemon actually answers.
+	if err := s.pingAgent(srv); err != nil {
+		if mtls {
+			// mTLS is reached directly; a failed probe means the agent is unreachable.
+			log.Error().Err(err).Str("server_id", id).Msg("agent status: mTLS agent unreachable")
+			return models.AgentStatusDown, nil
+		}
+		// SSH: the pre-check saw a live tunnel, but a probe failing with a
+		// dropped-connection error (EOF/closed/deadline) means the tunnel died
+		// underneath us — Alive() merely lagged. That's "tunnel down" (red), not
+		// a silent agent behind a genuinely live tunnel (degraded).
+		if tunnelDropped(err) {
+			log.Error().Err(err).Str("server_id", id).Msg("agent status: SSH tunnel to agent died")
+			return models.AgentStatusDown, nil
+		}
+		log.Error().Err(err).Str("server_id", id).Msg("agent status: SSH tunnel up but agent not responding")
+		return models.AgentStatusDegraded, nil
+	}
+
+	return models.AgentStatusOK, nil
 }
 
 func (s *Service) CreateServer(in ServerInput) (*models.Server, error) {

@@ -93,7 +93,9 @@ export function SavePeerQRCode(arg1:string,arg2:string,arg3:string):Promise<bool
 
 export function SelectFile(arg1:string):Promise<string>;
 
-export function ServerTunnelOpen(arg1:string):Promise<boolean>;
+export function ServerAgentStatus(arg1:string):Promise<models.AgentStatus>;
+
+export function ServerHostInfo(arg1:string):Promise<models.HostInfo>;
 
 export function SetBasicAuthEnabled(arg1:boolean):Promise<void>;
 

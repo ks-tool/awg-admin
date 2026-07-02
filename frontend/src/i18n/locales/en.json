@@ -42,7 +42,9 @@
     "unknown": "Unknown",
     "active": "Active",
     "inactive": "Inactive",
-    "error": "Error"
+    "error": "Error",
+    "ok": "OK",
+    "down": "Down"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -61,8 +63,16 @@
   "servers": {
     "title": "Servers",
     "host": "Host",
-    "tunnelStatus": "SSH Tunnel",
-    "tunnelNotApplicable": "mTLS (direct)",
+    "agentStatus": "Agent status",
+    "agentType": "Agent type",
+    "hostInfo": {
+      "backend": "Backend",
+      "version": "Version",
+      "dockerHost": "Docker on host",
+      "container": "Runs in container",
+      "kernelModule": "AmneziaWG kernel module",
+      "interfaceKinds": "Interface kinds"
+    },
     "port": "Port",
     "status": "Status",
     "peers": "Peers",
@@ -341,6 +351,8 @@
     "search": "Search...",
     "filter": "Filter",
     "all": "All",
+    "yes": "Yes",
+    "no": "No",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "copy": "Copy",

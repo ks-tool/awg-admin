@@ -26,6 +26,8 @@ interface Props {
 
 const config: Record<Status, { dot: string; text: string; bg: string }> = {
   online:   { dot: 'bg-emerald-400 animate-pulse', text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 border-emerald-200 dark:bg-emerald-400/10 dark:border-emerald-400/20' },
+  ok:       { dot: 'bg-emerald-400 animate-pulse', text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 border-emerald-200 dark:bg-emerald-400/10 dark:border-emerald-400/20' },
+  down:     { dot: 'bg-red-500 animate-pulse',     text: 'text-red-700 dark:text-red-400',     bg: 'bg-red-100 border-red-200 dark:bg-red-500/10 dark:border-red-500/20' },
   offline:  { dot: 'bg-gray-500 dark:bg-zinc-500',  text: 'text-gray-600 dark:text-zinc-400',    bg: 'bg-gray-100 border-gray-200 dark:bg-zinc-500/10 dark:border-zinc-500/20' },
   degraded: { dot: 'bg-amber-400 animate-pulse',   text: 'text-amber-700 dark:text-amber-400',   bg: 'bg-amber-100 border-amber-200 dark:bg-amber-400/10 dark:border-amber-400/20' },
   unknown:  { dot: 'bg-gray-500 dark:bg-zinc-600', text: 'text-gray-600 dark:text-zinc-500',    bg: 'bg-gray-100 border-gray-200 dark:bg-zinc-600/10 dark:border-zinc-600/20' },

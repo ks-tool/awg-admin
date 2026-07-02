@@ -51,9 +51,10 @@ export interface AgentSource {
   /**
    * Image, when set instead of URL/Path, is a Docker image reference (e.g.
    * ghcr.io/ks-tool/awg-agent-userspace:latest). Deploying such a source runs
-   * the agent as a Docker container on the server rather than as a systemd
-   * unit — for hosts using the userspace amneziawg-go image. Exactly one of
-   * URL, Path or Image is set; CacheLocally is always false for it.
+   * the agent as a Docker container on the server (see deploy.ToAgent's docker
+   * path) rather than as a systemd unit — for hosts using the userspace
+   * amneziawg-go image. Exactly one of URL, Path or Image is set; CacheLocally
+   * is meaningless here (Docker pulls the image itself) and is always false.
    */
   image?: string;
 }
@@ -153,6 +154,28 @@ export interface Agent {
   monitoringDisabled?: boolean;
 }
 /**
+ * AgentStatus is the tri-state health of a server's agent shown on the
+ * dashboard (see Service.ServerAgentStatus), color-coded on the frontend:
+ * green / red / amber.
+ */
+export type AgentStatus = string;
+/**
+ * AgentStatusOK (green): the agent is reachable and answering — which for an
+ * SSH-tunnelled server also means its tunnel is up.
+ */
+export const AgentStatusOK: AgentStatus = "ok";
+/**
+ * AgentStatusDown (red): the connection to the agent is down — the SSH
+ * tunnel could not be brought up, or an mTLS agent (reached directly) is
+ * unreachable.
+ */
+export const AgentStatusDown: AgentStatus = "down";
+/**
+ * AgentStatusDegraded (amber): the SSH tunnel is up but the agent behind it
+ * isn't responding, or the state is otherwise indeterminate.
+ */
+export const AgentStatusDegraded: AgentStatus = "degraded";
+/**
  * AgentTLS holds the mTLS material for direct (non-tunnelled) communication
  * with the agent on a public ("white") IP. CA is kept so awg-admin can
  * re-issue Server/Client certs later (e.g. on renewal) without invalidating
@@ -238,5 +261,11 @@ export interface Peer {
   pk: Key;
   interface: string;
   disabled?: boolean;
+  /**
+   * DNS is the client-side DNS for this peer's generated wg-quick config
+   * (the `[Interface] DNS = …` line). Admin-only: it's never pushed to the
+   * agent (DNS is a client setting). Empty falls back to the owning
+   * interface's DNS in GetPeerConfig.
+   */
   dns?: string[];
 }

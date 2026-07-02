@@ -42,7 +42,9 @@
     "unknown": "Неизвестно",
     "active": "Активен",
     "inactive": "Неактивен",
-    "error": "Ошибка"
+    "error": "Ошибка",
+    "ok": "OK",
+    "down": "Недоступен"
   },
   "dashboard": {
     "title": "Обзор",
@@ -61,8 +63,16 @@
   "servers": {
     "title": "Серверы",
     "host": "Хост",
-    "tunnelStatus": "SSH-туннель",
-    "tunnelNotApplicable": "mTLS (напрямую)",
+    "agentStatus": "Статус агента",
+    "agentType": "Тип агента",
+    "hostInfo": {
+      "backend": "Бэкенд",
+      "version": "Версия",
+      "dockerHost": "Docker на хосте",
+      "container": "Запущен в контейнере",
+      "kernelModule": "Модуль ядра AmneziaWG",
+      "interfaceKinds": "Типы интерфейсов"
+    },
     "port": "Порт",
     "status": "Статус",
     "peers": "Пиры",
@@ -341,6 +351,8 @@
     "search": "Поиск...",
     "filter": "Фильтр",
     "all": "Все",
+    "yes": "Да",
+    "no": "Нет",
     "enabled": "Включён",
     "disabled": "Отключён",
     "copy": "Копировать",

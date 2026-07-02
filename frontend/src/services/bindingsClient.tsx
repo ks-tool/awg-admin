@@ -347,14 +347,27 @@ export const bindingsClient = {
         }
     },
 
-    async getServerTunnelStatus(id: string): Promise<ApiResponse<boolean>> {
+    async getServerAgentStatus(id: string): Promise<ApiResponse<string>> {
         try {
-            const data = await AppBindings.ServerTunnelOpen(id);
+            const data = await AppBindings.ServerAgentStatus(id);
             return { data };
         } catch (error) {
-            console.error('Bindings ServerTunnelOpen failed:', error);
+            console.error('Bindings ServerAgentStatus failed:', error);
             return {
-                data: false,
+                data: '',
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
+    async getServerHostInfo(id: string): Promise<ApiResponse<models.HostInfo>> {
+        try {
+            const data = await AppBindings.ServerHostInfo(id);
+            return { data };
+        } catch (error) {
+            console.error('Bindings ServerHostInfo failed:', error);
+            return {
+                data: null as any,
                 error: extractErrorMessage(error),
             };
         }

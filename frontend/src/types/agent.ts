@@ -24,6 +24,51 @@ export interface AgentInfo {
 }
 
 //////////
+// source: host.go
+
+/**
+ * HostInfo is what the agent discovers about the host it runs on, gathered once
+ * at startup and served unchanged over GET /info (these facts don't change under
+ * a running agent). The admin uses it to show what a server supports — which
+ * interface kinds can be created, whether Docker is available — without having
+ * to SSH in and probe by hand.
+ */
+export interface HostInfo {
+  /**
+   * Backend identifies which link backend this agent build drives: "kernel"
+   * (amneziawg-dkms over netlink) or "userspace" (in-process amneziawg-go).
+   */
+  backend: string;
+  /**
+   * Version is the agent build version (see each main's -ldflags).
+   */
+  version: string;
+  /**
+   * Docker reports whether Docker is usable on the host (the docker CLI is
+   * present and `docker info` succeeds) — i.e. whether a docker-image agent
+   * deploy would work there.
+   */
+  docker: boolean;
+  /**
+   * InDocker reports whether the agent process itself runs inside a Docker
+   * container, detected via the /.dockerenv file. Only the userspace agent
+   * ships as a container image, so this is only ever true for it.
+   */
+  inDocker: boolean;
+  /**
+   * KernelModule reports whether the AmneziaWG kernel module is available on
+   * the host (modinfo amneziawg succeeds — e.g. installed via dkms). Only
+   * meaningful for the kernel backend; always false for userspace.
+   */
+  kernelModule: boolean;
+  /**
+   * InterfaceKinds lists the interface variants this agent can create on this
+   * host: "amneziawg" and/or "wireguard".
+   */
+  interfaceKinds: string[];
+}
+
+//////////
 // source: metrics.go
 
 /**
@@ -146,6 +191,12 @@ export interface InterfaceConfig {
   addr: string;
   mtu?: number /* int */;
   dns?: string[];
+  /**
+   * Disabled deactivates the interface on the agent: its link is torn down
+   * (or never brought up at startup) and its device config is not applied,
+   * while the config itself stays stored. Zero value (false) keeps the
+   * interface active, so configs written before this field existed stay up.
+   */
   disabled?: boolean;
   /**
    * Table the routing table number

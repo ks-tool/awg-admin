@@ -152,6 +152,32 @@ func (c *Client) Delete(ctx context.Context, name string) error {
 	return nil
 }
 
+// Info fetches the host facts the agent discovered at startup — its backend and
+// creatable interface kinds, whether Docker is available on the host, whether
+// the agent itself runs in a container, kernel-module presence (GET /info).
+func (c *Client) Info(ctx context.Context) (*agentmodels.HostInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/info", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GET /info: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, responseError(resp, "")
+	}
+
+	var info agentmodels.HostInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, fmt.Errorf("decode host info: %w", err)
+	}
+	return &info, nil
+}
+
 // Metrics fetches the agent's latest CPU/RAM/load/network/peer snapshot
 // (GET /metrics).
 func (c *Client) Metrics(ctx context.Context) (*agentmodels.MetricsSnapshot, error) {

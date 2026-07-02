@@ -21,16 +21,18 @@ import { useAppStore } from '@/store'
 import { StatCard } from '@/components/common/StatCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { getServerMetrics, getServerTunnelStatus } from '@/services/servers'
+import { getServerMetrics, getServerAgentStatus, getServerHostInfo, type AgentStatus } from '@/services/servers'
 import { ServerMetricsModal } from '@/components/server/ServerMetricsModal'
-import type { MetricsSnapshot } from '@/types'
+import { HostInfoBadges } from '@/components/server/HostInfoBadges'
+import type { HostInfo, MetricsSnapshot } from '@/types'
 import {useAutoRefresh} from "@/hooks/useAutoRefresh.tsx";
 
 export default function Dashboard() {
     const { t } = useTranslation()
     const { stats, servers, refreshData } = useAppStore()
     const [metricsByServer, setMetricsByServer] = useState<Record<string, MetricsSnapshot | null>>({})
-    const [tunnelOpenByServer, setTunnelOpenByServer] = useState<Record<string, boolean | null>>({})
+    const [agentStatusByServer, setAgentStatusByServer] = useState<Record<string, AgentStatus | null>>({})
+    const [hostInfoByServer, setHostInfoByServer] = useState<Record<string, HostInfo | null>>({})
     const [metricsModalServerId, setMetricsModalServerId] = useState<string | null>(null)
 
     // Auto-fetch data on component mount
@@ -49,7 +51,7 @@ export default function Dashboard() {
                 // error to null) must not blank a row that was already populated.
                 // Keep the last known snapshot on a transient miss; "—" is only
                 // shown until a server's very first successful fetch. Reachability
-                // is still signalled separately by the tunnel/online badge.
+                // is still signalled separately by the agent-status badge.
                 setMetricsByServer((prev) => {
                     const next: Record<string, MetricsSnapshot | null> = { ...prev }
                     for (const [id, snapshot] of entries) {
@@ -64,15 +66,38 @@ export default function Dashboard() {
         }
     }, [servers])
 
-    // Tunnel status only applies to servers without mTLS configured — mTLS
-    // servers are reached directly and never have one, so skip the call for
-    // those instead of reporting a misleading "closed".
+    // Agent status applies to every server (mTLS included): it probes the agent
+    // itself and combines that with transport liveness into a tri-state badge.
+    // Best-effort like metrics — a failed tick yields null ('unknown') rather
+    // than throwing.
     useEffect(() => {
         let cancelled = false
-        const tunnelledServers = servers.filter((server) => !server.agent?.tls)
-        Promise.all(tunnelledServers.map(async (server) => [server.id, await getServerTunnelStatus(server.id)] as const))
+        Promise.all(servers.map(async (server) => [server.id, await getServerAgentStatus(server.id)] as const))
             .then((entries) => {
-                if (!cancelled) setTunnelOpenByServer(Object.fromEntries(entries))
+                if (!cancelled) setAgentStatusByServer(Object.fromEntries(entries))
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [servers])
+
+    // Host info (backend, Docker, interface kinds) is gathered by the agent once
+    // at startup, so it's effectively static — merge rather than replace so a
+    // transient unreachable tick keeps the last known value instead of blanking
+    // the cell (same treatment as metrics; "—" only until the first success).
+    useEffect(() => {
+        let cancelled = false
+        Promise.all(servers.map(async (server) => [server.id, await getServerHostInfo(server.id)] as const))
+            .then((entries) => {
+                if (cancelled) return
+                setHostInfoByServer((prev) => {
+                    const next: Record<string, HostInfo | null> = { ...prev }
+                    for (const [id, info] of entries) {
+                        if (info !== null) next[id] = info
+                        else if (!(id in next)) next[id] = null
+                    }
+                    return next
+                })
             })
         return () => {
             cancelled = true
@@ -142,7 +167,10 @@ export default function Dashboard() {
                                         {t('servers.host')}
                                     </th>
                                     <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-600">
-                                        {t('servers.tunnelStatus')}
+                                        {t('servers.agentStatus')}
+                                    </th>
+                                    <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-600">
+                                        {t('servers.agentType')}
                                     </th>
                                     <th className="px-5 py-3 text-right text-xs font-medium uppercase tracking-wider text-zinc-600">
                                         {t('servers.peers')}
@@ -171,20 +199,13 @@ export default function Dashboard() {
                                                 <div className="text-xs dark:text-zinc-400 font-mono">{server.ssh.host}</div>
                                             </td>
                                             <td className="px-5 py-3">
-                                                {server.agent?.tls ? (
-                                                    <span className="text-xs text-zinc-600">{t('servers.tunnelNotApplicable')}</span>
-                                                ) : (
-                                                    <StatusBadge
-                                                        status={
-                                                            tunnelOpenByServer[server.id] == null
-                                                                ? 'unknown'
-                                                                : tunnelOpenByServer[server.id]
-                                                                    ? 'online'
-                                                                    : 'offline'
-                                                        }
-                                                        size="sm"
-                                                    />
-                                                )}
+                                                <StatusBadge
+                                                    status={agentStatusByServer[server.id] ?? 'unknown'}
+                                                    size="sm"
+                                                />
+                                            </td>
+                                            <td className="px-5 py-3">
+                                                <HostInfoBadges info={hostInfoByServer[server.id]} />
                                             </td>
                                             <td className="px-5 py-3 text-right font-mono dark:text-zinc-400">
                                                 {server.interfaces?.length || 0}

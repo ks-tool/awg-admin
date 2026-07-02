@@ -35,6 +35,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ks-tool/awg-admin/agent/internal/service"
+
 	"github.com/amnezia-vpn/amneziawg-go/conn"
 	"github.com/amnezia-vpn/amneziawg-go/device"
 	"github.com/amnezia-vpn/amneziawg-go/ipc"
@@ -170,6 +172,17 @@ func (b *Backend) SyncAddr(iface, addr string) error {
 		return err
 	}
 	return ipCmd("address", "add", addr, "dev", iface)
+}
+
+// Info reports the userspace backend's capabilities. The amneziawg-go device
+// serves both plain WireGuard and AmneziaWG in process, needing no kernel
+// module, so both kinds are always creatable and KernelModule is always false.
+func (b *Backend) Info() service.BackendInfo {
+	return service.BackendInfo{
+		Kind:           "userspace",
+		KernelModule:   false,
+		InterfaceKinds: []string{"amneziawg", "wireguard"},
+	}
 }
 
 // ipCmd runs the `ip` command with args, returning its combined output on error.

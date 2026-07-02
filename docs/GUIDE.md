@@ -142,6 +142,11 @@ obfuscation params (`H1–H4` ranges, `I1–I5`) — upgrade the module to 2.0, 
 deactivate the interface (see [Interfaces](#interfaces)) to keep its config
 without applying it.
 
+Once running, the agent detects what its host actually supports — Docker, the
+AmneziaWG kernel module, which interface kinds it can create, and whether it's
+running in a container — and reports it back; the
+[Dashboard](#dashboard-and-metrics)'s **agent type** column surfaces it.
+
 ### Agent sources (deploy presets)
 
 An **agent source** is a reusable, named preset describing where to get the
@@ -302,19 +307,43 @@ first.
 ## Dashboard and metrics
 
 The **Dashboard** shows totals (servers, peers, users, tunnels) and a per-server
-table with **load average (1/5/15)**, **RAM %** and tunnel status. Clicking a
-server opens the **metrics modal** with two tabs:
+table with an **agent status** badge, an **agent type** column, **load average
+(1/5/15)** and **RAM %**. Clicking a server opens the **metrics modal** with two
+tabs:
 
 - **System** — host CPU/RAM/load/network over time.
 - **Peers** — a per-peer activity table with a compact sparkline of each peer's
   traffic, labelled `<user>/<peer>`.
+
+The **agent status** badge is a tri-state health check — it actually probes the
+agent and combines that with the state of the connection to it:
+
+- 🟢 **green** — the agent is reachable and answering (which, for an
+  SSH-tunnelled server, also means its tunnel is up);
+- 🔴 **red** — the connection is down: the SSH tunnel could not be brought up,
+  or an mTLS agent (reached directly) is unreachable;
+- 🟡 **amber** — in between, e.g. the SSH tunnel is up but the agent behind it
+  isn't responding.
+
+(A grey "unknown" shows until the first check completes.) Any non-green state is
+logged at error level, so problems are visible in the agent/admin logs.
+
+The **agent type** column reflects what the agent detected about its host when it
+started: its backend build (`kernel` or `userspace`), a **docker** pill when the
+agent itself runs in a container, and the interface kinds it can create there
+(`awg` for AmneziaWG, `wg` for plain WireGuard). Hover it for the full detail —
+whether Docker is available on the host, whether the AmneziaWG kernel module is
+present, and the agent's version. It's a quick way to see at a glance whether a
+server can obfuscate traffic and how its agent is running. (Like metrics it's
+best-effort — it shows the last known values while the agent is briefly
+unreachable, and `—` until the first successful read.)
 
 Metrics come from the agent, which samples the host and every peer's
 rx/tx/handshake on an interval (default 45s, `AWG_AGENT_METRICS_INTERVAL`) into
 in-memory ring buffers, retaining up to 48h of history. History is checkpointed
 to disk on the agent, so charts survive an agent restart. Metrics are
 best-effort: a server whose agent is briefly unreachable shows the last known
-values, and reachability is signalled separately by the online/tunnel badge.
+values, and reachability is signalled separately by the agent-status badge.
 
 The agent can also expose metrics in **Prometheus** text format (its `/metrics?fmt=prom`
 endpoint) if you want to scrape it into your own monitoring.

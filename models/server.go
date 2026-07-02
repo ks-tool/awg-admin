@@ -65,6 +65,24 @@ type Agent struct {
 	MonitoringDisabled bool `json:"monitoringDisabled,omitempty"`
 }
 
+// AgentStatus is the tri-state health of a server's agent shown on the
+// dashboard (see Service.ServerAgentStatus), color-coded on the frontend:
+// green / red / amber.
+type AgentStatus string
+
+const (
+	// AgentStatusOK (green): the agent is reachable and answering — which for an
+	// SSH-tunnelled server also means its tunnel is up.
+	AgentStatusOK AgentStatus = "ok"
+	// AgentStatusDown (red): the connection to the agent is down — the SSH
+	// tunnel could not be brought up, or an mTLS agent (reached directly) is
+	// unreachable.
+	AgentStatusDown AgentStatus = "down"
+	// AgentStatusDegraded (amber): the SSH tunnel is up but the agent behind it
+	// isn't responding, or the state is otherwise indeterminate.
+	AgentStatusDegraded AgentStatus = "degraded"
+)
+
 // AgentTLS holds the mTLS material for direct (non-tunnelled) communication
 // with the agent on a public ("white") IP. CA is kept so awg-admin can
 // re-issue Server/Client certs later (e.g. on renewal) without invalidating

@@ -86,6 +86,19 @@ func Run(version string) {
 
 	log.Info().Str("version", version).Msg("starting awg-agent")
 
+	// Discover what this host supports once, up front (backend/interface kinds,
+	// Docker, in-container, kernel module), log it as a startup diagnostic and
+	// serve it unchanged over GET /info. The backend is already selected by main
+	// (service.SetBackend) before Run is called.
+	hostInfo := gatherHostInfo(version)
+	log.Info().
+		Str("backend", hostInfo.Backend).
+		Bool("docker", hostInfo.Docker).
+		Bool("inDocker", hostInfo.InDocker).
+		Bool("kernelModule", hostInfo.KernelModule).
+		Strs("interfaceKinds", hostInfo.InterfaceKinds).
+		Msg("host capabilities")
+
 	if len(cfg.DB) == 0 {
 		home, err := os.UserHomeDir()
 		if err == nil {
@@ -138,7 +151,7 @@ func Run(version string) {
 		close(metricsDone)
 	}()
 
-	srv := &http.Server{Addr: cfg.Addr, Handler: api.New(store, collector, middleware.RequestID, middleware.Logging)}
+	srv := &http.Server{Addr: cfg.Addr, Handler: api.New(hostInfo, store, collector, middleware.RequestID, middleware.Logging)}
 
 	tlsConfig, err := buildTLSConfig(cfg)
 	if err != nil {

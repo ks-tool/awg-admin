@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/ks-tool/awg-admin/internal/service"
+	"github.com/ks-tool/awg-admin/models"
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bunrouter"
 )
@@ -263,7 +264,7 @@ func (h *Handler) serverMetrics(w http.ResponseWriter, r bunrouter.Request) erro
 	return bunrouter.JSON(w, snap)
 }
 
-func (h *Handler) serverTunnelStatus(w http.ResponseWriter, r bunrouter.Request) error {
+func (h *Handler) serverAgentStatus(w http.ResponseWriter, r bunrouter.Request) error {
 	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
 
 	sID, err := serverID(r)
@@ -271,14 +272,32 @@ func (h *Handler) serverTunnelStatus(w http.ResponseWriter, r bunrouter.Request)
 		return badRequest(err)
 	}
 	fields["server_id"] = sID
-	log.Debug().Fields(fields).Msg("getting server tunnel status")
+	log.Debug().Fields(fields).Msg("getting server agent status")
 
-	open, err := h.svc.ServerTunnelOpen(sID)
+	status, err := h.svc.ServerAgentStatus(sID)
 	if err != nil {
 		return handleErr(err, fields)
 	}
 
-	return bunrouter.JSON(w, map[string]bool{"open": open})
+	return bunrouter.JSON(w, map[string]models.AgentStatus{"status": status})
+}
+
+func (h *Handler) serverHostInfo(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+	log.Debug().Fields(fields).Msg("getting server host info")
+
+	info, err := h.svc.ServerHostInfo(sID)
+	if err != nil {
+		return handleErr(err, fields)
+	}
+
+	return bunrouter.JSON(w, info)
 }
 
 func (h *Handler) serverMetricsHistory(w http.ResponseWriter, r bunrouter.Request) error {

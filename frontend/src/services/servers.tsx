@@ -19,7 +19,7 @@ import {getCurrentApiMode} from './apiMode';
 import {bindingsClient} from './bindingsClient';
 import {throwIfPassphraseRequired} from './sshErrors';
 import {reportError} from './errorReporting';
-import type {Agent, DeployStatus, Interface, InterfaceConfig, MetricsSnapshot, Server, ServerInfo, SSHConfig, SystemHistory} from '@/types';
+import type {Agent, DeployStatus, HostInfo, Interface, InterfaceConfig, MetricsSnapshot, Server, ServerInfo, SSHConfig, SystemHistory} from '@/types';
 
 export interface ServerInput {
     name: string;
@@ -448,29 +448,58 @@ export async function getServerMetricsHistory(serverId: string): Promise<SystemH
 }
 
 /**
- * Check whether a server currently has a live SSH tunnel open. Only
- * meaningful for servers without mTLS configured (see models.Agent.TLS) —
- * mTLS servers are reached directly and never have a tunnel, so callers
- * should check that first rather than relying on this returning false for
- * them. Best-effort like getServerMetrics: returns null rather than
- * throwing on failure.
+ * Tri-state health of a server's agent for the dashboard (mirrors
+ * models.AgentStatus): 'ok' (green — agent reachable & answering, which for an
+ * SSH server also means its tunnel is up), 'down' (red — SSH tunnel not up, or
+ * an mTLS agent unreachable), 'degraded' (amber — tunnel up but agent silent /
+ * indeterminate). Applies to every server, mTLS included. Best-effort like
+ * getServerMetrics: returns null rather than throwing on failure.
  */
-export async function getServerTunnelStatus(serverId: string): Promise<boolean | null> {
+export type AgentStatus = 'ok' | 'down' | 'degraded';
+
+export async function getServerAgentStatus(serverId: string): Promise<AgentStatus | null> {
     const client = getClient();
 
     if (client) {
-        const {data, error} = await client.getServerTunnelStatus(serverId);
+        const {data, error} = await client.getServerAgentStatus(serverId);
         if (error) {
-            console.error(`Failed to fetch tunnel status for server ${serverId} (bindings):`, error);
+            console.error(`Failed to fetch agent status for server ${serverId} (bindings):`, error);
             return null;
         }
-        return data;
+        return data as AgentStatus;
     }
 
-    const {data, error} = await get<{open: boolean}>(`/servers/${serverId}/tunnel-status`);
+    const {data, error} = await get<{status: AgentStatus}>(`/servers/${serverId}/agent-status`);
     if (error) {
-        console.error(`Failed to fetch tunnel status for server ${serverId}:`, error);
+        console.error(`Failed to fetch agent status for server ${serverId}:`, error);
         return null;
     }
-    return data.open;
+    return data.status;
+}
+
+/**
+ * Fetch the host facts a server's agent discovered at startup (see
+ * agent.HostInfo): its backend (kernel/userspace), the interface kinds it can
+ * create, whether Docker is available on the host, whether the agent runs in a
+ * container, kernel-module presence. Best-effort like getServerMetrics: returns
+ * null rather than throwing when the agent is unreachable ("no data").
+ */
+export async function getServerHostInfo(serverId: string): Promise<HostInfo | null> {
+    const client = getClient();
+
+    if (client) {
+        const {data, error} = await client.getServerHostInfo(serverId);
+        if (error) {
+            console.error(`Failed to fetch host info for server ${serverId} (bindings):`, error);
+            return null;
+        }
+        return data as unknown as HostInfo;
+    }
+
+    const {data, error} = await get<HostInfo>(`/servers/${serverId}/host-info`);
+    if (error) {
+        console.error(`Failed to fetch host info for server ${serverId}:`, error);
+        return null;
+    }
+    return data;
 }

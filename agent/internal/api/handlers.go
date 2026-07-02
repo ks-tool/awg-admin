@@ -35,14 +35,15 @@ type Handler struct {
 	awg       *wgctrl.Client
 	store     storage.Storage
 	collector *metrics.Collector
+	hostInfo  models.HostInfo
 }
 
-func New(store storage.Storage, collector *metrics.Collector, mws ...mux.Middleware) http.Handler {
+func New(hostInfo models.HostInfo, store storage.Storage, collector *metrics.Collector, mws ...mux.Middleware) http.Handler {
 	// PUT         /interfaces     		=> set
 	// GET         /interfaces/ 		=> list
 	// GET, DELETE /interfaces/{name}	=> get, delete
 
-	// GET         /info				=> info
+	// GET         /info				=> host capabilities gathered at startup
 	// GET         /metrics			=> metrics snapshot (CPU/RAM/LA/network, peer rx/tx/handshake)
 	// GET         /metrics/history	=> retained system + per-peer metrics history (up to 48h)
 	// PATCH       /metrics			=> enable/disable metrics collection
@@ -52,18 +53,26 @@ func New(store storage.Storage, collector *metrics.Collector, mws ...mux.Middlew
 		panic(err)
 	}
 
-	h := &Handler{awg: awg, store: store, collector: collector}
+	h := &Handler{awg: awg, store: store, collector: collector, hostInfo: hostInfo}
 
 	router := mux.NewServeMux(mws...)
 	router.PUT("/interfaces", h.set)
 	router.GET("/interfaces/", h.list)
 	router.GET("/interfaces/{name}", h.get)
 	router.DELETE("/interfaces/{name}", h.delete)
+	router.GET("/info", h.info)
 	router.GET("/metrics", h.metrics)
 	router.GET("/metrics/history", h.metricsHistory)
 	router.PATCH("/metrics", h.setMetricsState)
 
 	return router
+}
+
+// info serves the host facts gathered once at startup (see agent.Run →
+// models.HostInfo): which backend/interface kinds this agent supports, whether
+// Docker is available, whether it runs in a container, kernel-module presence.
+func (h *Handler) info(w http.ResponseWriter, r *http.Request) {
+	encode(w, h.hostInfo)
 }
 
 func (h *Handler) set(w http.ResponseWriter, r *http.Request) {

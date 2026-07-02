@@ -90,6 +90,16 @@ func newFakeAgent() *httptest.Server {
 	mux.HandleFunc("PATCH /metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("GET /info", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(agentmodels.HostInfo{
+			Backend:        "userspace",
+			Version:        "test",
+			Docker:         true,
+			InDocker:       true,
+			KernelModule:   false,
+			InterfaceKinds: []string{"amneziawg", "wireguard"},
+		})
+	})
 
 	return httptest.NewServer(mux)
 }
@@ -217,6 +227,23 @@ func TestClientMutationsAreMarkedIdempotent(t *testing.T) {
 		if rt.hadKey[i] != want {
 			t.Errorf("request %d: Idempotency-Key present = %v, want %v", i, rt.hadKey[i], want)
 		}
+	}
+}
+
+func TestClientInfo(t *testing.T) {
+	srv := newFakeAgent()
+	defer srv.Close()
+
+	c := New(srv.Client(), srv.URL)
+	info, err := c.Info(context.Background())
+	if err != nil {
+		t.Fatalf("Info: %v", err)
+	}
+	if info.Backend != "userspace" || !info.InDocker || info.KernelModule {
+		t.Fatalf("Info returned unexpected host info: %+v", info)
+	}
+	if len(info.InterfaceKinds) != 2 {
+		t.Fatalf("Info: expected 2 interface kinds, got %v", info.InterfaceKinds)
 	}
 }
 

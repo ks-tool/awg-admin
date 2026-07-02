@@ -58,6 +58,28 @@ type Backend interface {
 	AddrAdd(iface, addr string) error
 	// SyncAddr makes addr the link's only address, removing any others first.
 	SyncAddr(iface, addr string) error
+	// Info reports what this backend can create on the current host — its kind,
+	// the interface variants it can bring up, and (kernel only) whether the
+	// AmneziaWG kernel module is present. Probed on each call (it shells out to
+	// modinfo for the kernel backend), so the agent calls it once at startup and
+	// caches the result (see agent.Run → models.HostInfo).
+	Info() BackendInfo
+}
+
+// BackendInfo describes what the active link backend can create on the current
+// host. Gathered once at startup (Backend.Info) and folded into the agent's
+// GET /info response (models.HostInfo). Host-level facts that don't depend on
+// the backend — whether Docker is usable, whether the agent runs in a container
+// — are discovered separately by the agent package, not here.
+type BackendInfo struct {
+	// Kind identifies the backend: "kernel" or "userspace".
+	Kind string
+	// KernelModule reports whether the AmneziaWG kernel module is available on
+	// this host. Always false for the userspace backend (it needs no module).
+	KernelModule bool
+	// InterfaceKinds lists the interface variants creatable here: "amneziawg"
+	// and/or "wireguard".
+	InterfaceKinds []string
 }
 
 // backend is the active link backend for this process. There is no default: a
@@ -71,3 +93,7 @@ var backend Backend
 // main, before loading interfaces. Not safe to call concurrently with interface
 // operations.
 func SetBackend(b Backend) { backend = b }
+
+// ActiveBackendInfo returns the active backend's capabilities (see BackendInfo).
+// SetBackend must have been called first.
+func ActiveBackendInfo() BackendInfo { return backend.Info() }

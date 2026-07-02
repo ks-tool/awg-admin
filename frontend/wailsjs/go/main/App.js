@@ -182,8 +182,12 @@ export function SelectFile(arg1) {
   return window['go']['main']['App']['SelectFile'](arg1);
 }
 
-export function ServerTunnelOpen(arg1) {
-  return window['go']['main']['App']['ServerTunnelOpen'](arg1);
+export function ServerAgentStatus(arg1) {
+  return window['go']['main']['App']['ServerAgentStatus'](arg1);
+}
+
+export function ServerHostInfo(arg1) {
+  return window['go']['main']['App']['ServerHostInfo'](arg1);
 }
 
 export function SetBasicAuthEnabled(arg1) {
