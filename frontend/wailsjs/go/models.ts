@@ -148,6 +148,7 @@ export namespace models {
 	    addr: string;
 	    mtu?: number;
 	    dns?: string[];
+	    disabled?: boolean;
 	    table?: number;
 	    fwMark?: number;
 	    preUp?: string[];
@@ -190,6 +191,7 @@ export namespace models {
 	        this.addr = source["addr"];
 	        this.mtu = source["mtu"];
 	        this.dns = source["dns"];
+	        this.disabled = source["disabled"];
 	        this.table = source["table"];
 	        this.fwMark = source["fwMark"];
 	        this.preUp = source["preUp"];
@@ -244,6 +246,7 @@ export namespace models {
 	    addr: string;
 	    mtu?: number;
 	    dns?: string[];
+	    disabled?: boolean;
 	    table?: number;
 	    fwMark?: number;
 	    preUp?: string[];
@@ -280,6 +283,7 @@ export namespace models {
 	        this.addr = source["addr"];
 	        this.mtu = source["mtu"];
 	        this.dns = source["dns"];
+	        this.disabled = source["disabled"];
 	        this.table = source["table"];
 	        this.fwMark = source["fwMark"];
 	        this.preUp = source["preUp"];

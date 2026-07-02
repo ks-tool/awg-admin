@@ -119,6 +119,10 @@ const INITIAL_INTERFACE_FORM = {
     addr: '',
     listen: '51820',
     pk: '',
+    // Whether the interface is active on the agent (default on). Maps to the
+    // inverse of InterfaceConfig.disabled; the agent brings up only active
+    // interfaces and tears down inactive ones.
+    enabled: true,
     // AmneziaWG obfuscation. `amnezia` toggles whether these are sent at all;
     // when off the interface is plain WireGuard. The individual params are held
     // as strings for input binding and converted on submit.
@@ -280,6 +284,23 @@ function InterfaceFormModal({
                             className={cn(inputs.primary, 'resize-none font-mono text-xs')}
                         />
                     </FormField>
+
+                    <FormField label="">
+                        <label className="flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                name="enabled"
+                                checked={form.enabled}
+                                onChange={handleChange}
+                                disabled={loading}
+                                className="rounded border-input bg-background text-sky-500 focus:ring-sky-500 focus:ring-offset-0 disabled:opacity-50 dark:border-white/10 dark:bg-white/5"
+                            />
+                            <span className="ml-3 text-sm font-medium text-foreground dark:text-zinc-300">
+                                {t('servers.interfaces.enabled')}
+                            </span>
+                        </label>
+                    </FormField>
+                    <p className="text-xs text-muted-foreground">{t('servers.interfaces.enabledHint')}</p>
                 </div>
 
                 <div className={tab === 'amnezia' ? 'space-y-4' : 'hidden'}>
@@ -825,6 +846,7 @@ export default function ServerDetail() {
             addr: form.addr,
             listen: parseInt(form.listen) || 51820,
             pk: form.pk,
+            disabled: !form.enabled,
         };
 
         // Only carry the AmneziaWG obfuscation params when the interface is an
@@ -1058,6 +1080,11 @@ export default function ServerDetail() {
                                                         <AlertTriangle size={14}/>
                                                     </span>
                                                 )}
+                                                {iface.disabled && (
+                                                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground dark:bg-white/10 dark:text-zinc-400">
+                                                        {t('servers.interfaces.disabledBadge')}
+                                                    </span>
+                                                )}
                                             </div>
                                         )}
                                         {iface.id && (
@@ -1070,6 +1097,7 @@ export default function ServerDetail() {
                                                             addr: iface.addr ?? '',
                                                             listen: String(iface.listen ?? 51820),
                                                             pk: iface.pk ?? '',
+                                                            enabled: iface.disabled !== true,
                                                             amnezia: iface.jc != null || iface.jmin != null || iface.jmax != null,
                                                             ...amneziaToForm(iface),
                                                         },

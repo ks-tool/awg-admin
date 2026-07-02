@@ -169,6 +169,11 @@ interfaces. The form has two tabs.
   address (it won't move the interface to a new subnet and orphan its peers).
 - **Listen port** — the UDP port the interface listens on (default `51820`).
 - **Private key** — leave blank to have one generated automatically.
+- **Activate interface** — a checkbox, **ticked by default**. While ticked, the
+  agent brings the interface up (and raises it again on every agent restart).
+  Untick it to keep the stored config but have the agent take the interface
+  down; it then shows a **Disabled** badge in the list. Handy to park an
+  interface without deleting it.
 
 **Amnezia** tab — the `Jc/Jmin/Jmax`, `S1–S4`, `H1–H4` and `I1–I5` junk-packet
 and header-obfuscation values that make AmneziaWG traffic harder to fingerprint:
@@ -190,6 +195,12 @@ against editing/deletion in the UI; remove the tunnel first.
 
 Every interface tracks an **in-sync** status: whether the last push to the agent
 succeeded, the error if it didn't, and when it last synced.
+
+The agent raises only **active** interfaces on startup and takes every active
+interface down when it stops, so a stopped agent leaves no tunnels running. A
+deactivated interface is never brought up and its config is not applied — only
+stored — which also makes deactivation a way to park an interface the agent
+otherwise fails to configure.
 
 ### Hook commands
 

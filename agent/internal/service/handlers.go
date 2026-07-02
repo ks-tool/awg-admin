@@ -50,12 +50,46 @@ func (h *Handler) All() error {
 	return nil
 }
 
+// StopEnabled tears down the OS link of every enabled interface (best effort),
+// leaving the stored configs intact. It's called on agent shutdown so tunnels
+// don't keep carrying traffic — and lifecycle PreDown/PostDown rules stay in
+// effect — while the agent is gone. Disabled interfaces are skipped (their link
+// is already down). On the next start, All → One re-creates the enabled ones.
+func (h *Handler) StopEnabled() {
+	configs, err := h.store.List()
+	if err != nil {
+		log.Warn().Err(err).Msg("shutdown: failed to list interfaces to stop")
+		return
+	}
+	for _, cfg := range configs {
+		if cfg.Disabled {
+			continue
+		}
+		if err := InterfaceDelete(cfg); err != nil {
+			log.Warn().Err(err).Str("interface", cfg.Interface).Msg("shutdown: failed to stop interface")
+		}
+	}
+}
+
 // One applies cfg to the host: creates or (in place) updates the link, then
 // pushes the full device config. prev is the previously-stored config for this
 // interface (nil for a brand-new one), used by InterfaceUpdate to reconcile
 // hooks on an in-place edit.
 func (h *Handler) One(prev *models.InterfaceConfig, cfg models.InterfaceConfig) error {
 	logger := log.Debug().Str("interface", cfg.Interface)
+
+	// A disabled interface must not be present in the kernel: tear its link down
+	// if it exists (the stored config stays — this is desired state) and don't
+	// push any device config. This is also what makes startup (All → One for
+	// every stored config) bring up only the enabled interfaces.
+	if cfg.Disabled {
+		if IsInterfaceExist(cfg) {
+			logger.Str("action", "deactivate").Send()
+			return InterfaceDelete(cfg)
+		}
+		logger.Str("action", "skip-disabled").Send()
+		return nil
+	}
 
 	if ok := IsInterfaceExist(cfg); ok {
 		logger.Str("action", "update").Send()

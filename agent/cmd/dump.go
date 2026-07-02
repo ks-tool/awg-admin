@@ -61,12 +61,17 @@ func main() {
 			lastHandshakeTime = 0
 		}
 
+		allowedIPs := "(none)"
+		if len(peer.AllowedIPs) > 0 {
+			allowedIPs = peer.AllowedIPs[0].String()
+		}
+
 		fmt.Printf(
 			"%s\t%s\t%s\t%s\t%d\t%d\t%d\t%s\n",
 			peer.PublicKey,
 			psk,
 			endpoint,
-			peer.AllowedIPs[0].String(),
+			allowedIPs,
 			lastHandshakeTime,
 			peer.ReceiveBytes,
 			peer.TransmitBytes,

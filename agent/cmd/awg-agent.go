@@ -172,6 +172,12 @@ func main() {
 		log.Warn().Msg("timed out waiting for metrics history to flush")
 	}
 
+	// Bring every active interface down so no tunnel keeps running (and its
+	// PreDown/PostDown rules stay applied) while the agent is stopped. The
+	// stored configs are untouched, so the next start re-raises the enabled ones.
+	log.Info().Msg("stopping active interfaces")
+	service.NewHandler(store, metricsAwg).StopEnabled()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {

@@ -146,6 +146,7 @@ export interface InterfaceConfig {
   addr: string;
   mtu?: number /* int */;
   dns?: string[];
+  disabled?: boolean;
   /**
    * Table the routing table number
    */

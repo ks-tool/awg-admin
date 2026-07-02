@@ -17,22 +17,50 @@
 package service
 
 import (
+	"fmt"
+
+	"github.com/rs/zerolog/log"
 	"github.com/vishvananda/netlink"
 )
 
 type Device string
 
-func newGenericLink(dev Device) *netlink.GenericLink {
+// newTypedLink builds a link handle of a specific netlink kind. Only Add()
+// needs the kind (it's what the kernel uses to pick the driver at creation);
+// every other op below addresses an existing device by name, so its kind is
+// irrelevant there — those use newGenericLink.
+func newTypedLink(dev Device, kind string) *netlink.GenericLink {
 	return &netlink.GenericLink{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: string(dev),
 		},
-		LinkType: "wireguard",
+		LinkType: kind,
 	}
 }
 
+func newGenericLink(dev Device) *netlink.GenericLink {
+	return newTypedLink(dev, "wireguard")
+}
+
+// Add creates the interface link, preferring the AmneziaWG kernel module (kind
+// "amneziawg") so the obfuscation params are actually honored. Hosts that only
+// have the mainline WireGuard module — or whose amnezia module doesn't allow
+// creating a link over netlink (returns EINVAL/EOPNOTSUPP) — fall back to a
+// plain "wireguard" link so the agent still comes up. The fallback is logged at
+// warn level because on such a host obfuscation silently won't apply.
 func (dev Device) Add() error {
-	return netlink.LinkAdd(newGenericLink(dev))
+	err := netlink.LinkAdd(newTypedLink(dev, "amneziawg"))
+	if err == nil {
+		return nil
+	}
+
+	wgErr := netlink.LinkAdd(newTypedLink(dev, "wireguard"))
+	if wgErr != nil {
+		return fmt.Errorf("create link %q: amneziawg kind: %v; wireguard kind: %w", dev, err, wgErr)
+	}
+	log.Warn().Str("interface", string(dev)).Err(err).Msg(
+		"AmneziaWG-kind link creation failed; created a plain WireGuard link instead — traffic obfuscation will NOT be applied on this host")
+	return nil
 }
 
 func (dev Device) Delete() error {

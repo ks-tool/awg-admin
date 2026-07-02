@@ -95,6 +95,12 @@ type InterfaceConfig struct {
 	MTU     int      `json:"mtu,omitempty"`
 	DNS     []string `json:"dns,omitempty"`
 
+	// Disabled deactivates the interface on the agent: its link is torn down
+	// (or never brought up at startup) and its device config is not applied,
+	// while the config itself stays stored. Zero value (false) keeps the
+	// interface active, so configs written before this field existed stay up.
+	Disabled bool `json:"disabled,omitempty"`
+
 	// Table the routing table number
 	Table int `json:"table,omitempty"`
 	// FirewallMark specifies a device's firewall mark, if not nil.
