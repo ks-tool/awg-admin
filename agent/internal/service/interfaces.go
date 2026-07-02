@@ -17,7 +17,10 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	"net"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -30,6 +33,10 @@ func InterfaceCreate(cfg models.InterfaceConfig) error {
 	if err := backend.Add(cfg.Interface, cfg.IsAmnezia()); err != nil {
 		return err
 	}
+	// Disable IPv6 on the fresh link before it's brought up, so the kernel never
+	// auto-assigns it a link-local IPv6 address (this app's tunnels are IPv4).
+	// Best-effort — see disableIPv6; it never blocks bringing the interface up.
+	disableIPv6(cfg.Interface, cfg.Address)
 	// PreUp runs after the link exists (so interface-referencing rules such as
 	// `ip route ... dev %i` or `ip rule ... iif %i` resolve) but before it's
 	// brought up — matching wg-quick's order (add link → PreUp → up → PostUp).
@@ -72,6 +79,9 @@ func InterfaceUpdate(prev *models.InterfaceConfig, cfg models.InterfaceConfig) e
 	if err := backend.SyncAddr(cfg.Interface, cfg.Address); err != nil {
 		return err
 	}
+	// Keep IPv6 off on re-apply too (idempotent) — covers a link that survived a
+	// restart, or one whose setting was reset out from under us. Best-effort.
+	disableIPv6(cfg.Interface, cfg.Address)
 	if cfg.MTU > 0 {
 		if err := backend.SetMTU(cfg.Interface, cfg.MTU); err != nil {
 			return err
@@ -136,4 +146,48 @@ func runHooks(iface, phase string, cmds []string) error {
 
 func IsInterfaceExist(cfg models.InterfaceConfig) bool {
 	return backend.Exists(cfg.Interface)
+}
+
+// disableIPv6 turns IPv6 off on iface via its per-interface sysctl
+// (net.ipv6.conf.<iface>.disable_ipv6), so a v4-only tunnel never gets an
+// auto-assigned link-local IPv6 address and can't carry/leak IPv6. Writing the
+// /proc entry directly keeps this backend-agnostic (no netlink, no `sysctl`
+// binary) and works for both the kernel and userspace links. Call it after the
+// link exists (the entry appears with it) and before bringing it up, so no
+// link-local is ever assigned; setting it also flushes any already present.
+//
+// Best-effort by design: hardening the interface must never block bringing up an
+// otherwise-valid v4 tunnel, so any write failure is logged and swallowed rather
+// than propagated. This matters because the non-privileged userspace-agent
+// Docker container runs with /proc/sys mounted read-only (runc's default — the
+// same reason the deploy sets net.ipv4.ip_forward via `docker run --sysctl`
+// instead of writing it at runtime), so the write returns EROFS there even
+// though the file exists; failing the push would break every interface on that
+// deployment. os.ErrNotExist (IPv6 compiled out / disabled at boot, nothing to
+// disable) is the expected quiet case; other errors are worth a warning.
+//
+// Skipped entirely when the interface is itself addressed with IPv6 — disabling
+// would break it.
+func disableIPv6(iface, address string) {
+	if isIPv6Address(address) {
+		return
+	}
+	path := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/disable_ipv6", iface)
+	if err := os.WriteFile(path, []byte("1\n"), 0o644); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Warn().Err(err).Str("interface", iface).Msg("could not disable IPv6 on interface, continuing")
+	}
+}
+
+// isIPv6Address reports whether address (a CIDR like "fd00::1/64" or a bare IP)
+// is IPv6. Empty or unparseable counts as not-IPv6 — the interfaces this app
+// creates are IPv4, so the default is to disable IPv6.
+func isIPv6Address(address string) bool {
+	if address == "" {
+		return false
+	}
+	ip, _, err := net.ParseCIDR(address)
+	if err != nil {
+		ip = net.ParseIP(address)
+	}
+	return ip != nil && ip.To4() == nil
 }
