@@ -168,11 +168,11 @@ export default function Dashboard() {
 
                 <div>
                     {/* Servers table */}
-                    <div className="rounded-xl border border-border bg-card dark:border-white/5 dark:bg-white/3 overflow-hidden">
+                    <div className="rounded-xl border border-border bg-card dark:border-white/5 dark:bg-white/3 overflow-x-auto">
                         <div className="border-b border-white/5 px-5 py-4">
                             <h2 className="text-sm font-semibold text-zinc-500">{t('nav.servers')}</h2>
                         </div>
-                        <table className="w-full text-sm">
+                        <table className="w-full text-sm whitespace-nowrap">
                             <thead>
                                 <tr className="border-b border-white/5">
                                     <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-600">

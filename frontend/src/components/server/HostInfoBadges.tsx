@@ -68,7 +68,7 @@ export function HostInfoBadges({ info }: { info: HostInfo | null | undefined }) 
     ].filter(Boolean).join('\n')
 
     return (
-        <div className="flex flex-wrap items-center gap-1" title={title}>
+        <div className="flex items-center gap-1 whitespace-nowrap" title={title}>
             <Pill tone="sky">{info.backend}</Pill>
             {info.inDocker && <Pill tone="violet">docker</Pill>}
             {(info.interfaceKinds ?? []).map((kind) => (
