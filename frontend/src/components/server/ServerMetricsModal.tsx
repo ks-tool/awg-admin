@@ -202,18 +202,34 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         return m;
     }, [users]);
 
-    // Interface names on this server that belong to a tunnel. An unnamed peer on
-    // one of those is the tunnel's gateway peer (the other member's interface,
-    // added by the tunnel — not a user peer), so it's labelled as such instead of
-    // showing a bare short key.
-    const tunnelIfaceNames = useMemo(() => {
+    // For each of THIS server's tunnel-member interfaces (by name), the tunnel's
+    // two member servers as "<entry-server>/<exit-server>". An unnamed peer on
+    // such an interface is the tunnel's gateway peer (the other member — not a
+    // user peer), so it's labelled with the tunnel it belongs to rather than a
+    // bare short key. Entry (has a listen port) is put first for a stable order.
+    const tunnelLabelByIface = useMemo(() => {
+        const byTunnel = new Map<string, {name: string; entry: boolean}[]>();
+        for (const s of servers) {
+            for (const id of s.interfaces ?? []) {
+                const iface = interfacesById.get(id);
+                if (!iface?.tunnel) continue;
+                const arr = byTunnel.get(iface.tunnel) ?? [];
+                arr.push({name: s.name, entry: !!iface.listen});
+                byTunnel.set(iface.tunnel, arr);
+            }
+        }
+        const map = new Map<string, string>();
         const server = servers.find((s) => s.id === serverId);
-        const names = new Set<string>();
         for (const id of server?.interfaces ?? []) {
             const iface = interfacesById.get(id);
-            if (iface?.tunnel) names.add(iface.iface);
+            if (!iface?.tunnel) continue;
+            const members = (byTunnel.get(iface.tunnel) ?? [])
+                .slice()
+                .sort((a, b) => (a.entry === b.entry ? 0 : a.entry ? -1 : 1))
+                .map((m) => m.name);
+            map.set(iface.iface, members.join('/'));
         }
-        return names;
+        return map;
     }, [servers, interfacesById, serverId]);
 
     const peerRows = useMemo(() => {
@@ -221,9 +237,10 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
             iface.peers.map((peer) => {
                 const activity = activitySeries(peer.points);
                 const known = peerLabels.get(peer.publicKey);
+                const tunnel = tunnelLabelByIface.get(iface.interface);
                 const label = known
-                    ?? (tunnelIfaceNames.has(iface.interface)
-                        ? `${t('servers.metricsTunnelPeer')} · ${shortKey(peer.publicKey)}`
+                    ?? (tunnel
+                        ? `${t('servers.metricsTunnelPeer')} ${tunnel}`
                         : shortKey(peer.publicKey));
                 return {
                     publicKey: peer.publicKey,
@@ -235,7 +252,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         );
         // Busiest peers first, like Uptrace's GROUPS ordered by count.
         return rows.sort((a, b) => b.total - a.total);
-    }, [history, peerLabels, tunnelIfaceNames, t]);
+    }, [history, peerLabels, tunnelLabelByIface, t]);
 
     const labels = points?.map(timeLabel) ?? [];
 
