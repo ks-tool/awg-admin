@@ -63,8 +63,8 @@
   "servers": {
     "title": "Servers",
     "host": "Host",
-    "agentStatus": "Agent status",
-    "agentType": "Agent type",
+    "agentStatus": "Status",
+    "agentType": "Agent",
     "hostInfo": {
       "backend": "Backend",
       "version": "Version",
@@ -85,7 +85,7 @@
     "publicKey": "Public Key",
     "rxBytes": "Download",
     "txBytes": "Upload",
-    "loadAverage": "Load avg (1 / 5 / 15)",
+    "loadAverage": "LA (1 / 5 / 15)",
     "metricsTitle": "Metrics history",
     "metricsCpu": "CPU",
     "metricsMemory": "Memory",

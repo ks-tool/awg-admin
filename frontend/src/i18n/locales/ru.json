@@ -63,8 +63,8 @@
   "servers": {
     "title": "Серверы",
     "host": "Хост",
-    "agentStatus": "Статус агента",
-    "agentType": "Тип агента",
+    "agentStatus": "Статус",
+    "agentType": "Агент",
     "hostInfo": {
       "backend": "Бэкенд",
       "version": "Версия",
@@ -85,7 +85,7 @@
     "publicKey": "Публичный ключ",
     "rxBytes": "Входящий",
     "txBytes": "Исходящий",
-    "loadAverage": "Ср. нагрузка (1 / 5 / 15)",
+    "loadAverage": "LA (1 / 5 / 15)",
     "metricsTitle": "История метрик",
     "metricsCpu": "CPU",
     "metricsMemory": "Память",

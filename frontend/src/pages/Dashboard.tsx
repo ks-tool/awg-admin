@@ -14,7 +14,7 @@
   limitations under the License.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {LayoutDashboard, Server, Network, Users, Waypoints, RefreshCw} from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -29,11 +29,26 @@ import {useAutoRefresh} from "@/hooks/useAutoRefresh.tsx";
 
 export default function Dashboard() {
     const { t } = useTranslation()
-    const { stats, servers, refreshData } = useAppStore()
+    const { stats, servers, users, refreshData } = useAppStore()
     const [metricsByServer, setMetricsByServer] = useState<Record<string, MetricsSnapshot | null>>({})
     const [agentStatusByServer, setAgentStatusByServer] = useState<Record<string, AgentStatus | null>>({})
     const [hostInfoByServer, setHostInfoByServer] = useState<Record<string, HostInfo | null>>({})
     const [metricsModalServerId, setMetricsModalServerId] = useState<string | null>(null)
+
+    // Per-server peer count. Peers live under users, each tagged with its
+    // interface id — so a peer belongs to the server that owns its interface.
+    // (This column previously rendered server.interfaces.length, i.e. the
+    // interface count, so a server with one interface and no peers showed "1".)
+    const peerCountByServer = useMemo(() => {
+        const ifaceToServer = new Map<string, string>()
+        for (const s of servers) for (const ifaceId of s.interfaces ?? []) ifaceToServer.set(ifaceId, s.id)
+        const counts: Record<string, number> = {}
+        for (const u of users) for (const p of u.peers ?? []) {
+            const sid = ifaceToServer.get(p.interface)
+            if (sid) counts[sid] = (counts[sid] ?? 0) + 1
+        }
+        return counts
+    }, [servers, users])
 
     // Auto-fetch data on component mount
     useAutoRefresh(refreshData)
@@ -208,7 +223,7 @@ export default function Dashboard() {
                                                 <HostInfoBadges info={hostInfoByServer[server.id]} />
                                             </td>
                                             <td className="px-5 py-3 text-right font-mono dark:text-zinc-400">
-                                                {server.interfaces?.length || 0}
+                                                {peerCountByServer[server.id] ?? 0}
                                             </td>
                                             <td className="px-5 py-3 text-right font-mono text-xs dark:text-zinc-400">
                                                 {metrics

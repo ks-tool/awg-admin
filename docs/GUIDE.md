@@ -222,6 +222,11 @@ On edit the tab reflects what the interface already has — the box is ticked
 (showing the stored values) for an AmneziaWG interface, unticked for a plain
 WireGuard one.
 
+A new or edited interface is validated against the server's existing ones: its
+**name**, **listen port** and **subnet** (from Address) must each be free — a
+duplicate name or port, or a subnet that overlaps another interface, is rejected
+with the reason shown. (On edit, a field you didn't change isn't re-checked.)
+
 Interfaces that are part of a [tunnel](#multi-hop-tunnels-exit-nodes) are locked
 against editing/deletion in the UI; remove the tunnel first.
 
@@ -239,6 +244,13 @@ interface down when it stops, so a stopped agent leaves no tunnels running. A
 deactivated interface is never brought up and its config is not applied — only
 stored — which also makes deactivation a way to park an interface the agent
 otherwise fails to configure.
+
+Each interface — unless you address it with IPv6 — is brought up with **IPv6
+disabled** (the tunnels here are IPv4-only), so it never gets an auto-assigned
+link-local IPv6 address and can't carry or leak IPv6. An interface you
+deliberately give an IPv6 address is left alone. This is best-effort: where the
+agent can't set it — notably the userspace agent's Docker container, which runs
+with a read-only `/proc/sys` — the interface still comes up (a warning is logged).
 
 ### Hook commands
 
@@ -260,7 +272,11 @@ A **peer** is a single VPN client belonging to a user. *Add peer*:
 - **Name** — a label for the peer (device name, etc.).
 - **Server** and **interface** — where the peer attaches.
 - **Allowed IPs** — the peer's addresses; leave blank to auto-assign a free
-  host address on the interface's subnet.
+  host address on the interface's subnet. A supplied host address (a `/32`) must
+  lie **inside** the interface's subnet and not already be taken by another peer
+  or the interface itself — out-of-subnet and duplicate addresses are rejected.
+  Broader routed CIDRs (a LAN behind a site-to-site peer, e.g. `192.168.1.0/24`)
+  are allowed outside the subnet.
 - **Endpoint** — optional, for peers that should be dialed at a fixed address.
 - **DNS** — optional client-side DNS for this peer's generated config (one or
   more comma-separated servers, e.g. `1.1.1.1, 8.8.8.8`). It becomes the
