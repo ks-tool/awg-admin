@@ -29,7 +29,7 @@
     "entryHint": "Clients connect here.",
     "exitWarning": "This interface is reconfigured as a dedicated exit — its current config is replaced.",
     "subnet": "Tunnel subnet",
-    "subnetHint": "Leave empty to reuse the entry's subnet or auto-generate a free one.",
+    "subnetHint": "The tunnel always uses the entry interface's subnet.",
     "build": "Create tunnel",
     "building": "Creating…",
     "next": "Next",

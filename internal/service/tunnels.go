@@ -43,9 +43,9 @@ const (
 // entry keeps its clients + listen port and gains a "gateway peer" to the exit
 // plus policy-routing hooks; the exit is reconfigured onto the shared subnet
 // with the same obfuscation params, no listen port, a peer back to the entry
-// and MASQUERADE hooks. All members get one tunnel id. subnet is the shared
-// tunnel subnet — empty means "use the entry interface's subnet, or auto-pick a
-// free /24".
+// and MASQUERADE hooks. All members get one tunnel id. The shared subnet is
+// always the entry interface's own subnet (see below); the subnet argument is
+// only accepted when empty or equal to it, never an arbitrary value.
 func (s *Service) BuildTunnel(steps []models.TunnelStep, subnet string) (*models.Tunnel, error) {
 	if len(steps) != 2 {
 		return nil, errors.New("a tunnel needs exactly two interfaces (entry and exit)")
@@ -85,18 +85,20 @@ func (s *Service) BuildTunnel(steps []models.TunnelStep, subnet string) (*models
 		return nil, errors.New("both interfaces must have a private key")
 	}
 
-	// Shared subnet: explicit param, else the entry's own subnet, else auto.
-	sharedSubnet := subnet
-	if sharedSubnet == "" {
-		if _, ipnet, e := net.ParseCIDR(entryIface.Address); e == nil {
-			sharedSubnet = ipnet.String()
-		} else if sharedSubnet, err = s.nextFreeSubnet(); err != nil {
-			return nil, err
-		}
-	}
-	_, subnetNet, err := net.ParseCIDR(sharedSubnet)
+	// The tunnel subnet is ALWAYS the entry interface's own subnet: the exit is
+	// placed on it and routes it back to the relay, so a different subnet
+	// wouldn't include the entry's address and the tunnel couldn't carry the
+	// relay's clients. It can't be chosen freely — the subnet argument is only
+	// honored when it matches (the UI derives it from the entry interface, or
+	// leaves it empty and lets this derive it).
+	_, subnetNet, err := net.ParseCIDR(entryIface.Address)
 	if err != nil {
-		return nil, fmt.Errorf("invalid tunnel subnet %q: %w", sharedSubnet, err)
+		return nil, fmt.Errorf("entry interface %q has no valid subnet address: %w", entryIface.Interface, err)
+	}
+	if subnet != "" {
+		if _, reqNet, e := net.ParseCIDR(subnet); e != nil || reqNet.String() != subnetNet.String() {
+			return nil, invalidInput("tunnel subnet must match the entry interface subnet %s", subnetNet.String())
+		}
 	}
 	ones, _ := subnetNet.Mask.Size()
 

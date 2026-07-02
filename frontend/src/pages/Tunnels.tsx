@@ -23,7 +23,6 @@ import { Modal, buttons, inputs } from '@/components/common/Modal';
 import { FormField } from '@/components/common/FormField';
 import { ConfirmModal } from '@/components/common/ConfirmModal';
 import { useAppStore } from '@/store';
-import { cn } from '@/lib/utils';
 import { listTunnels, buildTunnel, removeTunnel } from '@/services/tunnels';
 import type { Interface, Server, Tunnel } from '@/types';
 
@@ -31,6 +30,23 @@ import type { Interface, Server, Tunnel } from '@/types';
 // CIDR address, and isn't already part of a tunnel.
 const eligibleEntry = (iface: Interface) => !iface.tunnel && !!iface.listen && !!iface.addr && iface.addr.includes('/');
 const eligibleExit = (iface: Interface) => !iface.tunnel;
+
+// networkOf returns the CIDR network of an interface address, e.g.
+// "172.23.24.2/24" -> "172.23.24.0/24" (IPv4). The tunnel always uses the entry
+// interface's subnet, so this is shown read-only on the review step. Falls back
+// to the raw input if it isn't a parseable IPv4 CIDR.
+function networkOf(cidr: string): string {
+    const [ip, bitsStr] = cidr.split('/');
+    const bits = parseInt(bitsStr, 10);
+    const octets = ip?.split('.').map(Number) ?? [];
+    if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255) || !(bits >= 0 && bits <= 32)) {
+        return cidr;
+    }
+    const addr = ((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>> 0;
+    const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+    const net = (addr & mask) >>> 0;
+    return `${(net >>> 24) & 255}.${(net >>> 16) & 255}.${(net >>> 8) & 255}.${net & 255}/${bits}`;
+}
 
 function TunnelWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
     const { t } = useTranslation();
@@ -40,7 +56,6 @@ function TunnelWizard({ onClose, onCreated }: { onClose: () => void; onCreated: 
     const [entryIfaceId, setEntryIfaceId] = useState('');
     const [exitServerId, setExitServerId] = useState('');
     const [exitIfaceId, setExitIfaceId] = useState('');
-    const [subnet, setSubnet] = useState('');
     const [building, setBuilding] = useState(false);
 
     const ifacesOf = (serverId: string): Interface[] => {
@@ -61,7 +76,9 @@ function TunnelWizard({ onClose, onCreated }: { onClose: () => void; onCreated: 
                     { serverId: entryServerId, ifaceId: entryIfaceId },
                     { serverId: exitServerId, ifaceId: exitIfaceId },
                 ],
-                subnet.trim(),
+                // The tunnel always uses the entry interface's subnet — the
+                // backend derives it; nothing arbitrary is sent.
+                '',
             );
             if (error || !tunnel) {
                 toast.error(error || t('tunnels.buildError'));
@@ -136,13 +153,9 @@ function TunnelWizard({ onClose, onCreated }: { onClose: () => void; onCreated: 
                         <h4 className="text-sm font-semibold text-foreground">{t('tunnels.stepReview')}</h4>
                         <FormField label={t('tunnels.subnet')}>
                             <div>
-                                <input
-                                    type="text"
-                                    value={subnet}
-                                    onChange={(e) => setSubnet(e.target.value)}
-                                    placeholder="172.23.24.0/24"
-                                    className={cn(inputs.primary, 'font-mono text-xs')}
-                                />
+                                <div className="font-mono text-xs text-foreground dark:text-zinc-200">
+                                    {entryIface?.addr ? networkOf(entryIface.addr) : '—'}
+                                </div>
                                 <p className="text-xs text-muted-foreground mt-2">{t('tunnels.subnetHint')}</p>
                             </div>
                         </FormField>
