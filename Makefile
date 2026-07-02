@@ -25,6 +25,10 @@ desktop:
 agent:
 	@make -C agent build
 
+.PHONY: agent-userspace
+agent-userspace:
+	@make -C agent build-userspace
+
 .PHONY: migrate
 migrate:
 	@echo 'Build awg-migrate ...'

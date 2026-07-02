@@ -1,28 +1,5 @@
 export namespace models {
-
-	export type AgentStatus = string;
-	export class HostInfo {
-	    backend: string;
-	    version: string;
-	    docker: boolean;
-	    inDocker: boolean;
-	    kernelModule: boolean;
-	    interfaceKinds: string[];
-
-	    static createFrom(source: any = {}) {
-	        return new HostInfo(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.backend = source["backend"];
-	        this.version = source["version"];
-	        this.docker = source["docker"];
-	        this.inDocker = source["inDocker"];
-	        this.kernelModule = source["kernelModule"];
-	        this.interfaceKinds = source["interfaceKinds"];
-	    }
-	}
+	
 	export class CertKeyPair {
 	    cert: string;
 	    pk: string;
@@ -143,6 +120,28 @@ export namespace models {
 	        this.step = source["step"];
 	        this.done = source["done"];
 	        this.error = source["error"];
+	    }
+	}
+	export class HostInfo {
+	    backend: string;
+	    version: string;
+	    docker: boolean;
+	    inDocker: boolean;
+	    kernelModule: boolean;
+	    interfaceKinds: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new HostInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.backend = source["backend"];
+	        this.version = source["version"];
+	        this.docker = source["docker"];
+	        this.inDocker = source["inDocker"];
+	        this.kernelModule = source["kernelModule"];
+	        this.interfaceKinds = source["interfaceKinds"];
 	    }
 	}
 	export class InterfacePeer {
