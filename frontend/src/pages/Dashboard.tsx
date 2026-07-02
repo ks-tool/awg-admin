@@ -131,11 +131,10 @@ export default function Dashboard() {
                         accent="sky"
                     />
                     <StatCard
-                        label={t('dashboard.totalPeers')}
-                        value={stats.totalPeers}
-                        sub={`${stats.activePeers} ${t('dashboard.activePeers').toLowerCase()}`}
-                        icon={Network}
-                        accent="emerald"
+                        label={t('dashboard.totalTunnels')}
+                        value={stats.totalTunnels}
+                        icon={Waypoints}
+                        accent="amber"
                     />
                     <StatCard
                         label={t('dashboard.totalUsers')}
@@ -144,10 +143,11 @@ export default function Dashboard() {
                         accent="violet"
                     />
                     <StatCard
-                        label={t('dashboard.totalTunnels')}
-                        value={stats.totalTunnels}
-                        icon={Waypoints}
-                        accent="amber"
+                        label={t('dashboard.totalPeers')}
+                        value={stats.totalPeers}
+                        sub={`${stats.activePeers} ${t('dashboard.activePeers').toLowerCase()}`}
+                        icon={Network}
+                        accent="emerald"
                     />
                 </div>
 
