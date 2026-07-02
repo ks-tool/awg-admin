@@ -1,0 +1,40 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="0.5" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.28" cy="0.22" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="net" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <filter id="ds" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="26" flood-color="#083344" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- app-icon rounded square background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="url(#glow)"/>
+
+  <!-- shield (security / VPN) -->
+  <path filter="url(#ds)"
+        d="M512 250 L726 326 L726 556 C726 668 628 736 512 778 C396 736 298 668 298 556 L298 326 Z"
+        fill="#ffffff"/>
+
+  <!-- hub-and-spoke network inside the shield: one admin managing many servers -->
+  <g stroke="url(#net)" stroke-width="24" stroke-linecap="round" fill="url(#net)">
+    <line x1="512" y1="500" x2="424" y2="432"/>
+    <line x1="512" y1="500" x2="600" y2="432"/>
+    <line x1="512" y1="500" x2="512" y2="618"/>
+    <circle cx="424" cy="432" r="32" stroke="none"/>
+    <circle cx="600" cy="432" r="32" stroke="none"/>
+    <circle cx="512" cy="618" r="32" stroke="none"/>
+    <circle cx="512" cy="500" r="46" stroke="none"/>
+  </g>
+</svg>
