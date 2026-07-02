@@ -55,6 +55,10 @@ func TestTunnelDropped(t *testing.T) {
 		{"closed conn", fmt.Errorf("dial: %w", net.ErrClosed)},
 		{"reported wrapped deadline", reportedTimeout},
 		{"bare context deadline", fmt.Errorf("PUT /interfaces: %w", context.DeadlineExceeded)},
+		// The shared SSH tunnel was closed (a concurrent reopen) while this
+		// request's channel-open was in flight — an unwrapped, formatted ssh mux
+		// error, matched by substring.
+		{"ssh channel-open torn down", errors.New(`GET /interfaces/: Get "http://127.0.0.1:8080/interfaces/": ssh: unexpected packet in response to channel open: <nil>`)},
 	}
 	for _, tc := range retryable {
 		if !tunnelDropped(tc.err) {

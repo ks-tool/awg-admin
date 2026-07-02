@@ -25,6 +25,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 
 	agentmodels "github.com/ks-tool/awg-admin/agent/models"
 	"github.com/ks-tool/awg-admin/internal/agentclient"
@@ -93,7 +94,7 @@ func (s *Service) callAgent(srv *models.Server, op func(context.Context, *agentc
 	// Ensure didn't notice in time. Force a fresh one and try again; keep the
 	// original error if the reconnect itself fails so the caller sees the real
 	// failure.
-	if reopenErr := s.tunnels.Open(srv.ID, srv.SSH, srv.Agent.Address); reopenErr != nil {
+	if reopenErr := s.tunnels.Reopen(srv.ID, srv.SSH, srv.Agent.Address); reopenErr != nil {
 		return err
 	}
 	client, reErr := s.agentClientFor(srv)
@@ -125,6 +126,18 @@ func callOnce(client *agentclient.Client, op func(context.Context, *agentclient.
 // every op routed through callAgent is a fast, small request. Reopening the
 // tunnel and retrying recovers it instead of surfacing a bare timeout.
 func tunnelDropped(err error) bool {
+	if err == nil {
+		return false
+	}
+	// golang.org/x/crypto/ssh's mux returns this formatted (non-wrapped, so
+	// errors.Is can't see it) error when the SSH connection is torn down while a
+	// channel-open is in flight — e.g. a concurrent callAgent for the same server
+	// force-reopened the shared tunnel, closing the old *ssh.Client out from under
+	// this request (mitigated but not eliminated by Manager.Reopen's dedup). Same
+	// "the tunnel died underneath us" case, so reconnect and retry.
+	if strings.Contains(err.Error(), "unexpected packet in response to channel open") {
+		return true
+	}
 	return errors.Is(err, io.EOF) ||
 		errors.Is(err, io.ErrUnexpectedEOF) ||
 		errors.Is(err, net.ErrClosed) ||

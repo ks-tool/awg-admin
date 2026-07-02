@@ -23,6 +23,7 @@ import (
 	"github.com/ks-tool/awg-admin/models"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/singleflight"
 )
 
 // Manager holds one TunnelClient per server that doesn't have mTLS
@@ -33,6 +34,10 @@ import (
 type Manager struct {
 	mu      sync.RWMutex
 	clients map[uuid.UUID]*TunnelClient
+
+	// reopen deduplicates concurrent (re)dials of the same server's tunnel (see
+	// Reopen) — its zero value is ready to use.
+	reopen singleflight.Group
 
 	// passphrases caches SSH key passphrases in memory for the lifetime of
 	// the process ("for the duration of the session") — never persisted to
@@ -123,6 +128,23 @@ func (m *Manager) Open(serverID uuid.UUID, sshCfg models.SSHConfig, agentAddr st
 	return nil
 }
 
+// Reopen (re)dials serverID's tunnel like Open, but deduplicates concurrent
+// callers: when several goroutines reopen the same server at once — the
+// dashboard fires metrics + agent-status + host-info together, and they all fail
+// on one dying/shared tunnel — only ONE actually dials (and closes the stale
+// connection); the rest wait and share its result. Without this, each caller's
+// Open would dial a fresh connection and Close the previous one, yanking it out
+// from under the others' in-flight channel opens — which surfaces as
+// `ssh: unexpected packet in response to channel open` (see
+// internal/service.tunnelDropped). Use it for the hot (re)dial paths (Ensure,
+// callAgent's retry); Open stays for the one-shot startup/deploy paths.
+func (m *Manager) Reopen(serverID uuid.UUID, sshCfg models.SSHConfig, agentAddr string) error {
+	_, err, _ := m.reopen.Do(serverID.String(), func() (any, error) {
+		return nil, m.Open(serverID, sshCfg, agentAddr)
+	})
+	return err
+}
+
 // Get returns the tunnel client for serverID, if one is open.
 func (m *Manager) Get(serverID uuid.UUID) (*TunnelClient, bool) {
 	m.mu.RLock()
@@ -150,7 +172,9 @@ func (m *Manager) Ensure(serverID uuid.UUID, sshCfg models.SSHConfig, agentAddr 
 	if t, ok := m.Get(serverID); ok && t.Alive() {
 		return t, nil
 	}
-	if err := m.Open(serverID, sshCfg, agentAddr); err != nil {
+	// Dead or missing — reopen (deduped, so concurrent Ensures for the same
+	// server dial once rather than each replacing the other's connection).
+	if err := m.Reopen(serverID, sshCfg, agentAddr); err != nil {
 		return nil, err
 	}
 	t, _ := m.Get(serverID)
