@@ -19,6 +19,12 @@ ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/etc/awg-agent /var/lib/awg-agent
 StateDirectory=awg-agent
+# The userspace agent (amneziawg-go) puts each interface's UAPI control socket
+# under /var/run/amneziawg (a symlink to /run/amneziawg). ProtectSystem=strict
+# makes /run read-only, so the agent can't create that dir itself — have systemd
+# create it writable (and clean it up on stop). Harmless for the kernel agent,
+# which drives netlink and never opens a UAPI socket.
+RuntimeDirectory=amneziawg
 
 [Install]
 WantedBy=multi-user.target
