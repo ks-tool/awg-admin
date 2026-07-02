@@ -338,9 +338,11 @@ func (c *Collector) collectPeers(now time.Time) {
 			continue
 		}
 
+		db := cfg.Interface
+		livePeers := make(map[string]struct{}, len(dev.Peers))
 		for _, peer := range dev.Peers {
 			key := hex.EncodeToString(peer.PublicKey[:])
-			db := cfg.Interface
+			livePeers[key] = struct{}{}
 
 			c.store.write(db, key+"/rx", now, float64(peer.ReceiveBytes))
 			c.store.write(db, key+"/tx", now, float64(peer.TransmitBytes))
@@ -351,7 +353,22 @@ func (c *Collector) collectPeers(now time.Time) {
 			}
 			c.store.write(db, key+"/handshake", now, float64(handshake))
 		}
+		// Evict metrics for peers no longer on the device (deleted) so they stop
+		// showing in the peer metrics/history, instead of lingering until they
+		// age past the retention window. Backstop to the immediate drop in the
+		// apply path (RetainPeers); also covers peers removed directly on the box.
+		c.store.retainPeers(db, livePeers)
 	}
+}
+
+// RetainPeers evicts an interface's peer metrics for every peer whose hex public
+// key is not in keep — called from the apply path when an interface's config is
+// (re)pushed with a reduced peer set (e.g. a peer was deleted), so the removed
+// peer disappears from /metrics and /metrics/history immediately instead of at
+// the next collection tick. keep is the hex-encoded public keys of the peers
+// that should remain. No-op if the interface has no recorded metrics.
+func (c *Collector) RetainPeers(iface string, keep map[string]struct{}) {
+	c.store.retainPeers(iface, keep)
 }
 
 // ForgetInterface immediately drops all retained peer metrics for the named

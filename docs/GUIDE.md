@@ -225,6 +225,12 @@ WireGuard one.
 Interfaces that are part of a [tunnel](#multi-hop-tunnels-exit-nodes) are locked
 against editing/deletion in the UI; remove the tunnel first.
 
+Deleting an interface also **deletes all of its peers** — a peer can't exist
+without its interface. When the interface has any peers, the UI asks you to
+confirm **twice** (the first dialog spells out how many peers will be removed).
+The removed peers also stop appearing in the
+[peer metrics](#dashboard-and-metrics).
+
 Every interface tracks an **in-sync** status: whether the last push to the agent
 succeeded, the error if it didn't, and when it last synced.
 
@@ -275,7 +281,8 @@ For each peer you get:
 - **QR code** — the same config as a scannable QR for the mobile apps, with a
   button to **save it as a PNG** file (native save dialog in the desktop app).
 
-Deleting a peer revokes it on the agent (removes it from the interface).
+Deleting a peer revokes it on the agent (removes it from the interface) and drops
+it from the peer metrics, so it no longer shows in the metrics history.
 
 ## Multi-hop tunnels (exit nodes)
 

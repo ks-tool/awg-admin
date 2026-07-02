@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -202,6 +203,33 @@ func (s *store) retainOnly(keep map[string]struct{}) {
 		if _, ok := keep[db]; !ok {
 			delete(s.dbs, db)
 		}
+	}
+}
+
+// retainPeers drops every metric in db whose "<publicKey>/<field>" key prefix is
+// not in keep, evicting a deleted peer's series (rx/tx/handshake) as soon as the
+// peer is gone from the interface — instead of waiting for it to age past the
+// retention window. keep holds the hex public keys of the peers that should
+// remain (see collectPeers' hex.EncodeToString keying). An empty resulting db is
+// removed. No-op for a database that was never recorded.
+func (s *store) retainPeers(db string, keep map[string]struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	metrics, ok := s.dbs[db]
+	if !ok {
+		return
+	}
+	for name := range metrics {
+		key, _, found := strings.Cut(name, "/")
+		if !found {
+			continue // not a "<key>/<field>" peer metric — leave it be
+		}
+		if _, keepIt := keep[key]; !keepIt {
+			delete(metrics, name)
+		}
+	}
+	if len(metrics) == 0 {
+		delete(s.dbs, db)
 	}
 }
 

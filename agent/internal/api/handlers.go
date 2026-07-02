@@ -17,6 +17,7 @@
 package api
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -114,6 +115,19 @@ func (h *Handler) set(w http.ResponseWriter, r *http.Request) {
 		}
 		handleErr(w, err)
 		return
+	}
+
+	// Every push carries the interface's full desired peer set (ReplacePeers), so
+	// a peer dropped from it (e.g. deleted in the admin) is gone here too — evict
+	// its retained metrics now so it stops showing in the peer metrics/history
+	// immediately, rather than at the next collection tick. Guarded: the
+	// collector is nil when metrics collection is disabled.
+	if h.collector != nil {
+		keep := make(map[string]struct{}, len(cfg.Peers))
+		for _, p := range cfg.Peers {
+			keep[hex.EncodeToString(p.Key[:])] = struct{}{}
+		}
+		h.collector.RetainPeers(cfg.Interface, keep)
 	}
 
 	w.WriteHeader(http.StatusCreated)

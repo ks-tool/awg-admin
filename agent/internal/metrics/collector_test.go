@@ -315,6 +315,47 @@ func TestForgetInterfaceDropsPeersFromSnapshotAndHistory(t *testing.T) {
 	}
 }
 
+func TestRetainPeersDropsDeletedPeer(t *testing.T) {
+	c := newTestCollector(t)
+	now := time.Now()
+	const iface = "wg0"
+	for _, key := range []string{"aaaa", "bbbb"} {
+		c.store.write(iface, key+"/rx", now, 1)
+		c.store.write(iface, key+"/tx", now, 2)
+		c.store.write(iface, key+"/handshake", now, float64(now.Unix()))
+	}
+
+	// Keep only "aaaa" — as the apply path / collector reconcile does once "bbbb"
+	// has been deleted from the interface.
+	c.RetainPeers(iface, map[string]struct{}{"aaaa": {}})
+
+	snap := c.Snapshot()
+	if len(snap.Interfaces) != 1 {
+		t.Fatalf("Interfaces = %d, want 1: %+v", len(snap.Interfaces), snap.Interfaces)
+	}
+	if peers := snap.Interfaces[0].Peers; len(peers) != 1 || peers[0].PublicKey != "aaaa" {
+		t.Fatalf("after RetainPeers, snapshot peers = %+v, want only aaaa", peers)
+	}
+	for _, ih := range c.SystemHistory().Interfaces {
+		for _, p := range ih.Peers {
+			if p.PublicKey == "bbbb" {
+				t.Fatalf("deleted peer bbbb still present in history: %+v", ih.Peers)
+			}
+		}
+	}
+}
+
+func TestRetainPeersEmptyDropsInterface(t *testing.T) {
+	c := newTestCollector(t)
+	c.store.write("wg0", "aaaa/rx", time.Now(), 1)
+
+	c.RetainPeers("wg0", map[string]struct{}{})
+
+	if snap := c.Snapshot(); len(snap.Interfaces) != 0 {
+		t.Fatalf("after retaining no peers, Interfaces = %+v, want none", snap.Interfaces)
+	}
+}
+
 func TestStoreRetainOnlyDropsMissingInterfaces(t *testing.T) {
 	s := newStore(10)
 	now := time.Now()
