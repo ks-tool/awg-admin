@@ -58,6 +58,10 @@ import type {AuthType} from '@/hooks/useServerForm';
 const INITIAL_INTERFACE_FORM = {
     iface: '',
     addr: '',
+    // Default client DNS for this interface's peers (comma-separated string for
+    // input binding, converted to string[] on submit). Substituted into a
+    // peer's generated config when the peer itself doesn't set a DNS.
+    dns: '',
     listen: '51820',
     pk: '',
     // Whether the interface is active on the agent (default on). Maps to the
@@ -185,6 +189,14 @@ function InterfaceFormModal({
                             <input type="text" name="addr" value={form.addr} onChange={handleChange}
                                    placeholder="10.0.0.1/24" disabled={loading} className={inputs.primary}/>
                             <p className="mt-1 text-xs text-muted-foreground">{t('servers.interfaces.addrHint')}</p>
+                        </div>
+                    </FormField>
+
+                    <FormField label={t('servers.interfaces.dns')}>
+                        <div>
+                            <input type="text" name="dns" value={form.dns} onChange={handleChange}
+                                   placeholder="1.1.1.1, 8.8.8.8" disabled={loading} className={inputs.primary}/>
+                            <p className="mt-1 text-xs text-muted-foreground">{t('servers.interfaces.dnsHint')}</p>
                         </div>
                     </FormField>
 
@@ -463,6 +475,7 @@ export default function ServerDetail() {
         const config: InterfaceConfig = {
             iface: form.iface,
             addr: form.addr,
+            dns: form.dns.split(',').map(s => s.trim()).filter(Boolean),
             listen: parseInt(form.listen) || 51820,
             pk: form.pk,
             disabled: !form.enabled,
@@ -699,6 +712,7 @@ export default function ServerDetail() {
                                                         initialValues: {
                                                             iface: iface.iface ?? '',
                                                             addr: iface.addr ?? '',
+                                                            dns: (iface.dns ?? []).join(', '),
                                                             listen: String(iface.listen ?? 51820),
                                                             pk: iface.pk ?? '',
                                                             enabled: iface.disabled !== true,

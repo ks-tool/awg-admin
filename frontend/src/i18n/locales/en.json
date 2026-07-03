@@ -266,6 +266,8 @@
       "name": "Interface Name (Required)",
       "addr": "Address (Optional)",
       "addrHint": "Leave blank to auto-assign the first host of a free /24 (172.23.x.0/24).",
+      "dns": "DNS",
+      "dnsHint": "Default client DNS for this interface's peers (comma-separated). Substituted into a peer's config when the peer doesn't set its own DNS. Leave blank for none.",
       "port": "Listen Port",
       "privateKey": "Private Key (Optional)",
       "privateKeyPlaceholder": "Enter Wireguard private key",
