@@ -40,28 +40,9 @@ func (s *Service) ListAgentSources() ([]models.AgentSource, error) {
 // run as a container on the server. cacheLocally is ignored (forced false) for
 // path (nothing to cache) and image (Docker pulls it itself).
 func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally, userspace bool) (*models.AgentSource, error) {
-	if len(name) == 0 {
-		return nil, fmt.Errorf("agent source name is required")
-	}
-	set := 0
-	for _, v := range []string{url, path, image} {
-		if len(v) > 0 {
-			set++
-		}
-	}
-	if set == 0 {
-		return nil, fmt.Errorf("agent source requires a URL, a local file path or a Docker image")
-	}
-	if set > 1 {
-		return nil, fmt.Errorf("agent source must have exactly one of a URL, a local file path or a Docker image")
-	}
-	if len(path) > 0 || len(image) > 0 {
-		cacheLocally = false
-	}
-	// Userspace marks the userspace agent binary and only applies to a
-	// URL/Path (systemd) source — a Docker image is inherently userspace.
-	if len(image) > 0 {
-		userspace = false
+	cacheLocally, userspace, err := validateAgentSourceInput(name, url, path, image, cacheLocally, userspace)
+	if err != nil {
+		return nil, err
 	}
 
 	src := &models.AgentSource{
@@ -77,6 +58,78 @@ func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally,
 		return nil, err
 	}
 	return src, nil
+}
+
+// UpdateAgentSource edits an existing preset in place (same ID), with the same
+// validation as CreateAgentSource. If it stops being a cached URL (caching
+// turned off, switched to a path/image kind, or the URL changed), its previously
+// cached binary is dropped best-effort — the cache is keyed by ID, so otherwise
+// a changed URL would keep serving the stale cached binary until a manual
+// refresh.
+func (s *Service) UpdateAgentSource(id, name, url, path, image string, cacheLocally, userspace bool) (*models.AgentSource, error) {
+	sID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := s.store.AgentSources().Get(sID)
+	if err != nil {
+		return nil, err
+	}
+
+	cacheLocally, userspace, err = validateAgentSourceInput(name, url, path, image, cacheLocally, userspace)
+	if err != nil {
+		return nil, err
+	}
+
+	if existing.CacheLocally && (!cacheLocally || existing.URL != url) {
+		if err := deploy.DeleteCache(sID); err != nil {
+			log.Warn().Err(err).Str("agent_source_id", id).Msg("failed to remove cached agent binary on update")
+		}
+	}
+
+	updated := &models.AgentSource{
+		ID:           sID,
+		Name:         name,
+		URL:          url,
+		Path:         path,
+		Image:        image,
+		CacheLocally: cacheLocally,
+		Userspace:    userspace,
+	}
+	if err := s.store.AgentSources().Set(updated); err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
+// validateAgentSourceInput checks a create/update's fields and normalizes the
+// two flags that only apply to some source kinds: cacheLocally (URL only) and
+// userspace (URL/Path only, not a Docker image). Returns the normalized flags.
+func validateAgentSourceInput(name, url, path, image string, cacheLocally, userspace bool) (bool, bool, error) {
+	if len(name) == 0 {
+		return false, false, fmt.Errorf("agent source name is required")
+	}
+	set := 0
+	for _, v := range []string{url, path, image} {
+		if len(v) > 0 {
+			set++
+		}
+	}
+	if set == 0 {
+		return false, false, fmt.Errorf("agent source requires a URL, a local file path or a Docker image")
+	}
+	if set > 1 {
+		return false, false, fmt.Errorf("agent source must have exactly one of a URL, a local file path or a Docker image")
+	}
+	if len(path) > 0 || len(image) > 0 {
+		cacheLocally = false
+	}
+	// Userspace only applies to a URL/Path (systemd) source — a Docker image is
+	// inherently the userspace agent.
+	if len(image) > 0 {
+		userspace = false
+	}
+	return cacheLocally, userspace, nil
 }
 
 // DeleteAgentSource removes a saved deploy preset, and its cached binary

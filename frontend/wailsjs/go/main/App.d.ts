@@ -121,6 +121,8 @@ export function SyncServer(arg1:string):Promise<void>;
 
 export function UnlockServerSSH(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
+export function UpdateAgentSource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean,arg7:boolean):Promise<models.AgentSource>;
+
 export function UpdateInterfaceConfig(arg1:string,arg2:string,arg3:models.InterfaceConfig):Promise<models.Interface>;
 
 export function UpdateServer(arg1:string,arg2:service.ServerInput):Promise<models.Server>;

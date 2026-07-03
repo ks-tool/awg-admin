@@ -205,6 +205,19 @@ export const bindingsClient = {
         }
     },
 
+    async updateAgentSource(id: string, name: string, url: string, path: string, image: string, cacheLocally: boolean, userspace: boolean): Promise<ApiResponse<models.AgentSource>> {
+        try {
+            const data = await AppBindings.UpdateAgentSource(id, name, url, path, image, cacheLocally, userspace);
+            return { data };
+        } catch (error) {
+            console.error('Bindings UpdateAgentSource failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async deleteAgentSource(id: string): Promise<ApiResponse<void>> {
         try {
             await AppBindings.DeleteAgentSource(id);

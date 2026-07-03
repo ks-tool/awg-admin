@@ -69,6 +69,7 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 	protected.WithGroup("/agent-sources", func(gr *bunrouter.Group) {
 		gr.POST("", h.agentSourceCreate)
 		gr.GET("/", h.agentSourceList)
+		gr.PUT("/:sourceID", h.agentSourceUpdate)
 		gr.POST("/:sourceID/refresh", h.agentSourceRefresh)
 		gr.DELETE("/:sourceID", h.agentSourceDelete)
 	})

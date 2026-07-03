@@ -178,7 +178,8 @@ An **agent source** is a reusable, named preset describing where to get the
 agent binary from (e.g. a release URL), optionally cached locally so repeated
 deploys don't re-download. Manage them from the source dropdown in the agent
 dialog's deploy section: **Add new…** opens a small form to create one, and each
-saved entry has a refresh-cache and a remove button. Handy when you deploy to
+saved entry has an **edit** (pencil — view and change its URL/path/image and
+options), a refresh-cache and a remove button. Handy when you deploy to
 many servers or pin a specific agent version.
 
 A source is one of three kinds — a **URL**, a **local file path**, or a **Docker
