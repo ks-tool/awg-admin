@@ -85,12 +85,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # nsis: the NSIS installer is Windows-only — `wails build -nsis` errors
+          # ("cannot build nsis installer - no windows targets") on any non-Windows
+          # build, so it's passed only for the Windows target.
           - os: windows-latest
             platform: windows/amd64
+            nsis: "-nsis"
           - os: macos-latest
             platform: darwin/universal
+            nsis: ""
           - os: ubuntu-latest
             platform: linux/amd64
+            nsis: ""
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +122,7 @@ jobs:
         run: choco install nsis -y
 
       - name: Build desktop app
-        run: go tool wails build -platform ${{ matrix.platform }} -nsis -trimpath
+        run: go tool wails build -platform ${{ matrix.platform }} ${{ matrix.nsis }} -trimpath
 
       - name: Package macOS .dmg
         if: runner.os == 'macOS'
