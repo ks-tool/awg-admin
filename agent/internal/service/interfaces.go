@@ -37,12 +37,6 @@ func InterfaceCreate(cfg models.InterfaceConfig) error {
 	// auto-assigns it a link-local IPv6 address (this app's tunnels are IPv4).
 	// Best-effort — see disableIPv6; it never blocks bringing the interface up.
 	disableIPv6(cfg.Interface, cfg.Address)
-	// PreUp runs after the link exists (so interface-referencing rules such as
-	// `ip route ... dev %i` or `ip rule ... iif %i` resolve) but before it's
-	// brought up — matching wg-quick's order (add link → PreUp → up → PostUp).
-	if err := runHooks(cfg.Interface, "PreUp", cfg.PreUp); err != nil {
-		return err
-	}
 	if err := backend.AddrAdd(cfg.Interface, cfg.Address); err != nil {
 		return err
 	}
@@ -55,6 +49,18 @@ func InterfaceCreate(cfg models.InterfaceConfig) error {
 		return err
 	}
 
+	// PreUp runs after the link is addressed AND brought up, so device-referencing
+	// rules resolve *and* work — notably `ip route replace default dev %i table N`
+	// (a tunnel's policy route) needs the device IFF_UP, else `ip` rejects it with
+	// "Device for nexthop is not up". This matches InterfaceUpdate's order (up →
+	// PreUp → PostUp); the two apply paths must stay consistent, since a tunnel
+	// interface is configured through Update on the first push but recreated
+	// through Create on an agent restart. There are no peers on the device yet
+	// (ConfigureDevice runs after this returns), so no traffic flows before the
+	// PreUp firewall/routing rules are in place.
+	if err := runHooks(cfg.Interface, "PreUp", cfg.PreUp); err != nil {
+		return err
+	}
 	return runHooks(cfg.Interface, "PostUp", cfg.PostUp)
 }
 
