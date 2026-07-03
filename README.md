@@ -6,136 +6,110 @@
 
 [Русская версия](README_ru.md)
 
-**Amnezia Admin** is an admin tool for managing [AmneziaWG](https://github.com/amnezia-vpn/amneziawg-go)/WireGuard
-servers, the VPN peers connected to them, and the users those peers belong to. One admin instance can manage many
-servers at once; each server runs a small agent that owns the actual WireGuard interfaces on that box.
+**Amnezia Admin** is a centralized management application for AmneziaWG and WireGuard infrastructures. It stores the
+configuration of managed servers, users, and VPN peers, and applies that configuration through an agent running on each
+server.
 
-> 📖 **Full feature guide:** [docs/GUIDE.md](docs/GUIDE.md) — a complete walkthrough of every feature.
+A single instance can manage multiple servers simultaneously. The local database serves as the source of truth, while
+agents are responsible for reconciling the actual server state with the stored configuration.
 
-## What it's for
+> 📖 **Installation, configuration, and full documentation:** [docs/GUIDE.md](docs/GUIDE.md)
 
-- Create and configure WireGuard/AmneziaWG interfaces on remote servers without SSH'ing in by hand — addresses, keys and
-  AmneziaWG obfuscation parameters are filled in for you.
-- Manage users and issue/revoke VPN peers (keys, allowed IPs, QR codes and ready-to-use client configs) per user.
-- Deploy the per-server agent over SSH with one click, keep its config in sync, and **reconcile** what the agent
-  actually has against your database when they drift.
-- Chain servers into **multi-hop tunnels** so clients egress the internet through a chosen exit node.
-- Watch server health — load average, RAM, and per-peer traffic activity — from one place.
-- **Back up** your whole setup to a portable file at any time.
-- Reach agents over an automatic SSH tunnel, or directly via mTLS on a public IP.
-- Run either as a local desktop app or as a small web service you host yourself — your data stays on infrastructure you
-  control, never a third-party cloud.
+## Overview
 
-See the [full guide](docs/GUIDE.md) for how each of these works.
+Amnezia Admin provides centralized administration of AmneziaWG and WireGuard deployments without manually editing
+configuration files or connecting to every server over SSH.
 
-## Components
+After a server has been added, the application can automatically deploy an agent over SSH. All subsequent management
+operations are performed through the agent API, either over an SSH tunnel or directly via mTLS. If the actual server
+state diverges from the stored configuration, the application reconciles the differences by reapplying the required
+changes.
 
-| Component     | What it is                                                                                                                                                                                                             | Where                         |
-|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|
-| **Admin app** | The thing you actually interact with. Either a Wails desktop app, or a standalone web server — same business logic, same React frontend, two different shells.                                                         | root Go module + `frontend/`  |
-| **Agent**     | A small HTTP daemon you deploy to each managed server. It talks to the real WireGuard/AmneziaWG interfaces via `wgctrl-go` and exposes a CRUD API the admin app calls (over an SSH tunnel by default, or direct mTLS). | `agent/` (separate Go module) |
-| **Frontend**  | React 19 + TypeScript SPA. Detects at runtime whether it's running inside the Wails desktop shell or talking to the standalone server over HTTP, and switches transport accordingly — same UI either way.              | `frontend/`                   |
+Users and VPN peers are managed independently. Each user may own one or more peers. When a peer is created, the
+application automatically generates cryptographic keys, assigns addresses, applies AmneziaWG parameters, and produces
+client configuration files together with QR codes.
 
-The admin app keeps all of its own metadata (servers, SSH credentials, users, peer assignments) in a local embedded
-database (boltdb, `~/.awg-admin`) — it is the source of truth; the agent just applies whatever config it's pushed.
+Multiple servers can be organized into multi-hop VPN topologies, allowing selected nodes to operate as intermediate
+routers or Internet exit nodes.
 
-## Running it
+The application collects runtime information from managed servers, including CPU load, memory usage, and WireGuard peer
+statistics. The entire infrastructure configuration can be exported to a portable backup and restored on another
+installation.
 
-### Desktop app
+Amnezia Admin is available as both a desktop application and a standalone web server. Both deployment modes share the
+same data model, business logic, and user interface.
 
-Download the build for your OS from the [Releases](../../releases) page:
+## Architecture
 
-- **Windows** — `amnezia-admin-amd64-installer_<version>.exe` (NSIS installer), or the plain
-  `amnezia-admin_<version>.exe`.
-- **macOS** — `amnezia-admin_<version>.dmg` (universal: Intel + Apple Silicon). The app isn't notarized/signed by an
-  Apple Developer ID — on first launch, right-click the app → Open to bypass Gatekeeper, or run
-  `xattr -cr "/Applications/Amnezia Admin.app"`.
-- **Linux** — plain binary (`amnezia-admin_<version>`); requires `libgtk-3` and `libwebkit2gtk-4.1` to be installed.
+Amnezia Admin consists of three components: the administrative application, the agent, and the frontend.
 
-No login, no setup — it's a local single-user app.
+### Admin app
 
-### Standalone server
+The administrative application stores the infrastructure configuration, manages servers, users, and VPN peers, and
+coordinates communication with remote agents.
 
-For when you want to reach the admin UI from a browser instead, or run it on a headless box.
+It is available in two deployment modes: a Wails-based desktop application and a standalone web server. Both variants
+share the same business logic and user interface, differing only in their runtime environment and frontend transport.
 
-**Binary:**
-
-```sh
-./awg-admin
-# listens on :8080 by default
-```
-
-**Docker:**
-
-```sh
-docker run -d --name awg-admin \
-  -p 8080:8080 \
-  -v awg-admin-data:/data \
-  ghcr.io/<owner>/<repo>:latest
-```
-
-First login is **admin / admin** — change it immediately under *Settings* (or via the `PUT /auth/change-credentials`
-API). The standalone server is the only mode with a login screen; the desktop app has no network exposure to
-authenticate against.
-
-Configuration is via environment variables:
-
-| Variable                                   | Purpose                                                                                                                                             |
-|--------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| `AWG_ADMIN_ADDR`                           | Listen address, default `:8080`                                                                                                                     |
-| `AWG_ADMIN_TLS_CERT` / `AWG_ADMIN_TLS_KEY` | Serve HTTPS with a static cert/key pair                                                                                                             |
-| `AWG_ADMIN_AUTOCERT_DOMAINS`               | Comma-separated domains to get a cert for automatically from Let's Encrypt (mutually exclusive with the static cert above; needs port 80 reachable) |
-| `AWG_ADMIN_AUTOCERT_CACHE_DIR`             | Where to cache the autocert certificate, default `$HOME/.awg-admin-autocert`                                                                        |
-
-Data lives under `$HOME` — the boltdb file at `$HOME/.awg-admin`, the autocert cache at `$HOME/.awg-admin-autocert`,
-and (if you use deploy presets with local caching — see "Agent" below) downloaded agent binaries at
-`$HOME/.awg-admin-cache`. In the Docker image `$HOME` is `/data`, which is why it's set up as a mountable volume.
+The source code is located in the root Go module and the `frontend/` directory.
 
 ### Agent
 
-Deployed automatically by the admin app (server page → "Deploy agent", given SSH access to the box), or by hand:
+The agent is a lightweight HTTP service running on every managed server.
 
-```sh
-AWG_AGENT_ADDR=127.0.0.1:8080 AWG_AGENT_DB=/var/lib/awg-agent ./awg-agent
-```
+It manages AmneziaWG and WireGuard interfaces, stores their local configuration, and exposes the API used by the
+administrative application. WireGuard operations are performed through the `wgctrl-go` library.
 
-| Variable                                                               | Purpose                                                                                                                                  |
-|------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| `AWG_AGENT_ADDR`                                                       | Listen address, default `127.0.0.1:8080` (loopback — meant to be reached through an SSH tunnel from the admin app, not exposed directly) |
-| `AWG_AGENT_DB`                                                         | Where the agent stores its own interface configs                                                                                         |
-| `AWG_AGENT_TLS_CERT` / `AWG_AGENT_TLS_KEY` / `AWG_AGENT_TLS_CLIENT_CA` | Set all three to listen with mTLS instead, for reaching the agent directly on a public IP without an SSH tunnel                          |
-| `AWG_AGENT_METRICS_INTERVAL`                                           | How often to sample CPU/RAM/network/peer stats, default `45s`                                                                            |
-| `AWG_AGENT_LOG_LEVEL`                                                  | Log verbosity, default `info`                                                                                                            |
+By default, the agent listens only on the loopback interface and is intended to be accessed through an SSH tunnel.
+Direct mTLS connections are also supported when SSH tunneling is not desirable.
 
-Linux only (it manages real WireGuard interfaces on the host), amd64/arm64.
+The source code is located in the `agent/` directory.
 
-### Moving data between two installs
+### Frontend
 
-If you've been using the desktop app and want to switch to the standalone server (or vice versa, or just migrate to a
-new machine), use `awg-migrate` — it copies the boltdb file's contents to/from a portable JSON dump:
+The user interface is implemented as a React 19 and TypeScript single-page application.
 
-```sh
-awg-migrate export -db ~/.awg-admin -out dump.json   # on the old machine
-awg-migrate import -db ~/.awg-admin -in dump.json    # on the new machine
-```
+At startup, the frontend detects its runtime environment and automatically selects the appropriate transport: the Wails
+API for the desktop application or the standalone server's HTTP API. The user experience remains identical in both
+deployment modes.
 
-Both deployment modes already read the same file/format, so this is only needed when moving across machines. *Settings →
-Backup* exports the same dump from inside the app with one click (desktop save dialog or browser download), and an
-in-app backup is restored the same way — `awg-migrate import` it into the target database. See
-the [backup section of the guide](docs/GUIDE.md#backup-restore-and-migration).
+The source code is located in the `frontend/` directory.
+
+### Data storage
+
+All infrastructure metadata is stored locally in a BoltDB database (`~/.awg-admin`).
+
+The database contains information about managed servers, SSH credentials, users, VPN peers, and their relationships. It
+serves as the single source of truth for the administrative application.
+
+The agent stores only its local interface configuration and has no knowledge of the infrastructure as a whole.
 
 ## Building from source
 
-Requires Go 1.26.2+ and Node 24+.
+Building the project requires Go **1.26.2** or later and Node.js **24** or later.
+
+The following `Makefile` targets are available:
 
 ```sh
-make server      # standalone web server binary (build/bin/)
-make run-server  # build frontend + go run, for local testing
-make desktop     # Wails desktop binary (needs the Wails CLI: go tool wails)
-make agent       # cross-compiles the agent for Linux (build/bin/)
-make migrate     # awg-migrate export/import tool
+make server      # standalone web server
+make run-server  # local development server (go run)
+make desktop     # Wails desktop application
+make agent       # Linux agent
+make migrate     # awg-migrate utility
 ```
+
+Build artifacts are written to the `build/bin/` directory. The `make run-server` target is intended for local
+development and starts the application without producing a standalone executable.
+
+Building the desktop application requires the Wails CLI:
+
+```sh
+go tool wails
+```
+
+Targets that include the user interface automatically build the frontend, so a separate Node.js build step is usually
+unnecessary.
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full license text.
