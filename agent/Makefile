@@ -18,7 +18,7 @@ build-userspace:
 	@GOEXPERIMENT=jsonv2 CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) cmd/awg-agent-userspace.go
 
 # Unit tests for the agent module. The e2e module (agent/e2e) is a separate
-# module outside go.work, so `./...` skips it — run it with `make test-e2e`.
+# module, so `./...` skips it — run it with `make test-e2e`.
 .PHONY: test
 test:
 	@echo 'Test agent module ...'
@@ -27,7 +27,8 @@ test:
 # End-to-end tunnel test (agent/e2e): builds the userspace image from source and
 # runs two containers that form a real AmneziaWG tunnel. Needs Docker with
 # /dev/net/tun. It's a separate module (keeps testcontainers out of the daemon
-# module) and lives outside go.work, hence GOWORK=off.
+# module); GOWORK=off is a defensive no-op now the repo has no go.work, but keeps
+# the e2e module isolated even if someone adds one back locally.
 .PHONY: test-e2e
 test-e2e:
 	@echo 'Run userspace tunnel e2e (needs Docker) ...'

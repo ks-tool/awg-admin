@@ -2,9 +2,7 @@ module github.com/ks-tool/awg-admin
 
 go 1.26.2
 
-require github.com/ks-tool/awg-admin/agent v0.0.0
-
-replace github.com/ks-tool/awg-admin/agent v0.0.0 => ./agent
+require github.com/ks-tool/awg-admin/agent v1.0.0
 
 require (
 	github.com/google/uuid v1.6.0

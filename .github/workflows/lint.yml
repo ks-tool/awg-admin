@@ -1,8 +1,8 @@
 name: lint
 
 # Runs golangci-lint on pull requests, against both Go modules in this repo
-# (root module + agent/, joined via go.work — golangci-lint lints one
-# module at a time, hence the matrix).
+# (root module + agent/, each its own go.mod — golangci-lint lints one module
+# at a time, hence the matrix).
 on:
   pull_request:
 
