@@ -30,6 +30,7 @@ import {Container} from '@/components/common/Container';
 import {FormField} from '@/components/common/FormField';
 import {buttons, inputs, Modal} from '@/components/common/Modal';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
+import {CollapsibleSection} from '@/components/common/CollapsibleSection';
 import {cn} from '@/lib/utils';
 import type {Interface, Server} from '@/types';
 
@@ -243,6 +244,7 @@ function AddPeerModal({
                     </select>
                 </FormField>
 
+                <CollapsibleSection label={t('common.advancedSettings')}>
                 <FormField label={`${t('peers.allowedIPs')} (${t('common.optional')})`}>
                     <input
                         type="text"
@@ -320,6 +322,7 @@ function AddPeerModal({
                         />
                     </FormField>
                 )}
+                </CollapsibleSection>
 
                 <div className="flex gap-3 pt-4">
                     <button

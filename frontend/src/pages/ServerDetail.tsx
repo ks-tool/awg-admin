@@ -43,6 +43,7 @@ import type {InterfaceConfig} from '@/types';
 import {FormField} from '@/components/common/FormField';
 import {buttons, inputs, Modal} from '@/components/common/Modal';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
+import {CollapsibleSection} from '@/components/common/CollapsibleSection';
 import {Container} from '@/components/common/Container';
 import {cn} from '@/lib/utils';
 import {ServerFormFields} from '@/components/server/ServerFormFields';
@@ -112,7 +113,6 @@ function InterfaceFormModal({
 }) {
     const {t} = useTranslation();
     const [form, setForm] = useState(initialValues);
-    const [tab, setTab] = useState<'general' | 'amnezia'>('general');
 
     useEffect(() => setForm(initialValues), [initialValues]);
 
@@ -142,22 +142,6 @@ function InterfaceFormModal({
         if (!form.iface.trim()) return toast.error(t('servers.interfaces.name') + ' ' + t('common.required'));
         await onSubmit(form);
     };
-
-    const tabButton = (key: 'general' | 'amnezia', label: string) => (
-        <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={cn(
-                '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-                tab === key
-                    ? 'border-sky-500 text-foreground dark:text-zinc-100'
-                    : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
-            )}
-        >
-            {label}
-        </button>
-    );
 
     const amneziaNum = (name: (typeof AMNEZIA_NUM_FIELDS)[number]) => (
         <FormField key={name} label={name.toUpperCase()}>
@@ -189,18 +173,13 @@ function InterfaceFormModal({
 
     return (
         <Modal title={title} onClose={onClose} loading={loading}>
-            <div className="mb-4 flex gap-1 border-b border-border dark:border-white/10">
-                {tabButton('general', t('servers.interfaces.tabGeneral'))}
-                {tabButton('amnezia', t('servers.interfaces.tabAmnezia'))}
-            </div>
-
             <div className="space-y-4">
-                <div className={tab === 'general' ? 'space-y-4' : 'hidden'}>
-                    <FormField label={t('servers.interfaces.name')}>
-                        <input type="text" name="iface" value={form.iface} onChange={handleChange}
-                               placeholder="wg0" disabled={loading} className={inputs.primary}/>
-                    </FormField>
+                <FormField label={t('servers.interfaces.name')}>
+                    <input type="text" name="iface" value={form.iface} onChange={handleChange}
+                           placeholder="wg0" disabled={loading} className={inputs.primary}/>
+                </FormField>
 
+                <CollapsibleSection label={t('common.advancedSettings')} defaultOpen={mode === 'edit'}>
                     <FormField label={t('servers.interfaces.addr')}>
                         <div>
                             <input type="text" name="addr" value={form.addr} onChange={handleChange}
@@ -241,9 +220,7 @@ function InterfaceFormModal({
                         </label>
                     </FormField>
                     <p className="text-xs text-muted-foreground">{t('servers.interfaces.enabledHint')}</p>
-                </div>
 
-                <div className={tab === 'amnezia' ? 'space-y-4' : 'hidden'}>
                     <FormField label="">
                         <label className="flex items-center cursor-pointer">
                             <input
@@ -288,7 +265,7 @@ function InterfaceFormModal({
                             {AMNEZIA_STR_FIELDS.slice(4).map(amneziaStr)}
                         </div>
                     </div>
-                </div>
+                </CollapsibleSection>
 
                 <div className="flex gap-3 pt-4">
                     <button onClick={handleSubmit} disabled={loading || !form.iface.trim()}

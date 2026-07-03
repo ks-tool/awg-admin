@@ -272,8 +272,6 @@
       "enabled": "Activate interface",
       "enabledHint": "The deactivated interface is not created on the server when the agent starts.",
       "disabledBadge": "Disabled",
-      "tabGeneral": "General",
-      "tabAmnezia": "Amnezia",
       "amneziaInterface": "Amnezia Interface",
       "amneziaHint": "Obfuscation parameters, pre-filled with generated values you can edit. Uncheck \"Amnezia Interface\" to create a plain WireGuard interface (these values are then ignored).",
       "junkPackets": "Junk packets (Jc / Jmin / Jmax)",
@@ -430,7 +428,8 @@
     "browse": "Browse…",
     "close": "Close",
     "generating": "Generating…",
-    "url": "URL"
+    "url": "URL",
+    "advancedSettings": "Advanced settings"
   },
   "settings": {
     "title": "Settings",
