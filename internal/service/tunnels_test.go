@@ -167,7 +167,7 @@ func TestBuildAndRemoveTunnel(t *testing.T) {
 		t.Errorf("DeleteInterface of a tunnel member should be refused")
 	}
 
-	// --- RemoveTunnel leaves empty interfaces ---
+	// --- RemoveTunnel drops the tunnel config but KEEPS client peers ---
 	if err := svc.RemoveTunnel(tun.ID.String()); err != nil {
 		t.Fatalf("RemoveTunnel: %v", err)
 	}
@@ -175,9 +175,16 @@ func TestBuildAndRemoveTunnel(t *testing.T) {
 	if ei2.Tunnel != nil {
 		t.Errorf("entry Tunnel not cleared after RemoveTunnel")
 	}
-	if len(ei2.Peers) != 0 || ei2.Table != 0 || len(ei2.PreUp) != 0 || len(ei2.PostDown) != 0 {
-		t.Errorf("entry not emptied: peers=%d table=%d preUp=%d postDown=%d",
-			len(ei2.Peers), ei2.Table, len(ei2.PreUp), len(ei2.PostDown))
+	if ei2.Table != 0 || len(ei2.PreUp) != 0 || len(ei2.PostDown) != 0 {
+		t.Errorf("entry tunnel infra not cleared: table=%d preUp=%d postDown=%d",
+			ei2.Table, len(ei2.PreUp), len(ei2.PostDown))
+	}
+	// The client peer must survive; only the tunnel's gateway peer is removed.
+	if len(ei2.Peers) != 1 {
+		t.Fatalf("entry peers after RemoveTunnel = %d, want 1 (the client peer kept)", len(ei2.Peers))
+	}
+	if len(ei2.Peers[0].AllowedIPs) != 1 || ei2.Peers[0].AllowedIPs[0] != "172.23.24.10/32" {
+		t.Errorf("entry kept the wrong peer: %v (want the client 172.23.24.10/32)", ei2.Peers[0].AllowedIPs)
 	}
 	// After removal the interface can be deleted again.
 	if err := svc.DeleteInterface(srv1.ID.String(), entry.ID.String()); err != nil {
