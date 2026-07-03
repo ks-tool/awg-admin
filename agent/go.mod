@@ -4,10 +4,6 @@ go 1.26.2
 
 require (
 	github.com/Jipok/wgctrl-go v1.2.0
-	// AmneziaWG 2.0 line (h1–h4 ranges, s1–s4, i1–i5) — matches what
-	// GenerateAmneziaParams emits. Do NOT "upgrade" to v1.0.x: despite the
-	// higher number it's the older 1.x semantics (single-uint32 h, no s3/s4)
-	// and rejects the app's params at the UAPI. Verified by agent/e2e.
 	github.com/amnezia-vpn/amneziawg-go v0.2.19
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/fsnotify/fsnotify v1.10.1
