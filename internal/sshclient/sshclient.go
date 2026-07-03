@@ -246,18 +246,20 @@ func UploadFile(client *ssh.Client, remotePath string, mode os.FileMode, data []
 // remotePath on the host client is connected to, with the given
 // permissions — used to deploy an AgentSource without local caching
 // (models.AgentSource.CacheLocally == false), so the binary's bytes never
-// pass through the machine running awg-admin. Tries curl first, falls
-// back to wget if curl isn't on the remote PATH; downloads to a temporary
-// path first and installs it atomically via `install -D -m` (mirroring
-// UploadFile), so a failed/partial download never leaves a broken file at
-// remotePath.
+// pass through the machine running awg-admin. Tries curl, then wget, taking
+// whichever *works* — not just whichever is on PATH: a curl built without HTTPS
+// support fails an https:// URL with exit 4 (CURLE_NOT_BUILT_IN), so we fall
+// through to wget (which normally does have TLS) rather than giving up.
+// Downloads to a temporary path first and installs it atomically via
+// `install -D -m` (mirroring UploadFile), so a failed/partial download never
+// leaves a broken file at remotePath.
 func DownloadFile(client *ssh.Client, url, remotePath string, mode os.FileMode) error {
 	tmp := remotePath + ".download"
 	cmd := fmt.Sprintf(
-		"if command -v curl >/dev/null 2>&1; then curl -fsSL -o %[1]s %[3]s; "+
-			"elif command -v wget >/dev/null 2>&1; then wget -qO %[1]s %[3]s; "+
-			"else echo 'neither curl nor wget found on PATH' >&2; exit 127; fi && "+
-			"install -D -m %[2]o %[1]s %[4]s && rm -f %[1]s",
+		"if { command -v curl >/dev/null 2>&1 && curl -fsSL -o %[1]s %[3]s; } || "+
+			"{ command -v wget >/dev/null 2>&1 && wget -qO %[1]s %[3]s; }; then "+
+			"install -D -m %[2]o %[1]s %[4]s && rm -f %[1]s; "+
+			"else echo 'download failed: no working curl/wget on the server (a curl without HTTPS support fails an https URL), or the URL is unreachable' >&2; exit 1; fi",
 		shellQuote(tmp), mode.Perm(), shellQuote(url), shellQuote(remotePath),
 	)
 	if _, err := Run(client, cmd); err != nil {
