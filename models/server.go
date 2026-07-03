@@ -63,6 +63,13 @@ type Agent struct {
 	// peer metrics collection (see Service.SetServerMonitoring). Zero value
 	// (false) keeps monitoring enabled, matching the agent's own default.
 	MonitoringDisabled bool `json:"monitoringDisabled,omitempty"`
+
+	// ProfilingEnabled mirrors MonitoringDisabled for the agent's Go runtime
+	// profiling (the /debug/pprof endpoints, see Service.SetServerProfiling).
+	// Off by default; when true the admin has turned the agent's profiling on
+	// and SyncServer re-applies it after a redeploy (the agent starts with
+	// profiling off). Surfaced on the dashboard as an icon by the server name.
+	ProfilingEnabled bool `json:"profilingEnabled,omitempty"`
 }
 
 // AgentStatus is the tri-state health of a server's agent shown on the

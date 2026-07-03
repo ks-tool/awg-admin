@@ -17,7 +17,9 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/ks-tool/awg-admin/internal/service"
 	"github.com/ks-tool/awg-admin/models"
@@ -341,6 +343,64 @@ func (h *Handler) serverSetMonitoring(w http.ResponseWriter, r bunrouter.Request
 	}
 
 	return bunrouter.JSON(w, srv)
+}
+
+func (h *Handler) serverSetProfiling(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err = decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	log.Debug().Fields(fields).Bool("enabled", req.Enabled).Msg("setting server profiling state")
+
+	srv, err := h.svc.SetServerProfiling(sID, req.Enabled)
+	if err != nil {
+		return handleErr(err, fields)
+	}
+
+	return bunrouter.JSON(w, srv)
+}
+
+// serverProfileDownload streams a Go runtime profiling dump (pprof) fetched from
+// the server's agent as a file download. `type` selects the profile kind
+// (default goroutine) and, for the CPU "profile"/"trace" kinds, `seconds` its
+// sampling window. Requires profiling enabled on the agent (else 403 upstream,
+// surfaced as an error).
+func (h *Handler) serverProfileDownload(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+
+	kind := r.URL.Query().Get("type")
+	if kind == "" {
+		kind = "goroutine"
+	}
+	seconds, _ := strconv.Atoi(r.URL.Query().Get("seconds"))
+	fields["profile"] = kind
+	log.Debug().Fields(fields).Int("seconds", seconds).Msg("fetching agent profile")
+
+	dump, err := h.svc.GetServerProfile(sID, kind, seconds)
+	if err != nil {
+		return handleErr(err, fields)
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, dump.Filename))
+	_, err = w.Write(dump.Data)
+	return err
 }
 
 func (h *Handler) serverUnlockSSH(w http.ResponseWriter, r bunrouter.Request) error {

@@ -258,3 +258,39 @@ func (a *App) SaveBackup() (bool, error) {
 	}
 	return true, nil
 }
+
+// SaveServerProfile fetches a Go runtime profiling dump (pprof) from a server's
+// agent and writes it to a user-chosen file via the native save dialog. Returns
+// true if a file was written, false if the dialog was cancelled. Desktop-only
+// (a.ctx is set in startup). Mirrors SaveBackup — the web build downloads the
+// same dump via GET /servers/:id/profile instead.
+func (a *App) SaveServerProfile(serverID, kind string, seconds int) (bool, error) {
+	if a.ctx == nil {
+		return false, nil
+	}
+
+	dump, err := a.GetServerProfile(serverID, kind, seconds)
+	if err != nil {
+		return false, err
+	}
+
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save agent profile",
+		DefaultFilename: dump.Filename,
+		Filters: []runtime.FileFilter{{
+			DisplayName: "pprof profile (*.pprof, *.trace)",
+			Pattern:     "*.pprof;*.trace",
+		}},
+	})
+	if err != nil {
+		return false, err
+	}
+	if path == "" {
+		return false, nil // dialog cancelled
+	}
+
+	if err := os.WriteFile(path, dump.Data, 0o644); err != nil {
+		return false, fmt.Errorf("write profile: %w", err)
+	}
+	return true, nil
+}

@@ -118,6 +118,10 @@ export function GetServerMetricsHistory(arg1) {
   return window['go']['main']['App']['GetServerMetricsHistory'](arg1);
 }
 
+export function GetServerProfile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetServerProfile'](arg1, arg2, arg3);
+}
+
 export function GetUser(arg1) {
   return window['go']['main']['App']['GetUser'](arg1);
 }
@@ -182,6 +186,10 @@ export function SavePeerQRCode(arg1, arg2, arg3) {
   return window['go']['main']['App']['SavePeerQRCode'](arg1, arg2, arg3);
 }
 
+export function SaveServerProfile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveServerProfile'](arg1, arg2, arg3);
+}
+
 export function SelectFile(arg1) {
   return window['go']['main']['App']['SelectFile'](arg1);
 }
@@ -208,6 +216,10 @@ export function SetPeerDisabled(arg1, arg2, arg3) {
 
 export function SetServerMonitoring(arg1, arg2) {
   return window['go']['main']['App']['SetServerMonitoring'](arg1, arg2);
+}
+
+export function SetServerProfiling(arg1, arg2) {
+  return window['go']['main']['App']['SetServerProfiling'](arg1, arg2);
 }
 
 export function StartTunnels() {

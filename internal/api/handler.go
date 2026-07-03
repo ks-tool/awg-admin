@@ -121,6 +121,8 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *sessionStore {
 			gr.GET("/agent-status", h.serverAgentStatus)
 			gr.GET("/host-info", h.serverHostInfo)
 			gr.PATCH("/monitoring", h.serverSetMonitoring)
+			gr.PATCH("/profiling", h.serverSetProfiling)
+			gr.GET("/profile", h.serverProfileDownload)
 			gr.POST("/ssh/unlock", h.serverUnlockSSH)
 
 			gr.WithGroup("/interfaces", func(gr *bunrouter.Group) {

@@ -52,6 +52,7 @@ export namespace models {
 	    addr: string;
 	    tls?: AgentTLS;
 	    monitoringDisabled?: boolean;
+	    profilingEnabled?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Agent(source);
@@ -62,6 +63,7 @@ export namespace models {
 	        this.addr = source["addr"];
 	        this.tls = this.convertValues(source["tls"], AgentTLS);
 	        this.monitoringDisabled = source["monitoringDisabled"];
+	        this.profilingEnabled = source["profilingEnabled"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -917,6 +919,20 @@ export namespace service {
 	        this.PresharedKey = source["PresharedKey"];
 	        this.WithPresharedKey = source["WithPresharedKey"];
 	        this.KeepaliveInterval = source["KeepaliveInterval"];
+	    }
+	}
+	export class ProfileDump {
+	    filename: string;
+	    data: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProfileDump(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.filename = source["filename"];
+	        this.data = source["data"];
 	    }
 	}
 	export class ReconcileReport {

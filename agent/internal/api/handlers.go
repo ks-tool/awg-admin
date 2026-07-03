@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/pprof"
+	"sync/atomic"
 
 	"github.com/ks-tool/awg-admin/agent/internal/metrics"
 	"github.com/ks-tool/awg-admin/agent/internal/service"
@@ -37,6 +39,12 @@ type Handler struct {
 	store     storage.Storage
 	collector *metrics.Collector
 	hostInfo  models.HostInfo
+
+	// profiling gates the net/http/pprof endpoints at runtime. Off by default
+	// (their sampling has overhead and exposes internals), flipped via
+	// PATCH /profiling; not persisted across restarts — the admin re-applies it
+	// through SyncServer, like the metrics on/off state.
+	profiling atomic.Bool
 }
 
 func New(hostInfo models.HostInfo, store storage.Storage, collector *metrics.Collector, mws ...mux.Middleware) http.Handler {
@@ -65,6 +73,19 @@ func New(hostInfo models.HostInfo, store storage.Storage, collector *metrics.Col
 	router.GET("/metrics", h.metrics)
 	router.GET("/metrics/history", h.metricsHistory)
 	router.PATCH("/metrics", h.setMetricsState)
+	router.GET("/profiling", h.getProfilingState)
+	router.PATCH("/profiling", h.setProfilingState)
+
+	// Go runtime profiling (net/http/pprof), all gated by the runtime toggle
+	// above. pprof.Index serves the index and the instantaneous named profiles
+	// (heap, goroutine, allocs, block, mutex, threadcreate); profile (CPU),
+	// trace, cmdline and symbol have their own handlers. Registered method-less
+	// so a browser and `go tool pprof` (which uses GET) both reach them.
+	router.HandleFunc("/debug/pprof/", h.guardProfiling(pprof.Index))
+	router.HandleFunc("/debug/pprof/cmdline", h.guardProfiling(pprof.Cmdline))
+	router.HandleFunc("/debug/pprof/profile", h.guardProfiling(pprof.Profile))
+	router.HandleFunc("/debug/pprof/symbol", h.guardProfiling(pprof.Symbol))
+	router.HandleFunc("/debug/pprof/trace", h.guardProfiling(pprof.Trace))
 
 	return router
 }
@@ -263,6 +284,48 @@ func (h *Handler) setMetricsState(w http.ResponseWriter, r *http.Request) {
 	h.collector.SetEnabled(req.Enabled)
 	log.Debug().Fields(fields).Bool("enabled", req.Enabled).Msg("set metrics collection state")
 	encode(w, metricsStateRequest{Enabled: h.collector.Enabled()})
+}
+
+type profilingStateRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// getProfilingState reports whether the pprof endpoints are currently live.
+func (h *Handler) getProfilingState(w http.ResponseWriter, _ *http.Request) {
+	encode(w, profilingStateRequest{Enabled: h.profiling.Load()})
+}
+
+// setProfilingState turns the agent's Go runtime profiling (the /debug/pprof/*
+// endpoints) on or off at runtime. Off by default; not persisted across
+// restarts (the admin re-applies it via SyncServer). Useful for diagnosing a
+// misbehaving agent (goroutine/heap/CPU dumps) without leaving profiling — and
+// its overhead + exposure — always on.
+func (h *Handler) setProfilingState(w http.ResponseWriter, r *http.Request) {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	var req profilingStateRequest
+	if err := decode(r, &req); err != nil {
+		log.Debug().Fields(fields).Err(err).Msg("decoding profiling state failed")
+		badRequest(w, err)
+		return
+	}
+
+	h.profiling.Store(req.Enabled)
+	log.Info().Fields(fields).Bool("enabled", req.Enabled).Msg("set profiling state")
+	encode(w, profilingStateRequest{Enabled: h.profiling.Load()})
+}
+
+// guardProfiling wraps a net/http/pprof handler so it only serves while
+// profiling is enabled; otherwise 403. Keeps the profiling endpoints (and their
+// sampling overhead / internal exposure) opt-in.
+func (h *Handler) guardProfiling(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !h.profiling.Load() {
+			http.Error(w, "profiling is disabled", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	}
 }
 
 // ─────────────────────────────── helpers ───────────────────────────────────

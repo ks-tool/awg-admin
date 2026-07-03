@@ -26,6 +26,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	agentmodels "github.com/ks-tool/awg-admin/agent/models"
 	"github.com/ks-tool/awg-admin/internal/agentclient"
@@ -80,13 +81,32 @@ func (s *Service) agentClientFor(srv *models.Server) (*agentclient.Client, error
 // (the context-deadline-exceeded case below), where a single shared context
 // would leave the retry no time to run.
 func (s *Service) callAgent(srv *models.Server, op func(context.Context, *agentclient.Client) error) error {
+	return s.callAgentTimeout(srv, pushTimeout, true, op)
+}
+
+// callAgentTimeout is callAgent with a caller-chosen per-attempt timeout, for
+// the rare op that legitimately runs longer than the default pushTimeout — a
+// CPU/trace profile blocks for its sampling window (see GetServerProfile). Same
+// transport setup and single tunnel-reopen retry; each attempt gets its own
+// fresh timeout via callOnce.
+//
+// retryOnTimeout controls whether a context.DeadlineExceeded counts as a dead
+// tunnel worth reopening-and-retrying. True for the fast default requests
+// (callAgent), where a timeout almost always means a silently-dead socket. It
+// MUST be false for a deliberately-long op like a timed profile: there a
+// deadline means the profile genuinely ran past its budget, not a dead tunnel,
+// and retrying would re-run the whole sampling (double overhead, and for a CPU
+// profile a "cpu profiling already in use" error from the still-unwinding first
+// attempt). The hard drop signals (EOF/ErrClosed/channel-open) always retry.
+func (s *Service) callAgentTimeout(srv *models.Server, timeout time.Duration, retryOnTimeout bool, op func(context.Context, *agentclient.Client) error) error {
 	client, err := s.agentClientFor(srv)
 	if err != nil {
 		return err
 	}
 
-	err = callOnce(client, op)
-	if err == nil || !srv.Agent.TLS.IsZero() || !tunnelDropped(err) {
+	err = callOnce(client, timeout, op)
+	dropped := tunnelDroppedHard(err) || (retryOnTimeout && errors.Is(err, context.DeadlineExceeded))
+	if err == nil || !srv.Agent.TLS.IsZero() || !dropped {
 		return err
 	}
 
@@ -101,12 +121,12 @@ func (s *Service) callAgent(srv *models.Server, op func(context.Context, *agentc
 	if reErr != nil {
 		return err
 	}
-	return callOnce(client, op)
+	return callOnce(client, timeout, op)
 }
 
-// callOnce runs op against client under a fresh pushTimeout context.
-func callOnce(client *agentclient.Client, op func(context.Context, *agentclient.Client) error) error {
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
+// callOnce runs op against client under a fresh timeout context.
+func callOnce(client *agentclient.Client, timeout time.Duration, op func(context.Context, *agentclient.Client) error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return op(ctx, client)
 }
@@ -126,6 +146,16 @@ func callOnce(client *agentclient.Client, op func(context.Context, *agentclient.
 // every op routed through callAgent is a fast, small request. Reopening the
 // tunnel and retrying recovers it instead of surfacing a bare timeout.
 func tunnelDropped(err error) bool {
+	return tunnelDroppedHard(err) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// tunnelDroppedHard is the subset of tunnelDropped that unambiguously means the
+// connection is gone — an EOF/ErrClosed from the SSH mux or a channel-open torn
+// down mid-flight — as opposed to a mere deadline. Callers running a
+// deliberately-long op (a timed profile) use this instead of tunnelDropped so a
+// legitimate overrun isn't mistaken for a dead tunnel and re-run (see
+// callAgentTimeout's retryOnTimeout).
+func tunnelDroppedHard(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -140,8 +170,7 @@ func tunnelDropped(err error) bool {
 	}
 	return errors.Is(err, io.EOF) ||
 		errors.Is(err, io.ErrUnexpectedEOF) ||
-		errors.Is(err, net.ErrClosed) ||
-		errors.Is(err, context.DeadlineExceeded)
+		errors.Is(err, net.ErrClosed)
 }
 
 // pingAgent confirms srv's agent HTTP daemon actually answers, used by

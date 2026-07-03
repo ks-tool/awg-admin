@@ -14,7 +14,7 @@
   limitations under the License.
  */
 
-import {get, patch, post, put, remove} from './api';
+import {API_BASE_URL, get, patch, post, put, remove} from './api';
 import {getCurrentApiMode} from './apiMode';
 import {bindingsClient} from './bindingsClient';
 import {throwIfPassphraseRequired} from './sshErrors';
@@ -393,6 +393,81 @@ export async function setServerMonitoring(serverId: string, enabled: boolean): P
         return null;
     }
     return data;
+}
+
+/**
+ * Enable/disable the agent's Go runtime profiling (/debug/pprof) for a server,
+ * and persist the choice so it's re-applied by syncServer (e.g. after a
+ * redeploy). Off by default. Returns the updated server, or null on failure.
+ */
+export async function setServerProfiling(serverId: string, enabled: boolean): Promise<Server | null> {
+    const client = getClient();
+
+    if (client) {
+        const {data, error} = await client.setServerProfiling(serverId, enabled);
+        if (error) {
+            console.error(`Failed to set profiling state for ${serverId} (bindings):`, error);
+            return null;
+        }
+        return data as unknown as Server;
+    }
+
+    const {data, error} = await patch<Server, {enabled: boolean}>(`/servers/${serverId}/profiling`, {enabled});
+    if (error) {
+        console.error(`Failed to set profiling state for ${serverId}:`, error);
+        return null;
+    }
+    return data;
+}
+
+// filenameFromDisposition pulls the suggested filename out of a
+// Content-Disposition header (best-effort; null if absent/unreadable — a
+// cross-origin dev response may not expose the header). The web download path
+// falls back to a client-built name when this returns null.
+function filenameFromDisposition(header: string | null): string | null {
+    if (!header) return null;
+    const m = /filename="?([^"]+)"?/.exec(header);
+    return m ? m[1] : null;
+}
+
+/**
+ * Fetch a Go runtime profiling dump (pprof) from a server's agent and save it.
+ * Desktop opens a native save dialog in Go; web (server/browser) fetches
+ * GET /servers/:id/profile and triggers a browser download. `kind` selects the
+ * profile (goroutine/heap/allocs/profile/…); `seconds` is the sampling window
+ * for the CPU "profile"/"trace" kinds. Requires profiling enabled on the agent.
+ * Throws the backend message on failure so the caller can surface it (e.g.
+ * "profiling is disabled"). Returns true on success, false if cancelled.
+ */
+export async function saveServerProfile(serverId: string, kind: string, seconds = 0): Promise<boolean> {
+    if (getCurrentApiMode() === 'bindings') {
+        const {data, error} = await bindingsClient.saveServerProfile(serverId, kind, seconds);
+        if (error) {
+            throw new Error(String(error));
+        }
+        return data;
+    }
+
+    const qs = new URLSearchParams({type: kind});
+    if (seconds > 0) qs.set('seconds', String(seconds));
+
+    const res = await fetch(`${API_BASE_URL}/servers/${serverId}/profile?${qs.toString()}`, {credentials: 'include'});
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(text || `HTTP ${res.status}`);
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filenameFromDisposition(res.headers.get('Content-Disposition'))
+        || `agent-${kind}.${kind === 'trace' ? 'trace' : 'pprof'}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return true;
 }
 
 /**

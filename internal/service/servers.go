@@ -196,6 +196,16 @@ func (s *Service) UpdateServer(id string, in ServerInput) (*models.Server, error
 		return nil, err
 	}
 
+	// MonitoringDisabled and ProfilingEnabled are agent *desired-state* flags
+	// owned exclusively by the dedicated toggles (SetServerMonitoring /
+	// SetServerProfiling), never the edit form — which doesn't round-trip them,
+	// so in.Agent always carries their zero value. Preserve the stored values
+	// through this wholesale Agent replace, or an unrelated edit would silently
+	// re-enable monitoring / turn profiling back off (and stop SyncServer from
+	// re-applying them).
+	in.Agent.MonitoringDisabled = srv.Agent.MonitoringDisabled
+	in.Agent.ProfilingEnabled = srv.Agent.ProfilingEnabled
+
 	srv.Name = in.Name
 	srv.Info = in.Info
 	srv.SSH = in.SSH

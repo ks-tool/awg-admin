@@ -34,11 +34,15 @@ interface Props {
     children: React.ReactNode
     /** 'md' (default) is the usual form-sized modal; 'lg' widens it for content like charts. */
     size?: 'md' | 'lg'
+    /** When false, the full-screen backdrop is transparent. Use it on a modal that
+     *  is currently stacking a nested Modal (which brings its own bg-black/50),
+     *  so the two dim layers don't compound into a darker ~75% overlay. */
+    dimmed?: boolean
 }
 
-export function Modal({title, onClose, loading, children, size = 'md'}: Props) {
+export function Modal({title, onClose, loading, children, size = 'md', dimmed = true}: Props) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${dimmed ? 'bg-black/50' : ''}`}>
             <div
                 className={`flex max-h-[90vh] w-full flex-col rounded-xl border border-border bg-card p-6 shadow-2xl dark:border-white/5 dark:bg-zinc-900 ${size === 'lg' ? 'max-w-4xl' : 'max-w-lg'}`}>
                 <div className="flex items-center justify-between mb-4 shrink-0">

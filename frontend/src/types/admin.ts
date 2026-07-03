@@ -152,6 +152,14 @@ export interface Agent {
    * (false) keeps monitoring enabled, matching the agent's own default.
    */
   monitoringDisabled?: boolean;
+  /**
+   * ProfilingEnabled mirrors MonitoringDisabled for the agent's Go runtime
+   * profiling (the /debug/pprof endpoints, see Service.SetServerProfiling).
+   * Off by default; when true the admin has turned the agent's profiling on
+   * and SyncServer re-applies it after a redeploy (the agent starts with
+   * profiling off). Surfaced on the dashboard as an icon by the server name.
+   */
+  profilingEnabled?: boolean;
 }
 /**
  * AgentStatus is the tri-state health of a server's agent shown on the

@@ -61,6 +61,8 @@ export function GetServerMetrics(arg1:string):Promise<models.MetricsSnapshot>;
 
 export function GetServerMetricsHistory(arg1:string):Promise<models.SystemHistory>;
 
+export function GetServerProfile(arg1:string,arg2:string,arg3:number):Promise<service.ProfileDump>;
+
 export function GetUser(arg1:string):Promise<models.User>;
 
 export function ImportInterface(arg1:string,arg2:string):Promise<models.Interface>;
@@ -93,6 +95,8 @@ export function SaveLogs():Promise<boolean>;
 
 export function SavePeerQRCode(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
+export function SaveServerProfile(arg1:string,arg2:string,arg3:number):Promise<boolean>;
+
 export function SelectFile(arg1:string):Promise<string>;
 
 export function ServerAgentStatus(arg1:string):Promise<models.AgentStatus>;
@@ -106,6 +110,8 @@ export function SetDebugLogging(arg1:boolean):Promise<void>;
 export function SetPeerDisabled(arg1:string,arg2:string,arg3:boolean):Promise<models.User>;
 
 export function SetServerMonitoring(arg1:string,arg2:boolean):Promise<models.Server>;
+
+export function SetServerProfiling(arg1:string,arg2:boolean):Promise<models.Server>;
 
 export function StartTunnels():Promise<void>;
 

@@ -106,6 +106,7 @@ func (s *Service) SyncServer(serverID string) error {
 	}
 
 	s.syncMonitoringState(sID)
+	s.syncProfilingState(sID)
 	return nil
 }
 
@@ -127,6 +128,27 @@ func (s *Service) syncMonitoringState(serverID uuid.UUID) {
 		return c.SetMetricsEnabled(ctx, false)
 	}); err != nil {
 		log.Warn().Err(err).Str("server_id", serverID.String()).Msg("failed to re-apply monitoring state")
+	}
+}
+
+// syncProfilingState re-applies the stored profiling on/off preference to the
+// agent. Best-effort like syncMonitoringState: a freshly (re)deployed agent
+// starts with profiling off, so this only matters when it was explicitly turned
+// on and needs to be turned back on again after a redeploy/reconnect.
+func (s *Service) syncProfilingState(serverID uuid.UUID) {
+	srv, err := s.store.Servers().Get(serverID)
+	if err != nil {
+		log.Error().Err(err).Str("server_id", serverID.String()).Msg("sync profiling state: failed to load server")
+		return
+	}
+	if !srv.Agent.ProfilingEnabled {
+		return
+	}
+
+	if err := s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		return c.SetProfilingEnabled(ctx, true)
+	}); err != nil {
+		log.Warn().Err(err).Str("server_id", serverID.String()).Msg("failed to re-apply profiling state")
 	}
 }
 

@@ -16,7 +16,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {LayoutDashboard, Server, Network, Users, Waypoints, RefreshCw} from 'lucide-react'
+import {LayoutDashboard, Server, Network, Users, Waypoints, RefreshCw, Activity, Settings2} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { StatCard } from '@/components/common/StatCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
@@ -24,6 +24,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { getServerMetrics, getServerAgentStatus, getServerHostInfo, type AgentStatus } from '@/services/servers'
 import { ServerMetricsModal } from '@/components/server/ServerMetricsModal'
 import { HostInfoBadges } from '@/components/server/HostInfoBadges'
+import { AgentModal } from '@/components/server/AgentModal'
 import { b64ToHex, isPeerConnected } from '@/lib/peers'
 import type { HostInfo, MetricsSnapshot } from '@/types'
 import {useAutoRefresh} from "@/hooks/useAutoRefresh.tsx";
@@ -35,6 +36,7 @@ export default function Dashboard() {
     const [agentStatusByServer, setAgentStatusByServer] = useState<Record<string, AgentStatus | null>>({})
     const [hostInfoByServer, setHostInfoByServer] = useState<Record<string, HostInfo | null>>({})
     const [metricsModalServerId, setMetricsModalServerId] = useState<string | null>(null)
+    const [agentModalServerId, setAgentModalServerId] = useState<string | null>(null)
 
     // Per-server peer counts (active + total). Peers live under users, each
     // tagged with its interface id — so a peer belongs to the server that owns
@@ -257,7 +259,21 @@ export default function Dashboard() {
                                             className="cursor-pointer border-b border-white/3 last:border-0 hover:bg-white/2 transition-colors"
                                         >
                                             <td className="px-5 py-3">
-                                                <div className="font-medium dark:text-zinc-200">{server.name}</div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium dark:text-zinc-200">{server.name}</span>
+                                                    {server.agent?.profilingEnabled && (
+                                                        <span title={t('servers.agentModal.profilingActive')} className="text-amber-500 dark:text-amber-400">
+                                                            <Activity size={14}/>
+                                                        </span>
+                                                    )}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setAgentModalServerId(server.id); }}
+                                                        className="p-1 text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300 rounded transition-colors"
+                                                        title={t('servers.agentModal.open')}
+                                                    >
+                                                        <Settings2 size={14}/>
+                                                    </button>
+                                                </div>
                                             </td>
                                             <td className="px-5 py-3">
                                                 <div className="text-xs dark:text-zinc-400 font-mono">{server.ssh.host}</div>
@@ -329,6 +345,11 @@ export default function Dashboard() {
                     onClose={() => setMetricsModalServerId(null)}
                 />
             )}
+
+            {agentModalServerId && (() => {
+                const server = servers.find((s) => s.id === agentModalServerId)
+                return server ? <AgentModal server={server} onClose={() => setAgentModalServerId(null)}/> : null
+            })()}
         </div>
     )
 }

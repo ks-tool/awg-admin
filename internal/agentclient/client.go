@@ -260,6 +260,79 @@ func (c *Client) SetMetricsEnabled(ctx context.Context, enabled bool) error {
 	return nil
 }
 
+// SetProfilingEnabled turns the agent's Go runtime profiling (the /debug/pprof
+// endpoints) on/off at runtime (PATCH /profiling). Like metrics, not persisted
+// by the agent across restarts — re-applied via SyncServer.
+func (c *Client) SetProfilingEnabled(ctx context.Context, enabled bool) error {
+	body, err := json.Marshal(map[string]bool{"enabled": enabled})
+	if err != nil {
+		return fmt.Errorf("marshal profiling state: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.baseURL+"/profiling", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	markIdempotent(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("PATCH /profiling: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return responseError(resp, "")
+	}
+	return nil
+}
+
+// maxProfileBytes caps how much of a profiling dump the admin will read, so a
+// runaway/hostile response can't exhaust its memory. Real pprof dumps are far
+// smaller (KBs to a few MB).
+const maxProfileBytes = 128 << 20 // 128 MiB
+
+// Profile fetches a Go runtime profiling dump from the agent
+// (GET /debug/pprof/<name>). For the CPU "profile" and "trace" kinds, seconds
+// sets the sampling window (appended as ?seconds=N); it's ignored for the
+// instantaneous kinds (heap/goroutine/allocs/…). The agent answers 403 unless
+// profiling is enabled (SetProfilingEnabled). Returns the raw dump bytes.
+func (c *Client) Profile(ctx context.Context, name string, seconds int) ([]byte, error) {
+	u := c.baseURL + "/debug/pprof/" + name
+	if seconds > 0 {
+		u += fmt.Sprintf("?seconds=%d", seconds)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GET /debug/pprof/%s: %w", name, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, responseError(resp, "")
+	}
+
+	// Read one byte past the cap so hitting it is distinguishable from a genuine
+	// EOF: io.ReadAll(io.LimitReader(body, N)) returns exactly N bytes with a nil
+	// error when the body is larger, which would silently hand back a truncated —
+	// and therefore corrupt, unparseable — dump. Error out instead.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxProfileBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read profile: %w", err)
+	}
+	if int64(len(data)) > maxProfileBytes {
+		return nil, fmt.Errorf("profile dump exceeds %d bytes; refusing to return a truncated dump", maxProfileBytes)
+	}
+	return data, nil
+}
+
 // markIdempotent tells net/http.Transport it's safe to silently retry req
 // on a fresh connection if the pooled (often SSH-tunnelled, see
 // internal/sshclient.TunnelClient) connection it picked turned out to

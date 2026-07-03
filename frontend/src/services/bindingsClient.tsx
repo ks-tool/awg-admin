@@ -321,6 +321,32 @@ export const bindingsClient = {
         }
     },
 
+    async setServerProfiling(id: string, enabled: boolean): Promise<ApiResponse<models.Server>> {
+        try {
+            const data = await AppBindings.SetServerProfiling(id, enabled);
+            return { data };
+        } catch (error) {
+            console.error('Bindings SetServerProfiling failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
+    async saveServerProfile(id: string, kind: string, seconds: number): Promise<ApiResponse<boolean>> {
+        try {
+            const data = await AppBindings.SaveServerProfile(id, kind, seconds);
+            return { data };
+        } catch (error) {
+            console.error('Bindings SaveServerProfile failed:', error);
+            return {
+                data: false,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async unlockServerSSH(id: string, passphrase: string, applyToAll: boolean): Promise<ApiResponse<void>> {
         try {
             await AppBindings.UnlockServerSSH(id, passphrase, applyToAll);
