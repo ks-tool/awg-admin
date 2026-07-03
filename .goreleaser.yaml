@@ -1,29 +1,22 @@
-# GoReleaser config for awg-admin's pure-Go binaries and their Docker images:
-#   - awg-admin: the standalone web server (cmd/awg-admin.go), embeds the
-#     built frontend (see the "before.hooks" below) — linux/darwin/windows,
-#     amd64/arm64.
-#   - awg-agent: the per-server daemon (agent/cmd/awg-agent.go), kernel/
-#     amneziawg-dkms backend — linux only, amd64 and arm64.
-#   - awg-agent-userspace: the same daemon built to drive a userspace
-#     amneziawg-go process per interface (agent/cmd/awg-agent-userspace.go) —
-#     linux only, amd64 and arm64.
+# GoReleaser config for the awg-admin RELEASE — the root module's admin app.
+# Triggered by a `v*` tag (see .github/workflows/release.yml).
 #
-# Docker images (linux amd64+arm64, pushed to GHCR) are built here via the
-# `dockers_v2` pipe from prebuilt binaries:
-#   - {IMAGE_ADMIN}: the standalone server (frontend already embedded in the
-#     awg-admin binary, so the image just copies it).
-#   - {IMAGE_AGENT_USERSPACE}: the userspace agent, bundling amneziawg-go +
-#     iproute2/iptables (see docker/Dockerfile.agent).
-# IMAGE_ADMIN / IMAGE_AGENT_USERSPACE are set by the release workflow (the
-# lowercased GHCR image names); the amd64 build runs on the CI runner and the
-# arm64 one under buildx+QEMU (`use: buildx`).
+# This is a MONOREPO: the per-server agent is released separately, on `agent/v*`
+# tags, by .goreleaser.agent.yaml + .github/workflows/release-agent.yml. This
+# config therefore builds ONLY the admin:
+#   - awg-admin: the standalone web server (cmd/awg-admin.go), embeds the built
+#     frontend (see the "before.hooks") — linux/darwin/windows, amd64/arm64.
+#   - {IMAGE_ADMIN}: its multi-arch Docker image (linux amd64+arm64, GHCR), the
+#     frontend already embedded so the image just copies the binary
+#     (docker/Dockerfile.admin). IMAGE_ADMIN is set by the release workflow (the
+#     lowercased GHCR image name); arm64 is built under buildx+QEMU.
 #
 # Deliberately NOT handled here:
-#   - The Wails desktop app (Windows/macOS/Linux): needs the `wails` CLI,
-#     platform-specific packaging (NSIS installer, .dmg) and to run on each
-#     target OS's own runner — handled as separate jobs in
-#     .github/workflows/release.yml, which upload their artifacts to the
-#     same GitHub release this config creates.
+#   - awg-agent / awg-agent-userspace: released on `agent/v*` (see above).
+#   - The Wails desktop app (Windows/macOS/Linux): needs the `wails` CLI and to
+#     run on each target OS's own runner — separate jobs in release.yml that
+#     upload their artifacts to the same GitHub release this config creates
+#     (hence release.mode: keep-existing).
 version: 2
 
 project_name: awg-admin
@@ -52,40 +45,6 @@ builds:
     ldflags:
       - -s -w -X main.version={{ .Version }}
 
-  - id: agent
-    dir: agent
-    main: ./cmd/awg-agent.go
-    binary: awg-agent
-    env:
-      - CGO_ENABLED=0
-      - GOEXPERIMENT=jsonv2
-    goos:
-      - linux
-    goarch:
-      - amd64
-      - arm64
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w -X main.version={{ .Version }}
-
-  - id: agent-userspace
-    dir: agent
-    main: ./cmd/awg-agent-userspace.go
-    binary: awg-agent-userspace
-    env:
-      - CGO_ENABLED=0
-      - GOEXPERIMENT=jsonv2
-    goos:
-      - linux
-    goarch:
-      - amd64
-      - arm64
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w -X main.version={{ .Version }}
-
 archives:
   - id: admin-archive
     ids: [admin]
@@ -96,43 +55,16 @@ archives:
       - goos: windows
         formats: [zip]
 
-  - id: agent-archive
-    ids: [agent]
-    name_template: >-
-      awg-agent_{{ .Version }}_{{ .Os }}_{{ .Arch }}
-    formats: [tar.gz]
-
-  - id: agent-userspace-archive
-    ids: [agent-userspace]
-    name_template: >-
-      awg-agent-userspace_{{ .Version }}_{{ .Os }}_{{ .Arch }}
-    formats: [tar.gz]
-
-# Multi-arch images from prebuilt binaries (the modern dockers_v2 pipe: one
+# Multi-arch image from the prebuilt binary (the modern dockers_v2 pipe: one
 # entry builds every platform and its manifest in a single buildx pass). The
-# Dockerfiles COPY the binary GoReleaser drops into the build context; the
-# userspace one additionally compiles amneziawg-go in a builder stage. arm64
-# is built under buildx+QEMU.
+# Dockerfile COPYs the binary GoReleaser drops into the build context. arm64 is
+# built under buildx+QEMU.
 dockers_v2:
   - id: admin
     ids: [admin]
     dockerfile: docker/Dockerfile.admin
     images:
       - "{{ .Env.IMAGE_ADMIN }}"
-    tags:
-      - "{{ .Version }}"
-      - "latest"
-    platforms:
-      - linux/amd64
-      - linux/arm64
-    labels:
-      org.opencontainers.image.version: "{{ .Version }}"
-
-  - id: agent-userspace
-    ids: [agent-userspace]
-    dockerfile: docker/Dockerfile.agent
-    images:
-      - "{{ .Env.IMAGE_AGENT_USERSPACE }}"
     tags:
       - "{{ .Version }}"
       - "latest"

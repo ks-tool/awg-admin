@@ -1,0 +1,111 @@
+# GoReleaser config for the awg-agent RELEASE — the per-server daemon.
+# Triggered by an `agent/v*` tag (see .github/workflows/release-agent.yml), run
+# with `--config .goreleaser.agent.yaml --skip=validate`.
+#
+# MONOREPO note: the admin app is released separately on `v*` tags
+# (.goreleaser.yaml). GoReleaser's native monorepo tag-prefix stripping is a Pro
+# feature, so on the OSS build we do it by hand: the tag `agent/v1.2.3` is NOT
+# valid semver (it has the `agent/` prefix), so `--skip=validate` bypasses the
+# semver check and the release workflow exports `AGENT_VERSION=1.2.3` (the tag
+# with `agent/v` stripped). Every version template below therefore reads
+# `{{ .Env.AGENT_VERSION }}` — NOT `{{ .Version }}`, which GoReleaser leaves as
+# the raw `agent/v1.2.3` and would put a `/` into archive/image names. The GitHub
+# Release itself is still created on the real `agent/v1.2.3` tag (GoReleaser's
+# release target is the git ref, unaffected by the templating).
+#
+# Builds two Linux-only binaries and one Docker image:
+#   - awg-agent: kernel/amneziawg-dkms backend (agent/cmd/awg-agent.go).
+#   - awg-agent-userspace: userspace/amneziawg-go backend
+#     (agent/cmd/awg-agent-userspace.go).
+#   - {IMAGE_AGENT_USERSPACE}: the userspace agent's multi-arch image (linux
+#     amd64+arm64, GHCR), bundling amneziawg-go + iproute2/iptables
+#     (docker/Dockerfile.agent). The kernel agent is systemd-only, no image.
+# IMAGE_AGENT_USERSPACE is set by the release workflow; arm64 is built under
+# buildx+QEMU. The build `dir: agent` runs `go build` inside the agent module
+# (its own go.mod).
+version: 2
+
+project_name: awg-agent
+
+builds:
+  - id: agent
+    dir: agent
+    main: ./cmd/awg-agent.go
+    binary: awg-agent
+    env:
+      - CGO_ENABLED=0
+      - GOEXPERIMENT=jsonv2
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Env.AGENT_VERSION }}
+
+  - id: agent-userspace
+    dir: agent
+    main: ./cmd/awg-agent-userspace.go
+    binary: awg-agent-userspace
+    env:
+      - CGO_ENABLED=0
+      - GOEXPERIMENT=jsonv2
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Env.AGENT_VERSION }}
+
+archives:
+  - id: agent-archive
+    ids: [agent]
+    name_template: >-
+      awg-agent_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+
+  - id: agent-userspace-archive
+    ids: [agent-userspace]
+    name_template: >-
+      awg-agent-userspace_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+
+# Multi-arch userspace-agent image from the prebuilt binary; the Dockerfile
+# additionally compiles amneziawg-go in a builder stage. arm64 under buildx+QEMU.
+dockers_v2:
+  - id: agent-userspace
+    ids: [agent-userspace]
+    dockerfile: docker/Dockerfile.agent
+    images:
+      - "{{ .Env.IMAGE_AGENT_USERSPACE }}"
+    tags:
+      - "{{ .Env.AGENT_VERSION }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.version: "{{ .Env.AGENT_VERSION }}"
+
+# name_template must not use {{ .Version }} (the raw prefixed tag has a `/`).
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+release:
+  # Auto-detect the repo from `origin`; the release is created on the real
+  # `agent/v*` tag. Unlike the admin release, nothing runs after GoReleaser here
+  # (no desktop jobs), so the default publish mode is fine.
+  name_template: "awg-agent {{ .Env.AGENT_VERSION }}"

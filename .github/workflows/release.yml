@@ -1,15 +1,17 @@
 name: release
 
-# Triggered by pushing a version tag, e.g.:
+# Releases the ADMIN app. Triggered by pushing an admin version tag, e.g.:
 #   git tag v1.2.3 && git push origin v1.2.3
+#
+# This is a monorepo: the per-server agent is released separately on `agent/v*`
+# tags (see release-agent.yml). The `v*` and `agent/v*` globs are disjoint —
+# GitHub Actions' `*` doesn't cross `/`, so `v*` never matches `agent/v1.2.3`.
 #
 # Produces, all attached to the same GitHub Release for the tag:
 #   - awg-admin (standalone web server): linux/darwin/windows, amd64/arm64
 #     archives — built by GoReleaser (see .goreleaser.yaml).
-#   - awg-agent (kernel/amneziawg-dkms) and awg-agent-userspace
-#     (userspace/amneziawg-go): linux only, amd64/arm64 — built by GoReleaser.
-#   - multi-arch (amd64+arm64) Docker images pushed to GHCR — the standalone
-#     server and the userspace agent — also built by GoReleaser.
+#   - the awg-admin multi-arch (amd64+arm64) Docker image pushed to GHCR — also
+#     built by GoReleaser.
 #   - the Wails desktop app for Windows (.exe + NSIS installer), macOS
 #     (.app + .dmg, universal binary) and Linux (binary).
 on:
@@ -26,10 +28,10 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------
-  # Everything GoReleaser owns: awg-admin + awg-agent + awg-agent-userspace
-  # binaries, archives, checksums, changelog, the GitHub Release, and the
-  # multi-arch Docker images (standalone server + userspace agent) pushed
-  # to GHCR (see the dockers/docker_manifests pipes in .goreleaser.yaml).
+  # Everything GoReleaser owns for the admin: the awg-admin binaries,
+  # archives, checksums, changelog, the GitHub Release, and the multi-arch
+  # awg-admin Docker image pushed to GHCR (see the dockers_v2 pipe in
+  # .goreleaser.yaml).
   # ---------------------------------------------------------------------
   goreleaser:
     runs-on: ubuntu-latest
@@ -48,12 +50,11 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # Docker image names must be lowercase; GHCR is keyed off the repo owner.
-      - name: Compute image names (lowercase)
+      # Docker image name must be lowercase; GHCR is keyed off the repo owner.
+      - name: Compute image name (lowercase)
         run: |
           owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
           echo "IMAGE_ADMIN=ghcr.io/$owner/awg-admin" >> "$GITHUB_ENV"
-          echo "IMAGE_AGENT_USERSPACE=ghcr.io/$owner/awg-agent-userspace" >> "$GITHUB_ENV"
 
       # arm64 images are built under QEMU emulation via buildx (use: buildx).
       - uses: docker/setup-qemu-action@v3
