@@ -43,7 +43,10 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{ .Env.AGENT_VERSION }}
+      # main.version keeps the `v` prefix (v1.2.3) — it's the human-facing build
+      # version the agent reports via GET /info and the admin shows in the agent
+      # modal. AGENT_VERSION itself stays bare (1.2.3) for archive/image names.
+      - -s -w -X main.version=v{{ .Env.AGENT_VERSION }}
 
   - id: agent-userspace
     dir: agent
@@ -60,7 +63,10 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{ .Env.AGENT_VERSION }}
+      # main.version keeps the `v` prefix (v1.2.3) — it's the human-facing build
+      # version the agent reports via GET /info and the admin shows in the agent
+      # modal. AGENT_VERSION itself stays bare (1.2.3) for archive/image names.
+      - -s -w -X main.version=v{{ .Env.AGENT_VERSION }}
 
 # Publish the agents as RAW binaries (formats: [binary]), not tar.gz archives:
 # the admin deploys an agent by downloading its release-asset URL directly
