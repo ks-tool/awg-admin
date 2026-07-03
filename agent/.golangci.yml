@@ -1,0 +1,20 @@
+# golangci-lint config for the agent module (agent/go.mod).
+#
+# The lint workflow (.github/workflows/lint.yml) runs golangci-lint once per Go
+# module with `working-directory` set, and golangci-lint reads the config from
+# the working directory — so this file applies only to the agent module. The
+# root module has no config and uses golangci-lint's defaults.
+version: "2"
+
+linters:
+  exclusions:
+    paths:
+      # agent/cmd/ holds several `package main` files — awg-agent.go and
+      # awg-agent-userspace.go (both //go:build linux) plus dump.go — so the
+      # directory does not compile as a single package: on Linux all the mains
+      # are built together and golangci-lint's typecheck reports
+      # "main/version redeclared in this block". Each binary is compiled from
+      # its own file (see agent/Makefile: `build` / `build-userspace`), never
+      # the whole package, so linting the directory as one package is
+      # meaningless. Exclude it.
+      - (^|/)cmd/
