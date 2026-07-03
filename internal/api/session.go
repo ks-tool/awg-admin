@@ -29,7 +29,7 @@ const (
 	sessionTTL        = 7 * 24 * time.Hour
 )
 
-// sessionStore is an in-memory set of valid session tokens for the
+// SessionStore is an in-memory set of valid session tokens for the
 // standalone web server's single admin account. Tokens are opaque random
 // values rather than signed/stateless JWTs — there's exactly one account
 // and one process holding the store, so there's nothing distributed to
@@ -37,16 +37,16 @@ const (
 // survive a server restart, matching how the SSH passphrase cache
 // (internal/sshclient.Manager) already treats in-memory state as scoped to
 // the process's lifetime ("for the duration of the session").
-type sessionStore struct {
+type SessionStore struct {
 	mu       sync.Mutex
 	sessions map[string]time.Time
 }
 
-func newSessionStore() *sessionStore {
-	return &sessionStore{sessions: make(map[string]time.Time)}
+func newSessionStore() *SessionStore {
+	return &SessionStore{sessions: make(map[string]time.Time)}
 }
 
-func (s *sessionStore) create() string {
+func (s *SessionStore) create() string {
 	token := randomToken()
 	s.mu.Lock()
 	s.sessions[token] = time.Now().Add(sessionTTL)
@@ -54,7 +54,7 @@ func (s *sessionStore) create() string {
 	return token
 }
 
-func (s *sessionStore) valid(token string) bool {
+func (s *SessionStore) valid(token string) bool {
 	if len(token) == 0 {
 		return false
 	}
@@ -75,7 +75,7 @@ func (s *sessionStore) valid(token string) bool {
 // used by BasicAuthMiddleware so an admin who's already logged in via the
 // normal session flow is never *additionally* challenged for HTTP Basic
 // Auth credentials (see that middleware's doc comment).
-func (s *sessionStore) validRequest(r *http.Request) bool {
+func (s *SessionStore) validRequest(r *http.Request) bool {
 	c, err := r.Cookie(sessionCookieName)
 	if err != nil {
 		return false
@@ -83,7 +83,7 @@ func (s *sessionStore) validRequest(r *http.Request) bool {
 	return s.valid(c.Value)
 }
 
-func (s *sessionStore) revoke(token string) {
+func (s *SessionStore) revoke(token string) {
 	s.mu.Lock()
 	delete(s.sessions, token)
 	s.mu.Unlock()

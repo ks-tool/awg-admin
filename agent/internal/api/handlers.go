@@ -93,7 +93,7 @@ func New(hostInfo models.HostInfo, store storage.Storage, collector *metrics.Col
 // info serves the host facts gathered once at startup (see agent.Run →
 // models.HostInfo): which backend/interface kinds this agent supports, whether
 // Docker is available, whether it runs in a container, kernel-module presence.
-func (h *Handler) info(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) info(w http.ResponseWriter, _ *http.Request) {
 	encode(w, h.hostInfo)
 }
 
@@ -253,7 +253,7 @@ func (h *Handler) metrics(w http.ResponseWriter, r *http.Request) {
 	encode(w, snap)
 }
 
-func (h *Handler) metricsHistory(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) metricsHistory(w http.ResponseWriter, _ *http.Request) {
 	if h.collector == nil {
 		http.Error(w, "metrics collection is disabled", http.StatusServiceUnavailable)
 		return

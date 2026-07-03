@@ -52,7 +52,7 @@ import (
 // credentials on preflight requests, so a naive outermost wrap would
 // reject every preflight with 401, breaking the dev server in cross-origin
 // setups whenever this toggle is on).
-func BasicAuthMiddleware(svc *service.Service, sessions *sessionStore) func(http.Handler) http.Handler {
+func BasicAuthMiddleware(svc *service.Service, sessions *SessionStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if sessions.validRequest(r) {

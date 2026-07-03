@@ -30,7 +30,7 @@ import (
 
 type Handler struct {
 	svc      *service.Service
-	sessions *sessionStore
+	sessions *SessionStore
 }
 
 // New registers every route of the standalone web server's JSON API
@@ -45,7 +45,7 @@ type Handler struct {
 // Returns the session store it created so the caller can wire it into
 // BasicAuthMiddleware, letting an already-logged-in session bypass that
 // gate (see BasicAuthMiddleware's doc comment).
-func New(svc *service.Service, rootGroup *bunrouter.Group) *sessionStore {
+func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 	h := &Handler{svc: svc, sessions: newSessionStore()}
 
 	rootGroup.WithGroup("/auth", func(gr *bunrouter.Group) {
