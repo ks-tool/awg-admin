@@ -169,6 +169,14 @@ dialog's deploy section: **Add new…** opens a small form to create one, and ea
 saved entry has a refresh-cache and a remove button. Handy when you deploy to
 many servers or pin a specific agent version.
 
+A source is one of three kinds — a **URL**, a **local file path**, or a **Docker
+image** (the last one deploys the userspace agent as a container). If the agent
+already reports that the server has no usable Docker, image sources aren't
+offered for it — they're hidden from the dropdown and the **Docker image** option
+is dropped from the add form, since the container deploy can't run there anyway.
+Before the first deploy the server's capabilities are unknown, so everything is
+offered and the deploy's own Docker pre-check is the backstop.
+
 ### Sync
 
 **Sync** re-pushes every interface Amnezia Admin has recorded for a server to
