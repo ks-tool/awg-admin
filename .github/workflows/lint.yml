@@ -25,7 +25,34 @@ jobs:
         with:
           go-version-file: ${{ matrix.module }}/go.mod
 
+      # Prepare each module so golangci-lint can load every package it lints
+      # (a package that fails to type-check is reported as an unfilterable
+      # "typecheck" error — config exclusions can't suppress a load failure):
+      #
+      #  - root: main.go and cmd/awg-admin.go embed the built frontend
+      #    (`//go:embed cmd/dist`). That directory is a build artifact this job
+      #    does not build, so the embed pattern would match no files. Create a
+      #    placeholder to satisfy it; the rest of the package then lints
+      #    normally. Target: ./...
+      #
+      #  - agent: agent/cmd/ holds several `package main` files — awg-agent.go,
+      #    awg-agent-userspace.go and dump.go — so the directory never compiles
+      #    as a single package (each binary is built from its own file, see
+      #    agent/Makefile). Lint every package except cmd.
+      - name: Prepare lint targets
+        id: prep
+        working-directory: ${{ matrix.module }}
+        run: |
+          if [ "${{ matrix.module }}" = "agent" ]; then
+            targets=$(go list ./... | sed "s|^$(go list -m)|.|" | grep -v '^\./cmd$' | paste -sd' ' -)
+          else
+            mkdir -p cmd/dist && printf '<!doctype html>\n' > cmd/dist/index.html
+            targets='./...'
+          fi
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+
       - uses: golangci/golangci-lint-action@v7
         with:
           working-directory: ${{ matrix.module }}
           version: latest
+          args: ${{ steps.prep.outputs.targets }}
