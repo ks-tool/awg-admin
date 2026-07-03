@@ -32,6 +32,11 @@ interface Props {
     value: string;
     onChange: (id: string) => void;
     disabled?: boolean;
+    /** Whether the target server has usable Docker (from its agent's HostInfo).
+     *  false hides image (Docker) sources — both existing ones in the list and
+     *  the "image" type in the add form — since the docker deploy can't run
+     *  there. undefined = unknown (no agent yet) → everything is offered. */
+    dockerAvailable?: boolean;
 }
 
 /**
@@ -41,11 +46,20 @@ interface Props {
  * combobox itself lives inside another modal (the agent dialog). onCreated hands
  * the saved source back so the opener can refresh its list and select it.
  */
-function AddAgentSourceModal({onClose, onCreated}: {
+function AddAgentSourceModal({onClose, onCreated, dockerAvailable}: {
     onClose: () => void;
     onCreated: (src: AgentSource) => void;
+    /** false => the target server has no usable Docker, so the Docker-image
+     *  source type (which only the docker deploy uses) isn't offered. undefined
+     *  = unknown (agent not deployed yet) → offer it; the deploy pre-checks. */
+    dockerAvailable?: boolean;
 }) {
     const {t} = useTranslation();
+    // Hide the Docker-image option when Docker is known-unavailable — deploying
+    // from an image would just fail the docker pre-check on that host.
+    const types = dockerAvailable === false
+        ? (['url', 'path'] as const)
+        : (['url', 'path', 'image'] as const);
     const [sourceType, setSourceType] = useState<'url' | 'path' | 'image'>('url');
     const [name, setName] = useState('');
     const [url, setUrl] = useState('');
@@ -103,7 +117,7 @@ function AddAgentSourceModal({onClose, onCreated}: {
                 </FormField>
 
                 <div className="flex flex-wrap gap-4">
-                    {(['url', 'path', 'image'] as const).map(type => (
+                    {types.map(type => (
                         <label key={type} className="flex items-center cursor-pointer">
                             <input
                                 type="radio"
@@ -226,7 +240,7 @@ function AddAgentSourceModal({onClose, onCreated}: {
  * one; each existing entry has a remove button on the right, like clearing
  * single entries from Chrome's address-bar history.
  */
-export function AgentSourceCombobox({value, onChange, disabled = false}: Props) {
+export function AgentSourceCombobox({value, onChange, disabled = false, dockerAvailable}: Props) {
     const {t} = useTranslation();
     const [sources, setSources] = useState<AgentSource[]>([]);
     const [open, setOpen] = useState(false);
@@ -301,6 +315,14 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
     }, [open, updateMenuPos]);
 
     const selected = sources.find(s => s.id === value);
+
+    // Hide image (Docker) sources when Docker is known-unavailable on the target
+    // server — the docker deploy can't run there. Unknown/available (undefined or
+    // true) shows everything. A currently-selected image source is kept so the
+    // trigger doesn't blank, but it won't be offered for re-selection.
+    const visibleSources = dockerAvailable === false
+        ? sources.filter(s => !s.image || s.id === value)
+        : sources;
 
     const handleSelect = (id: string) => {
         onChange(id);
@@ -391,7 +413,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
                             }}
                             className="overflow-auto rounded-lg border border-border bg-card shadow-lg dark:border-white/10 dark:bg-zinc-900"
                         >
-                            {sources.map(s => (
+                            {visibleSources.map(s => (
                                 <div
                                     key={s.id}
                                     onClick={() => handleSelect(s.id)}
@@ -438,6 +460,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
 
             {adding && (
                 <AddAgentSourceModal
+                    dockerAvailable={dockerAvailable}
                     onClose={() => setAdding(false)}
                     onCreated={(src) => {
                         setAdding(false);
