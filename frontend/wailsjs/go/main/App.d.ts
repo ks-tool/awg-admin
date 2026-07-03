@@ -5,6 +5,8 @@ import {models} from '../models';
 
 export function AddPeer(arg1:string,arg2:service.AddPeerInput):Promise<models.User>;
 
+export function AppVersion():Promise<string>;
+
 export function Backup():Promise<Array<number>>;
 
 export function BasicAuthEnabled():Promise<boolean>;

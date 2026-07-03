@@ -36,6 +36,20 @@ function extractErrorMessage(error: unknown): string {
  * Wrapper for Wails bindings that converts them to the same interface as HTTP API
  */
 export const bindingsClient = {
+    // The admin app's build version, shown on the Settings page.
+    async appVersion(): Promise<ApiResponse<string>> {
+        try {
+            const data = await AppBindings.AppVersion();
+            return { data };
+        } catch (error) {
+            console.error('Bindings AppVersion failed:', error);
+            return {
+                data: '',
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async listUsers(): Promise<ApiResponse<models.User[]>> {
         try {
             const data = await AppBindings.ListUsers();

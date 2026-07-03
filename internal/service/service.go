@@ -31,6 +31,17 @@ func GeneratePresharedKey() Option {
 	}
 }
 
+// WithVersion sets the admin app's build version (set at link time via
+// -ldflags "-X main.version=..." in each entry point). Surfaced to the UI by
+// AppVersion so the Settings page can show it. Defaults to "dev".
+func WithVersion(v string) Option {
+	return func(h *Service) {
+		if v != "" {
+			h.version = v
+		}
+	}
+}
+
 type Service struct {
 	store   storage.Storage
 	tunnels *sshclient.Manager
@@ -38,14 +49,22 @@ type Service struct {
 	deployStatus *deployStatusStore
 
 	generatePresharedKey bool
+	version              string
 }
 
 func New(s storage.Storage, opts ...Option) *Service {
-	svc := &Service{store: s, tunnels: sshclient.NewManager(), deployStatus: newDeployStatusStore()}
+	svc := &Service{store: s, tunnels: sshclient.NewManager(), deployStatus: newDeployStatusStore(), version: "dev"}
 	for _, opt := range opts {
 		opt(svc)
 	}
 	return svc
+}
+
+// AppVersion returns the admin app's build version. Wails-bound (via App
+// embedding *Service) and served over HTTP at GET /version, so both transports
+// can show it on the Settings page.
+func (s *Service) AppVersion() string {
+	return s.version
 }
 
 // StartTunnels opens an SSH tunnel to the agent of every stored server that

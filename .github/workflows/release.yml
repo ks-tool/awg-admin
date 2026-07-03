@@ -129,7 +129,10 @@ jobs:
         run: choco install nsis -y
 
       - name: Build desktop app
-        run: go tool wails build -platform ${{ matrix.platform }} ${{ matrix.wailsflags }} -trimpath
+        # -ldflags stamps main.version so the app shows it on the Settings page
+        # (main.go's version var). github.ref_name is the admin tag, already
+        # `v1.0.0` (with the leading v), so pass it through as-is.
+        run: go tool wails build -platform ${{ matrix.platform }} ${{ matrix.wailsflags }} -trimpath -ldflags "-X main.version=${{ github.ref_name }}"
 
       - name: Package macOS .dmg
         if: runner.os == 'macOS'

@@ -6,6 +6,10 @@ export function AddPeer(arg1, arg2) {
   return window['go']['main']['App']['AddPeer'](arg1, arg2);
 }
 
+export function AppVersion() {
+  return window['go']['main']['App']['AppVersion']();
+}
+
 export function Backup() {
   return window['go']['main']['App']['Backup']();
 }

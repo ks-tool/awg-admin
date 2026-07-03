@@ -460,7 +460,8 @@
     "backup": "Backup",
     "createBackup": "Save backup",
     "backupHint": "Download a full snapshot of the admin database (servers, users, peers, credentials) as a JSON file. Restore it with the awg-migrate tool.",
-    "backupSaved": "Backup saved"
+    "backupSaved": "Backup saved",
+    "version": "Version"
   },
   "auth": {
     "signInTitle": "Amnezia Admin",

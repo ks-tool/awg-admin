@@ -65,6 +65,7 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 	})
 
 	protected.GET("/backup", h.backupDownload)
+	protected.GET("/version", h.appVersion)
 
 	protected.WithGroup("/agent-sources", func(gr *bunrouter.Group) {
 		gr.POST("", h.agentSourceCreate)
