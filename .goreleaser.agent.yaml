@@ -62,18 +62,22 @@ builds:
     ldflags:
       - -s -w -X main.version={{ .Env.AGENT_VERSION }}
 
+# Publish the agents as RAW binaries (formats: [binary]), not tar.gz archives:
+# the admin deploys an agent by downloading its release-asset URL directly
+# (systemd deploy → curl/wget the binary), so the URL must point at a runnable
+# binary, not an archive that would need extracting first.
 archives:
   - id: agent-archive
     ids: [agent]
     name_template: >-
       awg-agent_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
-    formats: [tar.gz]
+    formats: [binary]
 
   - id: agent-userspace-archive
     ids: [agent-userspace]
     name_template: >-
       awg-agent-userspace_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
-    formats: [tar.gz]
+    formats: [binary]
 
 # Multi-arch userspace-agent image from the prebuilt binary; the Dockerfile
 # additionally compiles amneziawg-go in a builder stage. arm64 under buildx+QEMU.
