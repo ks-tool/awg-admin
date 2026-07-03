@@ -89,11 +89,6 @@ changelog:
       - "^ci:"
 
 release:
-  # github.owner/name are left unset — GoReleaser auto-detects the repo
-  # from the `origin` git remote in CI.
-  #
-  # The desktop-build jobs in .github/workflows/release.yml run after this
-  # and upload more assets (Wails apps, installers) to the very same
-  # release via `gh release upload`, so it must already exist and stay
-  # editable rather than be (re)published as final by some other step.
   mode: keep-existing
+  name_template: "AWG Admin v{{ .Version }}"
+  replace_existing_artifacts: true

@@ -105,7 +105,5 @@ changelog:
       - "^ci:"
 
 release:
-  # Auto-detect the repo from `origin`; the release is created on the real
-  # `agent/v*` tag. Unlike the admin release, nothing runs after GoReleaser here
-  # (no desktop jobs), so the default publish mode is fine.
-  name_template: "awg-agent {{ .Env.AGENT_VERSION }}"
+  name_template: "AWG Agent v{{ .Env.AGENT_VERSION }}"
+  replace_existing_artifacts: true
