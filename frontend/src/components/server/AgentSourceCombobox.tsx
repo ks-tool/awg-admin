@@ -20,7 +20,7 @@ import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
 import {ChevronDown, FolderOpen, RefreshCw, X} from 'lucide-react';
 import {FormField} from '@/components/common/FormField';
-import {buttons, inputs} from '@/components/common/Modal';
+import {buttons, inputs, Modal} from '@/components/common/Modal';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {cn} from '@/lib/utils';
 import {createAgentSource, deleteAgentSource, listAgentSources, refreshAgentSourceCache, selectAgentFile} from '@/services/agentSources';
@@ -32,6 +32,188 @@ interface Props {
     value: string;
     onChange: (id: string) => void;
     disabled?: boolean;
+}
+
+/**
+ * Modal form for creating a new agent source. Broken out of the combobox into
+ * its own dialog: the fields (name, url/path/image type + its input, the cache
+ * toggle and its hint) don't fit legibly inline under the dropdown when the
+ * combobox itself lives inside another modal (the agent dialog). onCreated hands
+ * the saved source back so the opener can refresh its list and select it.
+ */
+function AddAgentSourceModal({onClose, onCreated}: {
+    onClose: () => void;
+    onCreated: (src: AgentSource) => void;
+}) {
+    const {t} = useTranslation();
+    const [sourceType, setSourceType] = useState<'url' | 'path' | 'image'>('url');
+    const [name, setName] = useState('');
+    const [url, setUrl] = useState('');
+    const [path, setPath] = useState('');
+    const [image, setImage] = useState('');
+    const [cacheLocally, setCacheLocally] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    // The native file picker only exists in the Wails desktop app; a browser
+    // can't resolve a real filesystem path, so the Browse button is desktop-only.
+    const isDesktop = getCurrentApiMode() === 'bindings';
+
+    const handleBrowse = async () => {
+        const picked = await selectAgentFile(t('servers.selectAgentBinaryDialog'));
+        if (picked) setPath(picked);
+    };
+
+    const handleAdd = async () => {
+        if (!name.trim()) return toast.error(t('servers.sourceNameRequired'));
+        if (sourceType === 'url' && !url.trim()) return toast.error(t('servers.sourceUrlRequired'));
+        if (sourceType === 'path' && !path.trim()) return toast.error(t('servers.sourcePathRequired'));
+        if (sourceType === 'image' && !image.trim()) return toast.error(t('servers.sourceImageRequired'));
+
+        setSaving(true);
+        try {
+            const src = await createAgentSource(
+                name.trim(),
+                sourceType === 'url' ? url.trim() : '',
+                sourceType === 'path' ? path.trim() : '',
+                sourceType === 'image' ? image.trim() : '',
+                cacheLocally,
+            );
+            if (src) {
+                onCreated(src);
+            } else {
+                toast.error(t('servers.sourceCreateError'));
+            }
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Modal title={t('servers.addSourceTitle')} onClose={onClose} loading={saving}>
+            <div className="space-y-4">
+                <FormField label={t('servers.sourceName')}>
+                    <input
+                        type="text"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder={t('servers.sourceNamePlaceholder')}
+                        disabled={saving}
+                        className={inputs.primary}
+                    />
+                </FormField>
+
+                <div className="flex flex-wrap gap-4">
+                    {(['url', 'path', 'image'] as const).map(type => (
+                        <label key={type} className="flex items-center cursor-pointer">
+                            <input
+                                type="radio"
+                                checked={sourceType === type}
+                                onChange={() => setSourceType(type)}
+                                disabled={saving}
+                                className="rounded border-input bg-background dark:border-white/10 dark:bg-white/5 text-sky-500"
+                            />
+                            <span className="ml-2 text-sm text-foreground dark:text-zinc-300">
+                                {type === 'url'
+                                    ? t('servers.sourceTypeUrl')
+                                    : type === 'path'
+                                        ? t('servers.sourceTypePath')
+                                        : t('servers.sourceTypeImage')}
+                            </span>
+                        </label>
+                    ))}
+                </div>
+
+                {sourceType === 'url' && (
+                    <>
+                        <FormField label="URL">
+                            <input
+                                type="text"
+                                value={url}
+                                onChange={e => setUrl(e.target.value)}
+                                placeholder="https://example.com/awg-agent"
+                                disabled={saving}
+                                className={cn(inputs.primary, 'font-mono text-xs')}
+                            />
+                        </FormField>
+
+                        <label className="flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={cacheLocally}
+                                onChange={e => setCacheLocally(e.target.checked)}
+                                disabled={saving}
+                                className="rounded border-input bg-background dark:border-white/10 dark:bg-white/5 text-sky-500"
+                            />
+                            <span className="ml-3 text-sm font-medium text-foreground dark:text-zinc-300">
+                                {t('servers.cacheLocally')}
+                            </span>
+                        </label>
+                        <p className="text-xs text-muted-foreground dark:text-zinc-500">
+                            {t('servers.cacheLocallyHint')}
+                        </p>
+                    </>
+                )}
+
+                {sourceType === 'path' && (
+                    <FormField label={t('servers.sourcePath')}>
+                        <div>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={path}
+                                    onChange={e => setPath(e.target.value)}
+                                    placeholder="/usr/local/bin/awg-agent"
+                                    disabled={saving}
+                                    className={cn(inputs.primary, 'font-mono text-xs min-w-0 flex-1')}
+                                />
+                                {isDesktop && (
+                                    <button
+                                        type="button"
+                                        onClick={handleBrowse}
+                                        disabled={saving}
+                                        className={cn('shrink-0 inline-flex items-center gap-2', buttons.secondary)}
+                                    >
+                                        <FolderOpen size={16}/>
+                                        {t('common.browse')}
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground dark:text-zinc-500 mt-2">
+                                {t('servers.sourcePathHint')}
+                            </p>
+                        </div>
+                    </FormField>
+                )}
+
+                {sourceType === 'image' && (
+                    <FormField label={t('servers.sourceImage')}>
+                        <div>
+                            <input
+                                type="text"
+                                value={image}
+                                onChange={e => setImage(e.target.value)}
+                                placeholder="ghcr.io/ks-tool/awg-agent-userspace:latest"
+                                disabled={saving}
+                                className={cn(inputs.primary, 'font-mono text-xs')}
+                            />
+                            <p className="text-xs text-muted-foreground dark:text-zinc-500 mt-2">
+                                {t('servers.sourceImageHint')}
+                            </p>
+                        </div>
+                    </FormField>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={handleAdd} disabled={saving} className={cn('flex-1', buttons.primary)}>
+                        {saving ? `${t('common.saving')}...` : t('servers.addSource')}
+                    </button>
+                    <button type="button" onClick={onClose} disabled={saving} className={cn('flex-1', buttons.secondary)}>
+                        {t('common.cancel')}
+                    </button>
+                </div>
+            </div>
+        </Modal>
+    );
 }
 
 /**
@@ -49,13 +231,6 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
     const [sources, setSources] = useState<AgentSource[]>([]);
     const [open, setOpen] = useState(false);
     const [adding, setAdding] = useState(false);
-    const [sourceType, setSourceType] = useState<'url' | 'path' | 'image'>('url');
-    const [name, setName] = useState('');
-    const [url, setUrl] = useState('');
-    const [path, setPath] = useState('');
-    const [image, setImage] = useState('');
-    const [cacheLocally, setCacheLocally] = useState(false);
-    const [saving, setSaving] = useState(false);
     const [refreshingId, setRefreshingId] = useState<string | null>(null);
     const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
     const [removeLoading, setRemoveLoading] = useState(false);
@@ -88,15 +263,6 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
             maxHeight,
         });
     }, []);
-
-    // The native file picker only exists in the Wails desktop app; a browser
-    // can't resolve a real filesystem path, so the Browse button is desktop-only.
-    const isDesktop = getCurrentApiMode() === 'bindings';
-
-    const handleBrowse = async () => {
-        const picked = await selectAgentFile(t('servers.selectAgentBinaryDialog'));
-        if (picked) setPath(picked);
-    };
 
     const load = useCallback(async () => {
         const list = await listAgentSources();
@@ -139,39 +305,6 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
     const handleSelect = (id: string) => {
         onChange(id);
         setOpen(false);
-    };
-
-    const handleAdd = async () => {
-        if (!name.trim()) return toast.error(t('servers.sourceNameRequired'));
-        if (sourceType === 'url' && !url.trim()) return toast.error(t('servers.sourceUrlRequired'));
-        if (sourceType === 'path' && !path.trim()) return toast.error(t('servers.sourcePathRequired'));
-        if (sourceType === 'image' && !image.trim()) return toast.error(t('servers.sourceImageRequired'));
-
-        setSaving(true);
-        try {
-            const src = await createAgentSource(
-                name.trim(),
-                sourceType === 'url' ? url.trim() : '',
-                sourceType === 'path' ? path.trim() : '',
-                sourceType === 'image' ? image.trim() : '',
-                cacheLocally,
-            );
-            if (src) {
-                await load();
-                onChange(src.id);
-                setAdding(false);
-                setName('');
-                setUrl('');
-                setPath('');
-                setImage('');
-                setCacheLocally(false);
-                setSourceType('url');
-            } else {
-                toast.error(t('servers.sourceCreateError'));
-            }
-        } finally {
-            setSaving(false);
-        }
     };
 
     const handleRemove = (id: string, e: React.MouseEvent) => {
@@ -304,133 +437,14 @@ export function AgentSourceCombobox({value, onChange, disabled = false}: Props) 
             </FormField>
 
             {adding && (
-                <div className="space-y-3 rounded-lg border border-input bg-background p-3 dark:border-white/10 dark:bg-white/5">
-                    <FormField label={t('servers.sourceName')}>
-                        <input
-                            type="text"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                            placeholder={t('servers.sourceNamePlaceholder')}
-                            disabled={saving}
-                            className={inputs.primary}
-                        />
-                    </FormField>
-
-                    <div className="flex flex-wrap gap-4">
-                        {(['url', 'path', 'image'] as const).map(type => (
-                            <label key={type} className="flex items-center">
-                                <input
-                                    type="radio"
-                                    checked={sourceType === type}
-                                    onChange={() => setSourceType(type)}
-                                    disabled={saving}
-                                    className="rounded border-input bg-background dark:border-white/10 dark:bg-white/5 text-sky-500"
-                                />
-                                <span className="ml-2 text-sm text-foreground dark:text-zinc-300">
-                                    {type === 'url'
-                                        ? t('servers.sourceTypeUrl')
-                                        : type === 'path'
-                                            ? t('servers.sourceTypePath')
-                                            : t('servers.sourceTypeImage')}
-                                </span>
-                            </label>
-                        ))}
-                    </div>
-
-                    {sourceType === 'url' && (
-                        <>
-                            <FormField label="URL">
-                                <input
-                                    type="text"
-                                    value={url}
-                                    onChange={e => setUrl(e.target.value)}
-                                    placeholder="https://example.com/awg-agent"
-                                    disabled={saving}
-                                    className={cn(inputs.primary, 'font-mono text-xs')}
-                                />
-                            </FormField>
-
-                            <label className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    checked={cacheLocally}
-                                    onChange={e => setCacheLocally(e.target.checked)}
-                                    disabled={saving}
-                                    className="rounded border-input bg-background dark:border-white/10 dark:bg-white/5 text-sky-500"
-                                />
-                                <span className="ml-3 text-sm font-medium text-foreground dark:text-zinc-300">
-                                    {t('servers.cacheLocally')}
-                                </span>
-                            </label>
-                            <p className="text-xs text-muted-foreground dark:text-zinc-500">
-                                {t('servers.cacheLocallyHint')}
-                            </p>
-                        </>
-                    )}
-
-                    {sourceType === 'path' && (
-                        <FormField label={t('servers.sourcePath')}>
-                            <div>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={path}
-                                        onChange={e => setPath(e.target.value)}
-                                        placeholder="/usr/local/bin/awg-agent"
-                                        disabled={saving}
-                                        className={cn(inputs.primary, 'font-mono text-xs min-w-0 flex-1')}
-                                    />
-                                    {isDesktop && (
-                                        <button
-                                            type="button"
-                                            onClick={handleBrowse}
-                                            disabled={saving}
-                                            className={cn('shrink-0 inline-flex items-center gap-2', buttons.secondary)}
-                                        >
-                                            <FolderOpen size={16}/>
-                                            {t('common.browse')}
-                                        </button>
-                                    )}
-                                </div>
-                                <p className="text-xs text-muted-foreground dark:text-zinc-500 mt-2">
-                                    {t('servers.sourcePathHint')}
-                                </p>
-                            </div>
-                        </FormField>
-                    )}
-
-                    {sourceType === 'image' && (
-                        <FormField label={t('servers.sourceImage')}>
-                            <div>
-                                <input
-                                    type="text"
-                                    value={image}
-                                    onChange={e => setImage(e.target.value)}
-                                    placeholder="ghcr.io/ks-tool/awg-agent-userspace:latest"
-                                    disabled={saving}
-                                    className={cn(inputs.primary, 'font-mono text-xs')}
-                                />
-                                <p className="text-xs text-muted-foreground dark:text-zinc-500 mt-2">
-                                    {t('servers.sourceImageHint')}
-                                </p>
-                            </div>
-                        </FormField>
-                    )}
-
-                    <div className="flex gap-3">
-                        <button type="button" onClick={handleAdd} disabled={saving} className={cn('flex-1', buttons.primary)}>
-                            {saving ? `${t('common.saving')}...` : t('servers.addSource')}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setAdding(false)}
-                            disabled={saving}
-                            className={cn('flex-1', buttons.secondary)}
-                        >
-                            {t('common.cancel')}
-                        </button>
-                    </div>
-                </div>
+                <AddAgentSourceModal
+                    onClose={() => setAdding(false)}
+                    onCreated={(src) => {
+                        setAdding(false);
+                        void load();
+                        onChange(src.id);
+                    }}
+                />
             )}
 
             {removeConfirmId && (

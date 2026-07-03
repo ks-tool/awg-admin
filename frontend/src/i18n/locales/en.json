@@ -134,6 +134,7 @@
     "agentSource": "Agent source",
     "selectSource": "Select a source…",
     "addNewSource": "Add new…",
+    "addSourceTitle": "Add agent source",
     "sourceName": "Name",
     "sourceNamePlaceholder": "e.g. awg-agent v1.2.3 linux/amd64",
     "sourceTypeUrl": "URL",
