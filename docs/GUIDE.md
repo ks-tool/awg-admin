@@ -13,11 +13,13 @@ features once it's up.
   - [Adding a server](#adding-a-server)
   - [SSH authentication](#ssh-authentication)
   - [Reaching the agent: SSH tunnel vs mTLS](#reaching-the-agent-ssh-tunnel-vs-mtls)
+  - [The agent dialog](#the-agent-dialog)
   - [Deploying the agent](#deploying-the-agent)
   - [Agent sources (deploy presets)](#agent-sources-deploy-presets)
   - [Sync](#sync)
   - [Reconcile (agent ↔ database)](#reconcile-agent--database)
   - [Monitoring toggle](#monitoring-toggle)
+  - [Profiling](#profiling)
 - [Interfaces](#interfaces)
 - [Users and peers](#users-and-peers)
 - [Multi-hop tunnels (exit nodes)](#multi-hop-tunnels-exit-nodes)
@@ -104,9 +106,20 @@ ways:
 The connection is resilient: if a tunnel silently drops (host reboot, network
 blip), the admin app detects it and reconnects automatically on the next call.
 
+### The agent dialog
+
+Everything you do *to the agent* — as opposed to the interfaces/peers it carries
+— lives in one **agent** dialog, so it's in a single place rather than scattered
+across the page. Open it from the **wrench** button on the server page, or the
+**gear** on each dashboard row. At the top it shows the agent's reported
+**version** and capabilities (backend, Docker, interface kinds); below that are
+all the agent actions: [deploy](#deploying-the-agent), [sync](#sync),
+[check/reconcile](#reconcile-agent--database), the [monitoring](#monitoring-toggle)
+toggle, and [profiling](#profiling). The sections below describe each one.
+
 ### Deploying the agent
 
-On the server page, **Deploy agent** installs and starts the agent over SSH in
+From the agent dialog, **Deploy agent** installs and starts the agent over SSH in
 one click — cross-compiled Linux binary, uploaded and launched for you. After a
 deploy the admin app automatically re-pushes every interface for that server so
 the box comes up in the desired state. A live status area reports progress and
@@ -185,6 +198,23 @@ agent.
 Each server has a monitoring switch that enables/disables the agent's metrics
 collection at runtime. The desired state is stored and re-applied on redeploy,
 so a server you've muted stays muted after the agent restarts.
+
+### Profiling
+
+For diagnosing a misbehaving agent, you can turn on **profiling** — the agent's
+Go runtime profiling (`net/http/pprof`). It's **off by default** (its sampling
+has overhead, and the endpoints expose internals), toggled per server from the
+agent dialog, and like monitoring the desired state is re-applied on redeploy.
+While it's on, a small **activity icon** appears next to the server's name (on
+the dashboard and the server page) as a reminder it's enabled.
+
+With profiling on, use **Download dump** to pull a profile off the agent for
+inspection with `go tool pprof`/`go tool trace`: pick the kind — `goroutine`
+(stuck/leaking goroutines), `heap` (memory), the CPU `profile` or an execution
+`trace` (both sampled over a chosen number of seconds), and the usual
+`allocs`/`block`/`mutex`/`threadcreate`. Desktop saves it via a native dialog;
+the web app downloads it in the browser. Turn profiling back off when you're
+done.
 
 ## Interfaces
 
