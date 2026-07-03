@@ -16,7 +16,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {LayoutDashboard, Server, Network, Users, Waypoints, RefreshCw, Activity, Settings2} from 'lucide-react'
+import {LayoutDashboard, Server, Network, Users, Waypoints, RefreshCw, Activity, Settings} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { StatCard } from '@/components/common/StatCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
@@ -271,7 +271,7 @@ export default function Dashboard() {
                                                         className="p-1 text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300 rounded transition-colors"
                                                         title={t('servers.agentModal.open')}
                                                     >
-                                                        <Settings2 size={14}/>
+                                                        <Settings size={14}/>
                                                     </button>
                                                 </div>
                                             </td>

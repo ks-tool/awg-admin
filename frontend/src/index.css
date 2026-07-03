@@ -141,6 +141,16 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind v4's Preflight dropped the automatic cursor:pointer on buttons that
+     v3 provided, so icon-only ("implicit") buttons showed the default arrow
+     instead of the link-style hand. Restore the pointer on interactive controls
+     so they read as clickable — except when disabled. Kept in @layer base so an
+     explicit cursor-* utility (e.g. disabled:cursor-not-allowed) still wins. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
 }
 
 html {
