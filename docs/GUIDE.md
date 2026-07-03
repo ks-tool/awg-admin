@@ -164,9 +164,10 @@ running in a container — and reports it back; the
 
 An **agent source** is a reusable, named preset describing where to get the
 agent binary from (e.g. a release URL), optionally cached locally so repeated
-deploys don't re-download. Manage them from the deploy dialog: create, refresh
-the cache, or delete. Handy when you deploy to many servers or pin a specific
-agent version.
+deploys don't re-download. Manage them from the source dropdown in the agent
+dialog's deploy section: **Add new…** opens a small form to create one, and each
+saved entry has a refresh-cache and a remove button. Handy when you deploy to
+many servers or pin a specific agent version.
 
 ### Sync
 
