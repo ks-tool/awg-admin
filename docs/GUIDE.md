@@ -1,8 +1,8 @@
-# Amnezia Admin — User Guide
+# Amnezia-WG Admin — User Guide
 
 [Русская версия](GUIDE_ru.md) · [← README](../README.md)
 
-This document is a complete guide to installing, running, and operating Amnezia Admin. The
+This document is a complete guide to installing, running, and operating Amnezia-WG Admin. The
 [README](../README.md) describes the project itself — its purpose, architecture, and how to build it from source; this
 guide covers everything required to run the application and use its features.
 
@@ -40,7 +40,7 @@ guide covers everything required to run the application and use its features.
 
 ## Installation and running
 
-Amnezia Admin can be deployed either as a desktop application or as a standalone web server. Both deployment modes use
+Amnezia-WG Admin can be deployed either as a desktop application or as a standalone web server. Both deployment modes use
 the same data model and business logic and differ only in how the application is accessed.
 
 ### Desktop application
@@ -58,7 +58,7 @@ provided for each supported operating system:
   Finder's **Open** context menu or remove the quarantine attribute manually:
 
 ```sh
-xattr -cr "/Applications/Amnezia Admin.app"
+xattr -cr "/Applications/Amnezia-WG Admin.app"
 ```
 
 - **Linux** — `amnezia-admin_<version>`. The application requires the `libgtk-3` and `libwebkit2gtk-4.1` system
@@ -154,9 +154,9 @@ The agent is available for Linux only and is distributed for both `amd64` and `a
 
 ## How it fits together
 
-Amnezia Admin manages four types of object, nested within one another:
+Amnezia-WG Admin manages four types of object, nested within one another:
 
-- A **server** is a remote machine accessible over SSH. Amnezia Admin stores its connection details and, once the agent
+- A **server** is a remote machine accessible over SSH. Amnezia-WG Admin stores its connection details and, once the agent
   has been deployed, communicates with the agent running on it.
 - An **interface** is a WireGuard/AmneziaWG network interface on a server (`wg0`, `awg0`, and so on). A server may have
   several.
@@ -183,10 +183,10 @@ later — during **Deploy**, **Sync**, or **Update** — rather than at creation
 
 ### SSH authentication
 
-Amnezia Admin connects to a server over SSH to deploy the agent and, by default, to tunnel to its API. The following
+Amnezia-WG Admin connects to a server over SSH to deploy the agent and, by default, to tunnel to its API. The following
 credential types are supported:
 
-- **Private key file** — a path to a key on the machine running Amnezia Admin.
+- **Private key file** — a path to a key on the machine running Amnezia-WG Admin.
 - **Uploaded key** — the key contents supplied directly and stored in the database. This is the portable option: it
   behaves identically in the desktop application and in a browser tab and does not depend on a file path that exists on
   only one machine. When both a path and uploaded contents are provided, the uploaded contents take precedence.
@@ -466,7 +466,7 @@ A tunnel is built from the **Tunnels** page using a wizard:
 3. **Review** — the tunnel's shared subnet is shown for confirmation. It is always the entry interface's own subnet (the
    exit is placed on it), not a value chosen manually.
 
-Amnezia Admin reconfigures both interfaces and pushes them: the relay receives policy-routing rules and a gateway peer
+Amnezia-WG Admin reconfigures both interfaces and pushes them: the relay receives policy-routing rules and a gateway peer
 pointing at the exit; the exit receives NAT (masquerade) and dials back to the relay. Clients require no configuration
 change — their existing tunnel to the relay now exits through the second server.
 

@@ -137,7 +137,7 @@ jobs:
       - name: Package macOS .dmg
         if: runner.os == 'macOS'
         run: |
-          hdiutil create -volname "Amnezia Admin" \
+          hdiutil create -volname "Amnezia-WG Admin" \
             -srcfolder build/bin/amnezia-admin.app \
             -ov -format UDZO build/bin/amnezia-admin.dmg
           # The .app bundle is now inside the .dmg — remove it so the upload glob

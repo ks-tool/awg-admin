@@ -39,7 +39,7 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "Amnezia admin",
+		Title:  "Amnezia-WG admin",
 		Width:  1230,
 		Height: 800,
 		AssetServer: &assetserver.Options{

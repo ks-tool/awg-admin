@@ -464,7 +464,7 @@
     "version": "Version"
   },
   "auth": {
-    "signInTitle": "Amnezia Admin",
+    "signInTitle": "Amnezia-WG Admin",
     "username": "Username",
     "password": "Password",
     "login": "Log in",
