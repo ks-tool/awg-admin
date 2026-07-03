@@ -126,7 +126,20 @@ jobs:
 
       - name: Install NSIS
         if: runner.os == 'Windows'
-        run: choco install nsis -y
+        shell: pwsh
+        # `wails build -nsis` only shells out to `makensis`; if it isn't on PATH
+        # Wails logs "Warning: Cannot create installer: makensis not found" and
+        # STILL exits 0 (nsis_installer.go), so the installer silently vanishes
+        # from the release (as it did in v1.1.0). choco installs NSIS to Program
+        # Files but does NOT add it to PATH, so put it there for the build step
+        # and fail loudly if makensis is missing.
+        run: |
+          choco install nsis -y --no-progress
+          $nsis = 'C:\Program Files (x86)\NSIS'
+          Add-Content -Path $env:GITHUB_PATH -Value $nsis
+          if (-not (Test-Path "$nsis\makensis.exe")) {
+            throw "makensis.exe not found under $nsis after 'choco install nsis'"
+          }
 
       - name: Build desktop app
         # -ldflags stamps main.version so the app shows it on the Settings page
@@ -134,23 +147,82 @@ jobs:
         # `v1.0.0` (with the leading v), so pass it through as-is.
         run: go tool wails build -platform ${{ matrix.platform }} ${{ matrix.wailsflags }} -trimpath -ldflags "-X main.version=${{ github.ref_name }}"
 
-      - name: Package macOS .dmg
-        if: runner.os == 'macOS'
+      - name: Verify NSIS installer was produced
+        if: runner.os == 'Windows'
+        shell: pwsh
+        # Guard against the silent-skip above ever regressing: `wails build
+        # -nsis` writes ${name}-${arch}-installer.exe (name = wails.json "name"),
+        # so for windows/amd64 that's amnezia-wg-admin-amd64-installer.exe.
         run: |
-          hdiutil create -volname "Amnezia-WG Admin" \
-            -srcfolder build/bin/amnezia-admin.app \
-            -ov -format UDZO build/bin/amnezia-admin.dmg
-          # The .app bundle is now inside the .dmg — remove it so the upload glob
-          # (build/bin/amnezia-admin*) doesn't try to upload a directory
-          # ("read ...amnezia-admin.app: is a directory").
-          rm -rf build/bin/amnezia-admin.app
+          $installer = 'build/bin/amnezia-wg-admin-amd64-installer.exe'
+          if (-not (Test-Path $installer)) {
+            throw "Expected NSIS installer '$installer' was not produced by 'wails build -nsis'"
+          }
+          Write-Host "OK: $installer"
+
+      - name: Package macOS .dmg (drag-to-Applications layout)
+        if: runner.os == 'macOS'
+        # Wails leaves an unsigned build/bin/amnezia-wg-admin.app. Here we:
+        #  1. rename the bundle to "Amnezia-WG Admin.app" so it appears under
+        #     that name in /Applications (the executable inside stays
+        #     amnezia-wg-admin — CFBundleExecutable is unchanged);
+        #  2. ad-hoc codesign it — an *unsigned* arm64 app is refused as
+        #     "damaged" on Apple Silicon; ad-hoc signing lets it launch. This
+        #     does NOT remove Gatekeeper's "unidentified developer" prompt —
+        #     users bypass that once (right-click → Open, or `xattr -cr`; see
+        #     README/GUIDE). To ship a fully-trusted build later, replace
+        #     `--sign -` with a "Developer ID Application: …" identity and add
+        #     an `xcrun notarytool submit … && xcrun stapler staple` step here
+        #     (needs a paid Apple Developer account + GitHub secrets for the
+        #     .p12 cert, its password and the notarization credentials);
+        #  3. build a JetBrains-style .dmg — the app icon and an /Applications
+        #     drop-link side by side in one Finder window (drag the icon across
+        #     to install) — via create-dmg instead of a bare hdiutil image.
+        run: |
+          set -euo pipefail
+          brew install create-dmg
+
+          bundle="Amnezia-WG Admin.app"
+          mv "build/bin/amnezia-wg-admin.app" "build/bin/$bundle"
+          codesign --force --deep --sign - "build/bin/$bundle"
+
+          # create-dmg images a whole folder — stage just the app so nothing
+          # else in build/bin leaks into the image.
+          staging="$(mktemp -d)"
+          cp -R "build/bin/$bundle" "$staging/"
+
+          # Retry: create-dmg drives Finder over AppleScript to lay out the
+          # window, which occasionally flakes on the headless runner.
+          for attempt in 1 2 3; do
+            if create-dmg \
+                --volname "Amnezia-WG Admin" \
+                --volicon "build/bin/$bundle/Contents/Resources/iconfile.icns" \
+                --window-pos 200 120 \
+                --window-size 640 400 \
+                --icon-size 120 \
+                --icon "$bundle" 160 190 \
+                --hide-extension "$bundle" \
+                --app-drop-link 480 190 \
+                --no-internet-enable \
+                "build/bin/amnezia-wg-admin.dmg" \
+                "$staging"; then
+              break
+            fi
+            echo "create-dmg attempt $attempt failed"
+            rm -f "build/bin/amnezia-wg-admin.dmg"
+            [ "$attempt" = 3 ] && exit 1
+          done
+
+          # Remove the .app so the upload glob (build/bin/amnezia-wg-admin*)
+          # doesn't try to upload a directory ("read ...app: is a directory").
+          rm -rf "build/bin/$bundle" "$staging"
 
       - name: Rename artifacts with version
         shell: bash
         run: |
           cd build/bin
           tag='${{ github.ref_name }}'
-          for f in amnezia-admin.exe amnezia-admin-amd64-installer.exe amnezia-admin.dmg amnezia-admin; do
+          for f in amnezia-wg-admin.exe amnezia-wg-admin-amd64-installer.exe amnezia-wg-admin.dmg amnezia-wg-admin; do
             [ -f "$f" ] || continue
             ext="${f##*.}"
             base="${f%.*}"
@@ -166,4 +238,4 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" build/bin/amnezia-admin* --clobber
+        run: gh release upload "${{ github.ref_name }}" build/bin/amnezia-wg-admin* --clobber

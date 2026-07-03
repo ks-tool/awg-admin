@@ -51,17 +51,19 @@ configuration is stored locally, and communication with managed servers is perfo
 Prebuilt binaries are available from the project's [Releases](../../../releases) page. The following packages are
 provided for each supported operating system:
 
-- **Windows** — `amnezia-admin-amd64-installer_<version>.exe` (NSIS installer) or the portable executable
-  `amnezia-admin_<version>.exe`.
-- **macOS** — `amnezia-admin_<version>.dmg`, containing a universal build for both Intel and Apple Silicon systems. The
-  application is not signed or notarized with an Apple Developer ID certificate. On first launch, either open it through
-  Finder's **Open** context menu or remove the quarantine attribute manually:
+- **Windows** — `amnezia-wg-admin-amd64-installer_<version>.exe` (NSIS installer) or the portable executable
+  `amnezia-wg-admin_<version>.exe`.
+- **macOS** — `amnezia-wg-admin_<version>.dmg`, a universal build for both Intel and Apple Silicon systems. Open the
+  `.dmg` and drag **Amnezia-WG Admin** onto the **Applications** shortcut shown next to it in the same window. The app is
+  ad-hoc signed but **not** notarized with an Apple Developer ID certificate, so on first launch macOS reports it as
+  coming from an unidentified developer. Bypass this once, either by right-clicking the app and choosing **Open** (then
+  **Open** again in the dialog), or by removing the quarantine attribute manually:
 
 ```sh
 xattr -cr "/Applications/Amnezia-WG Admin.app"
 ```
 
-- **Linux** — `amnezia-admin_<version>`. The application requires the `libgtk-3` and `libwebkit2gtk-4.1` system
+- **Linux** — `amnezia-wg-admin_<version>`. The application requires the `libgtk-3` and `libwebkit2gtk-4.1` system
   libraries.
 
 The desktop application does not expose a network API and therefore does not require authentication.
