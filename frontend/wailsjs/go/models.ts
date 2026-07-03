@@ -91,6 +91,7 @@ export namespace models {
 	    path?: string;
 	    cacheLocally?: boolean;
 	    image?: string;
+	    userspace?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentSource(source);
@@ -104,6 +105,7 @@ export namespace models {
 	        this.path = source["path"];
 	        this.cacheLocally = source["cacheLocally"];
 	        this.image = source["image"];
+	        this.userspace = source["userspace"];
 	    }
 	}
 	

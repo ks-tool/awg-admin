@@ -146,6 +146,8 @@
     "sourceImageHint": "Docker image reference for the userspace agent. The server runs it as a container (docker run) — it needs Docker installed and, for the WireGuard interfaces, /dev/net/tun. No kernel module required.",
     "cacheLocally": "Cache locally",
     "cacheLocallyHint": "Off (default): the server downloads the URL itself (curl/wget) — it needs outbound internet access to it, but awg-admin's own bandwidth is untouched. On: awg-admin downloads the URL once and caches it, then uploads the cached copy on every deploy — use this when the server can't reach the URL directly.",
+    "sourceUserspace": "Userspace agent (no kernel module)",
+    "sourceUserspaceHint": "Tick this when the binary is awg-agent-userspace, which runs over systemd with no AmneziaWG kernel module. The deploy then skips its kernel-module pre-check. Leave it off for the kernel agent (awg-agent).",
     "addSource": "Add",
     "noSourceSelected": "Select or add an agent source first",
     "sourceNameRequired": "Name is required",

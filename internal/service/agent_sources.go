@@ -39,7 +39,7 @@ func (s *Service) ListAgentSources() ([]models.AgentSource, error) {
 // binary directly from awg-admin's own filesystem, and image is a Docker image
 // run as a container on the server. cacheLocally is ignored (forced false) for
 // path (nothing to cache) and image (Docker pulls it itself).
-func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally bool) (*models.AgentSource, error) {
+func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally, userspace bool) (*models.AgentSource, error) {
 	if len(name) == 0 {
 		return nil, fmt.Errorf("agent source name is required")
 	}
@@ -58,6 +58,11 @@ func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally 
 	if len(path) > 0 || len(image) > 0 {
 		cacheLocally = false
 	}
+	// Userspace marks the userspace agent binary and only applies to a
+	// URL/Path (systemd) source — a Docker image is inherently userspace.
+	if len(image) > 0 {
+		userspace = false
+	}
 
 	src := &models.AgentSource{
 		ID:           uuid.New(),
@@ -66,6 +71,7 @@ func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally 
 		Path:         path,
 		Image:        image,
 		CacheLocally: cacheLocally,
+		Userspace:    userspace,
 	}
 	if err := s.store.AgentSources().Set(src); err != nil {
 		return nil, err

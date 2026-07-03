@@ -66,6 +66,9 @@ function AddAgentSourceModal({onClose, onCreated, dockerAvailable}: {
     const [path, setPath] = useState('');
     const [image, setImage] = useState('');
     const [cacheLocally, setCacheLocally] = useState(false);
+    // Marks a URL/Path source as the userspace agent binary — the systemd deploy
+    // then skips its AmneziaWG-kernel-module pre-check (see deploy.deploySystemd).
+    const [userspace, setUserspace] = useState(false);
     const [saving, setSaving] = useState(false);
 
     // The native file picker only exists in the Wails desktop app; a browser
@@ -91,6 +94,7 @@ function AddAgentSourceModal({onClose, onCreated, dockerAvailable}: {
                 sourceType === 'path' ? path.trim() : '',
                 sourceType === 'image' ? image.trim() : '',
                 cacheLocally,
+                sourceType !== 'image' && userspace,
             );
             if (src) {
                 onCreated(src);
@@ -215,6 +219,29 @@ function AddAgentSourceModal({onClose, onCreated, dockerAvailable}: {
                             </p>
                         </div>
                     </FormField>
+                )}
+
+                {/* Userspace agent (systemd) — the binary can be awg-agent (kernel)
+                    or awg-agent-userspace; ticking this skips the kernel-module
+                    pre-check on deploy. Not applicable to a Docker image source. */}
+                {sourceType !== 'image' && (
+                    <>
+                        <label className="flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={userspace}
+                                onChange={e => setUserspace(e.target.checked)}
+                                disabled={saving}
+                                className="rounded border-input bg-background dark:border-white/10 dark:bg-white/5 text-sky-500"
+                            />
+                            <span className="ml-3 text-sm font-medium text-foreground dark:text-zinc-300">
+                                {t('servers.sourceUserspace')}
+                            </span>
+                        </label>
+                        <p className="text-xs text-muted-foreground dark:text-zinc-500">
+                            {t('servers.sourceUserspaceHint')}
+                        </p>
+                    </>
                 )}
 
                 <div className="flex gap-3 pt-2">

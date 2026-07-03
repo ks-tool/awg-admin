@@ -22,8 +22,8 @@ export function ChangeCredentials(arg1, arg2, arg3) {
   return window['go']['main']['App']['ChangeCredentials'](arg1, arg2, arg3);
 }
 
-export function CreateAgentSource(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['CreateAgentSource'](arg1, arg2, arg3, arg4, arg5);
+export function CreateAgentSource(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['CreateAgentSource'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function CreateInterface(arg1, arg2) {

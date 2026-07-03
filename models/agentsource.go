@@ -48,4 +48,11 @@ type AgentSource struct {
 	// amneziawg-go image. Exactly one of URL, Path or Image is set; CacheLocally
 	// is meaningless here (Docker pulls the image itself) and is always false.
 	Image string `json:"image,omitempty"`
+	// Userspace marks a URL/Path source as the *userspace* agent binary
+	// (awg-agent-userspace), which runs over systemd with no kernel module. The
+	// systemd deploy then skips its AmneziaWG-kernel-module pre-check (which
+	// otherwise fails fast, as it must for the kernel agent — see
+	// deploy.deploySystemd). Meaningless for an Image source (a Docker image is
+	// inherently the userspace agent) — always false there.
+	Userspace bool `json:"userspace,omitempty"`
 }

@@ -48,10 +48,14 @@ const (
 func deploySystemd(ctx context.Context, client *ssh.Client, srv models.Server, src models.AgentSource, step stepFunc, failed failFunc) error {
 	// The kernel agent needs the AmneziaWG kernel module (amneziawg-dkms).
 	// Pre-check it's present so a missing module fails fast with an actionable
-	// message instead of the agent later crash-looping.
-	step("check_kernel_module").Msg("deploy step")
-	if _, err := sshclient.Run(client, "modinfo amneziawg"); err != nil {
-		return failed("check_kernel_module", fmt.Errorf("AmneziaWG kernel module (amneziawg-dkms) not found on %s — install it, or deploy the userspace agent via a Docker image source: %w", srv.SSH.Host, err))
+	// message instead of the agent later crash-looping. Skipped for a userspace
+	// source (src.Userspace): the userspace agent (awg-agent-userspace) runs over
+	// systemd too and needs no kernel module — its whole point.
+	if !src.Userspace {
+		step("check_kernel_module").Msg("deploy step")
+		if _, err := sshclient.Run(client, "modinfo amneziawg"); err != nil {
+			return failed("check_kernel_module", fmt.Errorf("AmneziaWG kernel module (amneziawg-dkms) not found on %s — install it, mark the source as the userspace agent, or deploy the userspace agent via a Docker image source: %w", srv.SSH.Host, err))
+		}
 	}
 
 	step("upload_binary").Msg("deploy step")

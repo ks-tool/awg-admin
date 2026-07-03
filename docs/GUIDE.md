@@ -130,11 +130,14 @@ native file picker, instead of relying on a downloaded one.
 
 #### Server prerequisites
 
-The agent ships in two builds, each needing different things on the server —
-pick the matching [agent source](#agent-sources-deploy-presets):
+Two choices are independent: the agent **backend** (kernel vs userspace — how the
+interface link is created) and the **deploy method** (systemd vs Docker, picked by
+the [agent source](#agent-sources-deploy-presets) kind — a **URL** or **local
+file** source installs a binary as a **systemd** service, an **image** source runs
+a **container**). What the server needs depends on which you use:
 
-- **`awg-agent` (systemd, kernel).** Drives the kernel module directly, so the
-  server needs it installed:
+- **`awg-agent` — kernel backend (systemd).** Drives the AmneziaWG kernel module
+  directly, so the server needs it installed:
   - the **AmneziaWG kernel module** for AmneziaWG interfaces — install
     `amneziawg-dkms` per the
     [amneziawg-linux-kernel-module README](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module/blob/master/README.md)
@@ -142,12 +145,21 @@ pick the matching [agent source](#agent-sources-deploy-presets):
     fast with a clear message if it's missing;
   - **WireGuard** itself if you also create plain (non-Amnezia) interfaces —
     see [wireguard.com/install](https://www.wireguard.com/install/).
-- **`awg-agent-userspace` (Docker).** Runs the agent as a container with an
-  in-process userspace WireGuard (the amneziawg-go library is compiled in) — no
-  kernel module required, for hosts where you can't install one. It only needs
-  **Docker** — see [docs.docker.com/engine/install](https://docs.docker.com/engine/install/)
-  (the deploy runs the container with `/dev/net/tun` + `NET_ADMIN` for you). The
-  deploy pre-checks `docker info` and fails fast if Docker isn't available.
+- **`awg-agent-userspace` — userspace backend (systemd *or* Docker).** An
+  in-process userspace WireGuard (the amneziawg-go library is compiled in) — **no
+  kernel module required**, for hosts where you can't (or don't want to) install
+  one. Deploy it either way:
+  - **as a binary via systemd** — use a **URL** or **local file** agent source
+    pointing at the `awg-agent-userspace` binary and tick its **Userspace agent
+    (no kernel module)** option; it's installed as a systemd service exactly like
+    the kernel agent, needing only `/dev/net/tun` (standard on Linux) — no Docker
+    involved. (That option tells the deploy to skip the kernel-module pre-check,
+    which otherwise fails fast for the kernel agent.) This is how you run the
+    userspace agent without containers;
+  - **as a container** — use an **image** agent source; the deploy runs the
+    container with `/dev/net/tun` + `NET_ADMIN` for you and pre-checks
+    `docker info`. Needs only **Docker** — see
+    [docs.docker.com/engine/install](https://docs.docker.com/engine/install/).
 
 Both builds speak the identical API; only how the interface link is created
 differs. Versions must match: an AmneziaWG 1.0 kernel module rejects 2.0-style

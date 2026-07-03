@@ -13,7 +13,7 @@ export function BuildTunnel(arg1:Array<models.TunnelStep>,arg2:string):Promise<m
 
 export function ChangeCredentials(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function CreateAgentSource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean):Promise<models.AgentSource>;
+export function CreateAgentSource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:boolean):Promise<models.AgentSource>;
 
 export function CreateInterface(arg1:string,arg2:models.InterfaceConfig):Promise<models.Interface>;
 

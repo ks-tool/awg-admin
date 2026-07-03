@@ -77,11 +77,12 @@ export async function createAgentSource(
     path: string,
     image: string,
     cacheLocally: boolean,
+    userspace: boolean,
 ): Promise<AgentSource | null> {
     const client = getClient();
 
     if (client) {
-        const {data, error} = await client.createAgentSource(name, url, path, image, cacheLocally);
+        const {data, error} = await client.createAgentSource(name, url, path, image, cacheLocally, userspace);
         if (error) {
             console.error('Failed to create agent source (bindings):', error);
             return null;
@@ -89,9 +90,9 @@ export async function createAgentSource(
         return data as unknown as AgentSource;
     }
 
-    const {data, error} = await post<AgentSource, {name: string; url: string; path: string; image: string; cacheLocally: boolean}>(
+    const {data, error} = await post<AgentSource, {name: string; url: string; path: string; image: string; cacheLocally: boolean; userspace: boolean}>(
         '/agent-sources',
-        {name, url, path, image, cacheLocally},
+        {name, url, path, image, cacheLocally, userspace},
     );
     if (error) {
         console.error('Failed to create agent source:', error);

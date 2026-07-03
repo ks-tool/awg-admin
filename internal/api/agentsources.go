@@ -43,13 +43,14 @@ func (h *Handler) agentSourceCreate(w http.ResponseWriter, r bunrouter.Request) 
 		Path         string `json:"path"`
 		Image        string `json:"image"`
 		CacheLocally bool   `json:"cacheLocally"`
+		Userspace    bool   `json:"userspace"`
 	}
 	if err := decode(r, &req); err != nil {
 		return badRequest(err)
 	}
 	log.Debug().Fields(fields).Str("name", req.Name).Msg("creating agent source")
 
-	src, err := h.svc.CreateAgentSource(req.Name, req.URL, req.Path, req.Image, req.CacheLocally)
+	src, err := h.svc.CreateAgentSource(req.Name, req.URL, req.Path, req.Image, req.CacheLocally, req.Userspace)
 	if err != nil {
 		return handleErr(err, fields)
 	}
