@@ -27,13 +27,19 @@ import (
 //go:embed all:cmd/dist
 var assets embed.FS
 
+// version is the desktop build's version, set at link time via
+// -ldflags "-X main.version=..." (the release workflow's `wails build` step).
+// The web-server entry point (cmd/awg-admin.go) has its own identically-named
+// var — they're separate `main` packages. Defaults to "dev" for local builds.
+var version = "dev"
+
 func main() {
 	// Create an instance of the app structure
-	app := NewApp()
+	app := NewApp(version)
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "Amnezia admin",
+		Title:  "Amnezia-WG admin",
 		Width:  1230,
 		Height: 800,
 		AssetServer: &assetserver.Options{

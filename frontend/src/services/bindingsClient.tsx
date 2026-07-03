@@ -36,6 +36,20 @@ function extractErrorMessage(error: unknown): string {
  * Wrapper for Wails bindings that converts them to the same interface as HTTP API
  */
 export const bindingsClient = {
+    // The admin app's build version, shown on the Settings page.
+    async appVersion(): Promise<ApiResponse<string>> {
+        try {
+            const data = await AppBindings.AppVersion();
+            return { data };
+        } catch (error) {
+            console.error('Bindings AppVersion failed:', error);
+            return {
+                data: '',
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async listUsers(): Promise<ApiResponse<models.User[]>> {
         try {
             const data = await AppBindings.ListUsers();
@@ -192,12 +206,25 @@ export const bindingsClient = {
         }
     },
 
-    async createAgentSource(name: string, url: string, path: string, image: string, cacheLocally: boolean): Promise<ApiResponse<models.AgentSource>> {
+    async createAgentSource(name: string, url: string, path: string, image: string, cacheLocally: boolean, userspace: boolean): Promise<ApiResponse<models.AgentSource>> {
         try {
-            const data = await AppBindings.CreateAgentSource(name, url, path, image, cacheLocally);
+            const data = await AppBindings.CreateAgentSource(name, url, path, image, cacheLocally, userspace);
             return { data };
         } catch (error) {
             console.error('Bindings CreateAgentSource failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
+    async updateAgentSource(id: string, name: string, url: string, path: string, image: string, cacheLocally: boolean, userspace: boolean): Promise<ApiResponse<models.AgentSource>> {
+        try {
+            const data = await AppBindings.UpdateAgentSource(id, name, url, path, image, cacheLocally, userspace);
+            return { data };
+        } catch (error) {
+            console.error('Bindings UpdateAgentSource failed:', error);
             return {
                 data: null as any,
                 error: extractErrorMessage(error),

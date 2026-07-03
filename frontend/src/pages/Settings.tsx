@@ -27,6 +27,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { changeCredentials, getCurrentUser, setBasicAuthEnabled } from '@/services/auth';
 import { getLogs, saveLogs, debugLoggingEnabled, setDebugLogging } from '@/services/logs';
 import { saveBackup } from '@/services/backup';
+import { getAppVersion } from '@/services/version';
 import { getCurrentApiMode } from '@/services/apiMode';
 import { cn } from '@/lib/utils';
 
@@ -325,6 +326,17 @@ export default function Settings() {
     const { t, i18n } = useTranslation();
     const { enabled: authEnabled } = useAuth();
     const isDesktop = getCurrentApiMode() === 'bindings';
+    const [appVersion, setAppVersion] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        getAppVersion().then((v) => {
+            if (!cancelled) setAppVersion(v);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const handleLanguageChange = (lang: string) => {
         i18n.changeLanguage(lang);
@@ -357,6 +369,15 @@ export default function Settings() {
                 {isDesktop && <LogsSection />}
                 {authEnabled && <BasicAuthSection />}
                 {authEnabled && <ChangeCredentialsSection />}
+
+                {appVersion && (
+                    <div className="p-4 bg-card border border-border rounded-lg">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-muted-foreground">{t('settings.version')}</span>
+                            <span className="font-mono text-sm text-foreground">{appVersion}</span>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

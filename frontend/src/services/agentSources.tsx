@@ -14,7 +14,7 @@
   limitations under the License.
  */
 
-import {get, post, remove} from './api';
+import {get, post, put, remove} from './api';
 import {getCurrentApiMode} from './apiMode';
 import {bindingsClient} from './bindingsClient';
 import {reportError} from './errorReporting';
@@ -77,11 +77,12 @@ export async function createAgentSource(
     path: string,
     image: string,
     cacheLocally: boolean,
+    userspace: boolean,
 ): Promise<AgentSource | null> {
     const client = getClient();
 
     if (client) {
-        const {data, error} = await client.createAgentSource(name, url, path, image, cacheLocally);
+        const {data, error} = await client.createAgentSource(name, url, path, image, cacheLocally, userspace);
         if (error) {
             console.error('Failed to create agent source (bindings):', error);
             return null;
@@ -89,12 +90,47 @@ export async function createAgentSource(
         return data as unknown as AgentSource;
     }
 
-    const {data, error} = await post<AgentSource, {name: string; url: string; path: string; image: string; cacheLocally: boolean}>(
+    const {data, error} = await post<AgentSource, {name: string; url: string; path: string; image: string; cacheLocally: boolean; userspace: boolean}>(
         '/agent-sources',
-        {name, url, path, image, cacheLocally},
+        {name, url, path, image, cacheLocally, userspace},
     );
     if (error) {
         console.error('Failed to create agent source:', error);
+        return null;
+    }
+    return data;
+}
+
+/**
+ * Edit an existing agent source (same id). Same fields as createAgentSource.
+ * Returns the updated source, or null on failure.
+ */
+export async function updateAgentSource(
+    id: string,
+    name: string,
+    url: string,
+    path: string,
+    image: string,
+    cacheLocally: boolean,
+    userspace: boolean,
+): Promise<AgentSource | null> {
+    const client = getClient();
+
+    if (client) {
+        const {data, error} = await client.updateAgentSource(id, name, url, path, image, cacheLocally, userspace);
+        if (error) {
+            console.error('Failed to update agent source (bindings):', error);
+            return null;
+        }
+        return data as unknown as AgentSource;
+    }
+
+    const {data, error} = await put<AgentSource, {name: string; url: string; path: string; image: string; cacheLocally: boolean; userspace: boolean}>(
+        `/agent-sources/${id}`,
+        {name, url, path, image, cacheLocally, userspace},
+    );
+    if (error) {
+        console.error('Failed to update agent source:', error);
         return null;
     }
     return data;

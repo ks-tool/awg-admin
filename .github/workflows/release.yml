@@ -85,18 +85,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # nsis: the NSIS installer is Windows-only — `wails build -nsis` errors
-          # ("cannot build nsis installer - no windows targets") on any non-Windows
-          # build, so it's passed only for the Windows target.
+          # wailsflags: per-platform extra flags for `wails build`.
+          #  - Windows: -nsis (the NSIS installer is Windows-only; `wails build
+          #    -nsis` errors "cannot build nsis installer - no windows targets"
+          #    on any non-Windows build).
+          #  - Linux: -tags webkit2_41 — ubuntu-latest (24.04) ships
+          #    webkit2gtk-4.1, but Wails defaults to pkg-config webkit2gtk-4.0
+          #    (not present) unless this tag selects the 4.1 path.
           - os: windows-latest
             platform: windows/amd64
-            nsis: "-nsis"
+            wailsflags: "-nsis"
           - os: macos-latest
             platform: darwin/universal
-            nsis: ""
+            wailsflags: ""
           - os: ubuntu-latest
             platform: linux/amd64
-            nsis: ""
+            wailsflags: "-tags webkit2_41"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -113,23 +117,33 @@ jobs:
 
       - name: Install Linux GTK/webkit build deps
         if: runner.os == 'Linux'
+        # libsoup-3.0-dev: the webkit2_41 build path pkg-configs
+        # `webkit2gtk-4.1 libsoup-3.0` (normally pulled in by libwebkit2gtk-4.1-dev,
+        # installed explicitly to be safe).
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
 
       - name: Install NSIS
         if: runner.os == 'Windows'
         run: choco install nsis -y
 
       - name: Build desktop app
-        run: go tool wails build -platform ${{ matrix.platform }} ${{ matrix.nsis }} -trimpath
+        # -ldflags stamps main.version so the app shows it on the Settings page
+        # (main.go's version var). github.ref_name is the admin tag, already
+        # `v1.0.0` (with the leading v), so pass it through as-is.
+        run: go tool wails build -platform ${{ matrix.platform }} ${{ matrix.wailsflags }} -trimpath -ldflags "-X main.version=${{ github.ref_name }}"
 
       - name: Package macOS .dmg
         if: runner.os == 'macOS'
         run: |
-          hdiutil create -volname "Amnezia Admin" \
+          hdiutil create -volname "Amnezia-WG Admin" \
             -srcfolder build/bin/amnezia-admin.app \
             -ov -format UDZO build/bin/amnezia-admin.dmg
+          # The .app bundle is now inside the .dmg — remove it so the upload glob
+          # (build/bin/amnezia-admin*) doesn't try to upload a directory
+          # ("read ...amnezia-admin.app: is a directory").
+          rm -rf build/bin/amnezia-admin.app
 
       - name: Rename artifacts with version
         shell: bash

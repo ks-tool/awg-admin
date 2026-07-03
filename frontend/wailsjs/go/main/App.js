@@ -6,6 +6,10 @@ export function AddPeer(arg1, arg2) {
   return window['go']['main']['App']['AddPeer'](arg1, arg2);
 }
 
+export function AppVersion() {
+  return window['go']['main']['App']['AppVersion']();
+}
+
 export function Backup() {
   return window['go']['main']['App']['Backup']();
 }
@@ -22,8 +26,8 @@ export function ChangeCredentials(arg1, arg2, arg3) {
   return window['go']['main']['App']['ChangeCredentials'](arg1, arg2, arg3);
 }
 
-export function CreateAgentSource(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['CreateAgentSource'](arg1, arg2, arg3, arg4, arg5);
+export function CreateAgentSource(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['CreateAgentSource'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function CreateInterface(arg1, arg2) {
@@ -236,6 +240,10 @@ export function SyncServer(arg1) {
 
 export function UnlockServerSSH(arg1, arg2, arg3) {
   return window['go']['main']['App']['UnlockServerSSH'](arg1, arg2, arg3);
+}
+
+export function UpdateAgentSource(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['UpdateAgentSource'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function UpdateInterfaceConfig(arg1, arg2, arg3) {

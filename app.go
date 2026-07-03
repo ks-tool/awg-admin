@@ -41,8 +41,10 @@ type App struct {
 	logs *logbuffer.Buffer
 }
 
-// NewApp creates a new App application struct
-func NewApp() *App {
+// NewApp creates a new App application struct. version is the desktop build's
+// version (see main.go), threaded into the Service so the Settings page can
+// show it via AppVersion.
+func NewApp(version string) *App {
 	// Tee the global logger to stdout AND an in-memory buffer (surfaced by the
 	// Settings "Logs" modal). This lives here rather than in the web-server
 	// entry point because NewApp is only ever constructed by the Wails desktop
@@ -56,6 +58,11 @@ func NewApp() *App {
 	// per-request debug noise until an admin turns it on to troubleshoot.
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
+	// The web-server main logs this line too, but that entry point isn't run in
+	// the desktop app — log it here so the version shows in the Settings "Logs"
+	// modal / captured buffer.
+	log.Info().Str("version", version).Msg("starting awg-admin")
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
@@ -66,7 +73,7 @@ func NewApp() *App {
 		log.Fatal().Err(err).Send()
 	}
 
-	return &App{Service: service.New(db), logs: logs}
+	return &App{Service: service.New(db, service.WithVersion(version)), logs: logs}
 }
 
 // startup is called when the app starts. The context is saved

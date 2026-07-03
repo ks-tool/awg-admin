@@ -49,7 +49,7 @@ const (
 func deployDocker(client *ssh.Client, srv models.Server, src models.AgentSource, udpPorts []uint16, step stepFunc, failed failFunc) error {
 	step("check_docker").Msg("deploy step")
 	if _, err := sshclient.Run(client, "docker info"); err != nil {
-		return failed("check_docker", fmt.Errorf("Docker not available on %s (docker info failed) — install/start Docker or use a binary agent source: %w", srv.SSH.Host, err))
+		return failed("check_docker", fmt.Errorf("the Docker not available on %s (docker info failed) — install/start Docker or use a binary agent source: %w", srv.SSH.Host, err))
 	}
 
 	if tls := srv.Agent.TLS; !tls.IsZero() {

@@ -43,7 +43,7 @@ func TestWriteReportsFullLengthAndStripsNewline(t *testing.T) {
 func TestRingDropsOldest(t *testing.T) {
 	b := New(3)
 	for i := 0; i < 5; i++ {
-		if _, err := b.Write([]byte(fmt.Sprintf("line-%d\n", i))); err != nil {
+		if _, err := fmt.Fprintf(b, "line-%d\n", i); err != nil {
 			t.Fatalf("Write: %v", err)
 		}
 	}
@@ -78,7 +78,7 @@ func TestConcurrentWritesAreRaceFree(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < 50; j++ {
-				_, _ = b.Write([]byte(fmt.Sprintf("w%d-%d\n", id, j)))
+				_, _ = fmt.Fprintf(b, "w%d-%d\n", id, j)
 			}
 		}(i)
 	}

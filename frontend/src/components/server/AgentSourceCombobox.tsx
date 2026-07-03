@@ -18,12 +18,12 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {ChevronDown, FolderOpen, RefreshCw, X} from 'lucide-react';
+import {ChevronDown, FolderOpen, Pencil, RefreshCw, X} from 'lucide-react';
 import {FormField} from '@/components/common/FormField';
 import {buttons, inputs, Modal} from '@/components/common/Modal';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {cn} from '@/lib/utils';
-import {createAgentSource, deleteAgentSource, listAgentSources, refreshAgentSourceCache, selectAgentFile} from '@/services/agentSources';
+import {createAgentSource, deleteAgentSource, listAgentSources, refreshAgentSourceCache, selectAgentFile, updateAgentSource} from '@/services/agentSources';
 import {getCurrentApiMode} from '@/services/apiMode';
 import type {AgentSource} from '@/types';
 
@@ -46,26 +46,36 @@ interface Props {
  * combobox itself lives inside another modal (the agent dialog). onCreated hands
  * the saved source back so the opener can refresh its list and select it.
  */
-function AddAgentSourceModal({onClose, onCreated, dockerAvailable}: {
+function AgentSourceModal({onClose, onSaved, dockerAvailable, source}: {
     onClose: () => void;
-    onCreated: (src: AgentSource) => void;
+    onSaved: (src: AgentSource) => void;
     /** false => the target server has no usable Docker, so the Docker-image
      *  source type (which only the docker deploy uses) isn't offered. undefined
      *  = unknown (agent not deployed yet) → offer it; the deploy pre-checks. */
     dockerAvailable?: boolean;
+    /** When set, the modal edits this existing source (pre-filled) instead of
+     *  creating a new one. */
+    source?: AgentSource;
 }) {
     const {t} = useTranslation();
+    const editing = !!source;
     // Hide the Docker-image option when Docker is known-unavailable — deploying
-    // from an image would just fail the docker pre-check on that host.
-    const types = dockerAvailable === false
+    // from an image would just fail the docker pre-check on that host. Keep it
+    // shown, though, when editing a source that already is an image.
+    const types = dockerAvailable === false && !source?.image
         ? (['url', 'path'] as const)
         : (['url', 'path', 'image'] as const);
-    const [sourceType, setSourceType] = useState<'url' | 'path' | 'image'>('url');
-    const [name, setName] = useState('');
-    const [url, setUrl] = useState('');
-    const [path, setPath] = useState('');
-    const [image, setImage] = useState('');
-    const [cacheLocally, setCacheLocally] = useState(false);
+    const [sourceType, setSourceType] = useState<'url' | 'path' | 'image'>(
+        source?.image ? 'image' : source?.path ? 'path' : 'url',
+    );
+    const [name, setName] = useState(source?.name ?? '');
+    const [url, setUrl] = useState(source?.url ?? '');
+    const [path, setPath] = useState(source?.path ?? '');
+    const [image, setImage] = useState(source?.image ?? '');
+    const [cacheLocally, setCacheLocally] = useState(source?.cacheLocally ?? false);
+    // Marks a URL/Path source as the userspace agent binary — the systemd deploy
+    // then skips its AmneziaWG-kernel-module pre-check (see deploy.deploySystemd).
+    const [userspace, setUserspace] = useState(source?.userspace ?? false);
     const [saving, setSaving] = useState(false);
 
     // The native file picker only exists in the Wails desktop app; a browser
@@ -77,25 +87,30 @@ function AddAgentSourceModal({onClose, onCreated, dockerAvailable}: {
         if (picked) setPath(picked);
     };
 
-    const handleAdd = async () => {
+    const handleSave = async () => {
         if (!name.trim()) return toast.error(t('servers.sourceNameRequired'));
         if (sourceType === 'url' && !url.trim()) return toast.error(t('servers.sourceUrlRequired'));
         if (sourceType === 'path' && !path.trim()) return toast.error(t('servers.sourcePathRequired'));
         if (sourceType === 'image' && !image.trim()) return toast.error(t('servers.sourceImageRequired'));
 
+        const args = [
+            name.trim(),
+            sourceType === 'url' ? url.trim() : '',
+            sourceType === 'path' ? path.trim() : '',
+            sourceType === 'image' ? image.trim() : '',
+            cacheLocally,
+            sourceType !== 'image' && userspace,
+        ] as const;
+
         setSaving(true);
         try {
-            const src = await createAgentSource(
-                name.trim(),
-                sourceType === 'url' ? url.trim() : '',
-                sourceType === 'path' ? path.trim() : '',
-                sourceType === 'image' ? image.trim() : '',
-                cacheLocally,
-            );
+            const src = source
+                ? await updateAgentSource(source.id, ...args)
+                : await createAgentSource(...args);
             if (src) {
-                onCreated(src);
+                onSaved(src);
             } else {
-                toast.error(t('servers.sourceCreateError'));
+                toast.error(editing ? t('servers.sourceUpdateError') : t('servers.sourceCreateError'));
             }
         } finally {
             setSaving(false);
@@ -103,7 +118,7 @@ function AddAgentSourceModal({onClose, onCreated, dockerAvailable}: {
     };
 
     return (
-        <Modal title={t('servers.addSourceTitle')} onClose={onClose} loading={saving}>
+        <Modal title={editing ? t('servers.editSourceTitle') : t('servers.addSourceTitle')} onClose={onClose} loading={saving}>
             <div className="space-y-4">
                 <FormField label={t('servers.sourceName')}>
                     <input
@@ -217,9 +232,32 @@ function AddAgentSourceModal({onClose, onCreated, dockerAvailable}: {
                     </FormField>
                 )}
 
+                {/* Userspace agent (systemd) — the binary can be awg-agent (kernel)
+                    or awg-agent-userspace; ticking this skips the kernel-module
+                    pre-check on deploy. Not applicable to a Docker image source. */}
+                {sourceType !== 'image' && (
+                    <>
+                        <label className="flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={userspace}
+                                onChange={e => setUserspace(e.target.checked)}
+                                disabled={saving}
+                                className="rounded border-input bg-background dark:border-white/10 dark:bg-white/5 text-sky-500"
+                            />
+                            <span className="ml-3 text-sm font-medium text-foreground dark:text-zinc-300">
+                                {t('servers.sourceUserspace')}
+                            </span>
+                        </label>
+                        <p className="text-xs text-muted-foreground dark:text-zinc-500">
+                            {t('servers.sourceUserspaceHint')}
+                        </p>
+                    </>
+                )}
+
                 <div className="flex gap-3 pt-2">
-                    <button type="button" onClick={handleAdd} disabled={saving} className={cn('flex-1', buttons.primary)}>
-                        {saving ? `${t('common.saving')}...` : t('servers.addSource')}
+                    <button type="button" onClick={handleSave} disabled={saving} className={cn('flex-1', buttons.primary)}>
+                        {saving ? `${t('common.saving')}...` : editing ? t('common.save') : t('servers.addSource')}
                     </button>
                     <button type="button" onClick={onClose} disabled={saving} className={cn('flex-1', buttons.secondary)}>
                         {t('common.cancel')}
@@ -245,6 +283,7 @@ export function AgentSourceCombobox({value, onChange, disabled = false, dockerAv
     const [sources, setSources] = useState<AgentSource[]>([]);
     const [open, setOpen] = useState(false);
     const [adding, setAdding] = useState(false);
+    const [editingSource, setEditingSource] = useState<AgentSource | null>(null);
     const [refreshingId, setRefreshingId] = useState<string | null>(null);
     const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
     const [removeLoading, setRemoveLoading] = useState(false);
@@ -434,6 +473,14 @@ export function AgentSourceCombobox({value, onChange, disabled = false, dockerAv
                                         )}
                                         <button
                                             type="button"
+                                            onClick={(e) => { e.stopPropagation(); setOpen(false); setEditingSource(s); }}
+                                            className="text-muted-foreground hover:text-sky-600 dark:hover:text-sky-400"
+                                            title={t('servers.editSource')}
+                                        >
+                                            <Pencil size={14}/>
+                                        </button>
+                                        <button
+                                            type="button"
                                             onClick={(e) => handleRemove(s.id, e)}
                                             className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
                                             title={t('common.close')}
@@ -459,13 +506,25 @@ export function AgentSourceCombobox({value, onChange, disabled = false, dockerAv
             </FormField>
 
             {adding && (
-                <AddAgentSourceModal
+                <AgentSourceModal
                     dockerAvailable={dockerAvailable}
                     onClose={() => setAdding(false)}
-                    onCreated={(src) => {
+                    onSaved={(src) => {
                         setAdding(false);
                         void load();
                         onChange(src.id);
+                    }}
+                />
+            )}
+
+            {editingSource && (
+                <AgentSourceModal
+                    source={editingSource}
+                    dockerAvailable={dockerAvailable}
+                    onClose={() => setEditingSource(null)}
+                    onSaved={() => {
+                        setEditingSource(null);
+                        void load();
                     }}
                 />
             )}

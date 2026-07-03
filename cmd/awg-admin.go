@@ -72,7 +72,7 @@ func main() {
 		log.Fatal().Err(err).Send()
 	}
 
-	svc := service.New(db)
+	svc := service.New(db, service.WithVersion(version))
 	svc.StartTunnels()
 	defer svc.StopTunnels()
 

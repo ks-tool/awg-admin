@@ -5,6 +5,8 @@ import {models} from '../models';
 
 export function AddPeer(arg1:string,arg2:service.AddPeerInput):Promise<models.User>;
 
+export function AppVersion():Promise<string>;
+
 export function Backup():Promise<Array<number>>;
 
 export function BasicAuthEnabled():Promise<boolean>;
@@ -13,7 +15,7 @@ export function BuildTunnel(arg1:Array<models.TunnelStep>,arg2:string):Promise<m
 
 export function ChangeCredentials(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function CreateAgentSource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean):Promise<models.AgentSource>;
+export function CreateAgentSource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:boolean):Promise<models.AgentSource>;
 
 export function CreateInterface(arg1:string,arg2:models.InterfaceConfig):Promise<models.Interface>;
 
@@ -120,6 +122,8 @@ export function StopTunnels():Promise<void>;
 export function SyncServer(arg1:string):Promise<void>;
 
 export function UnlockServerSSH(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
+export function UpdateAgentSource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean,arg7:boolean):Promise<models.AgentSource>;
 
 export function UpdateInterfaceConfig(arg1:string,arg2:string,arg3:models.InterfaceConfig):Promise<models.Interface>;
 

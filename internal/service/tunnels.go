@@ -219,19 +219,43 @@ func (s *Service) RemoveTunnel(tunnelID string) error {
 		return errors.New("tunnel not found")
 	}
 
+	// The tunnel's gateway/relay peers are keyed by another member's interface
+	// public key (BuildTunnel adds them directly — they have no user Peer
+	// record). Collect those keys so teardown strips ONLY them and keeps the
+	// interface's real client peers. Otherwise the client peers vanish from the
+	// device while their Peer records linger under the user, so they still show
+	// in the list but GetPeerConfig can't find them on the interface.
+	tunnelPeerKeys := map[string]bool{}
+	for i := range members {
+		if agentmodels.IsEmpty(members[i].iface.PrivateKey) {
+			continue
+		}
+		pub := members[i].iface.PrivateKey.PublicKey()
+		tunnelPeerKeys[pub.String()] = true
+	}
+
 	sort.SliceStable(members, func(a, b int) bool { return members[a].isExit && !members[b].isExit })
 	for i := range members {
-		emptyTunnelInterface(&members[i].iface)
+		resetTunnelInterface(&members[i].iface, tunnelPeerKeys)
 		s.pushInterface(members[i].srvID, &members[i].iface)
 	}
 	return nil
 }
 
-// emptyTunnelInterface resets a tunnel member back to a plain interface: clears
-// its peers, all lifecycle hooks, routing table and tunnel id, keeping only its
-// identity (name, key, address, listen port, obfuscation params).
-func emptyTunnelInterface(iface *models.Interface) {
-	iface.Peers = nil
+// resetTunnelInterface reverts a tunnel member to a plain interface: it drops
+// the tunnel's gateway/relay peers (those keyed by another member's interface
+// public key, in tunnelPeerKeys) and all tunnel infra (lifecycle hooks, routing
+// table, tunnel id), while KEEPING the interface's client peers so they survive
+// the teardown. Identity (name, key, address, listen port, obfuscation) is kept.
+func resetTunnelInterface(iface *models.Interface, tunnelPeerKeys map[string]bool) {
+	kept := make([]agentmodels.InterfacePeer, 0, len(iface.Peers))
+	for i := range iface.Peers {
+		if tunnelPeerKeys[iface.Peers[i].Key.String()] {
+			continue // the tunnel's own gateway/relay peer — drop it
+		}
+		kept = append(kept, iface.Peers[i])
+	}
+	iface.Peers = kept
 	iface.PreUp = nil
 	iface.PostUp = nil
 	iface.PreDown = nil

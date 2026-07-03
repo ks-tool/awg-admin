@@ -43,7 +43,11 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{ .Version }}
+      # `v`-prefix the human-facing version (v1.0.0) — it's shown on the admin
+      # Settings page (Service.AppVersion) and logged at startup. {{ .Version }}
+      # is the tag with its leading `v` stripped, so add it back. Archive/image
+      # names below keep the bare {{ .Version }} by convention.
+      - -s -w -X main.version=v{{ .Version }}
 
 archives:
   - id: admin-archive
