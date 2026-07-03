@@ -91,6 +91,7 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
     const [agentSourceId, setAgentSourceId] = useState('');
     const [deployLoading, setDeployLoading] = useState(false);
     const [deployStep, setDeployStep] = useState('');
+    const [deployError, setDeployError] = useState<string | null>(null);
     const deployPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const handleDeployAgentRef = useRef<(sourceId: string) => void>(() => {});
     const [sshUnlock, setSshUnlock] = useState<{retry: () => void} | null>(null);
@@ -136,8 +137,12 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
             stopDeployPolling();
             setDeployLoading(false);
             if (status.error) {
+                // Surface the agent's actual failure reason (e.g. a missing
+                // kernel module — tick "Userspace agent" for awg-agent-userspace —
+                // or a failed download) rather than a generic "failed to deploy".
                 console.error('Failed to deploy agent:', status.error);
-                toast.error(t('servers.deployError'));
+                setDeployError(status.error);
+                toast.error(status.error, {duration: 10000});
             } else {
                 toast.success(t('servers.deployedSuccess'));
                 refreshHostInfo();
@@ -157,6 +162,7 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
 
     const handleDeployAgent = useCallback(async (sourceId: string) => {
         stopDeployPolling();
+        setDeployError(null);
         setDeployLoading(true);
         setDeployStep('connect');
         try {
@@ -297,6 +303,9 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
                             <RefreshCw size={12} className="animate-spin"/>
                             <span>{t(`servers.deploySteps.${deployStep}`, deployStep)}</span>
                         </div>
+                    )}
+                    {deployError && !deployLoading && (
+                        <p className="mt-2 text-xs text-red-600 dark:text-red-400 break-words whitespace-pre-wrap">{deployError}</p>
                     )}
                 </div>
 
