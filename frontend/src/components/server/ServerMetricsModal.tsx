@@ -14,7 +14,7 @@
   limitations under the License.
  */
 
-import {useEffect, useMemo, useState} from 'react';
+import {type MouseEvent, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
     CategoryScale,
@@ -54,6 +54,11 @@ const timeLabel = (point: SystemHistoryPoint) =>
 // tsMs parses a wire timestamp (RFC3339 string, typed as number by tygo — see
 // the timeLabel note) to epoch milliseconds for range filtering/comparison.
 const tsMs = (ts: unknown) => new Date(ts as string).getTime();
+
+// Full clock label (with seconds — samples are ~45s apart) for the sparkline
+// hover tooltip.
+const clockLabel = (ms: number) =>
+    new Date(ms).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
 
 // Y-axis bounds are dynamic: max is the largest value actually present in
 // the series rounded up to the next multiple of ten, min is the smallest
@@ -114,7 +119,12 @@ const shortKey = (pk: string) => (pk.length > 12 ? `${pk.slice(0, 10)}…` : pk)
 // heavy for many peers) — for showing a peer's activity trend beside its
 // identifier. The SVG stretches horizontally to whatever room the row gives it
 // (preserveAspectRatio="none") while the stroke stays crisp (non-scaling).
-function Sparkline({values, height = 28}: {values: number[]; height?: number}) {
+// Hovering reveals the sample under the cursor: a vertical guide + dot in the
+// SVG and an HTML tooltip with that sample's time (and activity). `times[i]`
+// is the epoch-ms timestamp aligned to `values[i]`.
+function Sparkline({values, times, height = 28}: {values: number[]; times?: number[]; height?: number}) {
+    const [hover, setHover] = useState<number | null>(null);
+
     if (values.length === 0) {
         return <div className="w-full" style={{height}} aria-hidden="true"/>;
     }
@@ -124,30 +134,76 @@ function Sparkline({values, height = 28}: {values: number[]; height?: number}) {
     const n = values.length;
     const pad = 2;
     const h = height - pad * 2;
-    const xy = values.map((v, i) => {
-        const x = n > 1 ? (i / (n - 1)) * vbWidth : vbWidth / 2;
-        const y = pad + h - (v / max) * h;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
+    const xy = values.map((v, i) => ({
+        x: n > 1 ? (i / (n - 1)) * vbWidth : vbWidth / 2,
+        y: pad + h - (v / max) * h,
+    }));
+    const pointsStr = xy.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+
+    // Map the cursor's horizontal position (fraction of the real, rendered
+    // width — the SVG's own coord space is distorted by preserveAspectRatio)
+    // to the nearest sample index.
+    const onMove = (e: MouseEvent<HTMLDivElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const frac = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0;
+        setHover(Math.min(n - 1, Math.max(0, Math.round(frac * (n - 1)))));
+    };
+
+    const hv = hover != null ? xy[hover] : null;
+    const hoverFrac = hover != null && n > 1 ? hover / (n - 1) : 0.5;
 
     return (
-        <svg
-            width="100%"
-            height={height}
-            viewBox={`0 0 ${vbWidth} ${height}`}
-            preserveAspectRatio="none"
-            className="block"
+        <div
+            className="relative w-full"
+            style={{height}}
+            onMouseMove={onMove}
+            onMouseLeave={() => setHover(null)}
         >
-            <polygon points={`0,${height} ${xy.join(' ')} ${vbWidth},${height}`} fill="rgba(56,189,248,0.15)"/>
-            <polyline
-                points={xy.join(' ')}
-                fill="none"
-                stroke="rgb(56,189,248)"
-                strokeWidth={1.5}
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-            />
-        </svg>
+            <svg
+                width="100%"
+                height={height}
+                viewBox={`0 0 ${vbWidth} ${height}`}
+                preserveAspectRatio="none"
+                className="block"
+            >
+                <polygon points={`0,${height} ${pointsStr} ${vbWidth},${height}`} fill="rgba(56,189,248,0.15)"/>
+                <polyline
+                    points={pointsStr}
+                    fill="none"
+                    stroke="rgb(56,189,248)"
+                    strokeWidth={1.5}
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                />
+                {hv && (
+                    <line
+                        x1={hv.x}
+                        y1={0}
+                        x2={hv.x}
+                        y2={height}
+                        stroke="rgba(148,163,184,0.7)"
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                    />
+                )}
+            </svg>
+            {/* Dot + tooltip are HTML overlays (percent-positioned) so they stay
+                round/legible despite the SVG's non-uniform x-scaling. */}
+            {hv && (
+                <div
+                    className="pointer-events-none absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-400 ring-2 ring-sky-400/30"
+                    style={{left: `${hoverFrac * 100}%`, top: `${(hv.y / height) * 100}%`}}
+                />
+            )}
+            {hover != null && times?.[hover] != null && (
+                <div
+                    className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] leading-tight text-white shadow dark:bg-zinc-700"
+                    style={{left: `${hoverFrac * 100}%`}}
+                >
+                    {clockLabel(times[hover])} · {formatBytes(values[hover])}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -270,6 +326,10 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         const rows = (filtered?.interfaces ?? []).flatMap((iface) =>
             iface.peers.map((peer) => {
                 const activity = activitySeries(peer.points);
+                // activity[k] is the delta ending at peer.points[k+1], so its
+                // timestamp is that sample's — i.e. points shifted by one, which
+                // keeps this array the same length as `activity`.
+                const times = peer.points.slice(1).map((p) => tsMs(p.timestamp));
                 const known = peerLabels.get(peer.publicKey);
                 const tunnel = tunnelLabelByIface.get(iface.interface);
                 const label = known
@@ -289,6 +349,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                     label,
                     online,
                     activity,
+                    times,
                     total: activity.reduce((sum, v) => sum + v, 0),
                 };
             }),
@@ -488,7 +549,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                                                     {formatBytes(row.total)}
                                                 </span>
                                                 <div className="min-w-0 flex-1">
-                                                    <Sparkline values={row.activity}/>
+                                                    <Sparkline values={row.activity} times={row.times}/>
                                                 </div>
                                             </div>
                                         </td>
