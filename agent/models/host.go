@@ -42,4 +42,10 @@ type HostInfo struct {
 	// InterfaceKinds lists the interface variants this agent can create on this
 	// host: "amneziawg" and/or "wireguard".
 	InterfaceKinds []string `json:"interfaceKinds"`
+	// Arch is the host CPU architecture the agent runs on (runtime.GOARCH, e.g.
+	// "amd64"/"arm64"). The admin uses it to offer only matching-architecture
+	// agent binaries in the "GitHub releases" source picker, since a binary
+	// built for another CPU won't run. Empty when reported by an older agent
+	// that predates this field.
+	Arch string `json:"arch"`
 }

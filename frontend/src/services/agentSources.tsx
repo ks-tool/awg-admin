@@ -18,7 +18,7 @@ import {get, post, put, remove} from './api';
 import {getCurrentApiMode} from './apiMode';
 import {bindingsClient} from './bindingsClient';
 import {reportError} from './errorReporting';
-import type {AgentSource} from '@/types';
+import type {AgentReleaseAsset, AgentSource} from '@/types';
 
 function getClient() {
     return getCurrentApiMode() === 'bindings' ? bindingsClient : null;
@@ -59,6 +59,32 @@ export async function listAgentSources(): Promise<AgentSource[] | null> {
     const {data, error} = await get<AgentSource[]>('/agent-sources/');
     if (error) {
         reportError('fetch-agent-sources', 'Failed to fetch agent sources', error);
+        return null;
+    }
+    return data;
+}
+
+/**
+ * Fetches the newest awg-agent binaries published in the project's GitHub
+ * releases (tagged agent/v*), newest release first — offered by the combobox's
+ * "GitHub releases" picker so an official binary can be turned into a URL source
+ * without pasting a URL. Reaches the public GitHub API; returns null on failure.
+ */
+export async function listAgentReleases(): Promise<AgentReleaseAsset[] | null> {
+    const client = getClient();
+
+    if (client) {
+        const {data, error} = await client.listAgentReleases();
+        if (error) {
+            reportError('fetch-agent-releases', 'Failed to fetch agent releases', error);
+            return null;
+        }
+        return data as unknown as AgentReleaseAsset[];
+    }
+
+    const {data, error} = await get<AgentReleaseAsset[]>('/agent-sources/releases');
+    if (error) {
+        reportError('fetch-agent-releases', 'Failed to fetch agent releases', error);
         return null;
     }
     return data;

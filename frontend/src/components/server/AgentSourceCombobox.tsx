@@ -18,14 +18,14 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {ChevronDown, FolderOpen, Pencil, RefreshCw, X} from 'lucide-react';
+import {Check, ChevronDown, FolderOpen, Pencil, RefreshCw, X} from 'lucide-react';
 import {FormField} from '@/components/common/FormField';
 import {buttons, inputs, Modal} from '@/components/common/Modal';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
-import {cn} from '@/lib/utils';
-import {createAgentSource, deleteAgentSource, listAgentSources, refreshAgentSourceCache, selectAgentFile, updateAgentSource} from '@/services/agentSources';
+import {cn, formatBytes} from '@/lib/utils';
+import {createAgentSource, deleteAgentSource, listAgentReleases, listAgentSources, refreshAgentSourceCache, selectAgentFile, updateAgentSource} from '@/services/agentSources';
 import {getCurrentApiMode} from '@/services/apiMode';
-import type {AgentSource} from '@/types';
+import type {AgentReleaseAsset, AgentSource} from '@/types';
 
 interface Props {
     /** Selected AgentSource ID, or '' if nothing is selected yet. */
@@ -37,6 +37,11 @@ interface Props {
      *  the "image" type in the add form — since the docker deploy can't run
      *  there. undefined = unknown (no agent yet) → everything is offered. */
     dockerAvailable?: boolean;
+    /** The target server's CPU architecture (from its agent's HostInfo.arch,
+     *  e.g. "amd64"/"arm64"). Passed to the GitHub-releases picker to offer only
+     *  matching-architecture binaries — a binary built for another CPU won't
+     *  run. Empty/undefined (unknown arch, or an older agent) → all are offered. */
+    arch?: string;
 }
 
 /**
@@ -118,7 +123,7 @@ function AgentSourceModal({onClose, onSaved, dockerAvailable, source}: {
     };
 
     return (
-        <Modal title={editing ? t('servers.editSourceTitle') : t('servers.addSourceTitle')} onClose={onClose} loading={saving}>
+        <Modal title={editing ? t('servers.editSourceTitle') : t('servers.addSourceTitle')} onClose={onClose} loading={saving} dimmed={false}>
             <div className="space-y-4">
                 <FormField label={t('servers.sourceName')}>
                     <input
@@ -269,6 +274,153 @@ function AgentSourceModal({onClose, onSaved, dockerAvailable, source}: {
 }
 
 /**
+ * Modal listing the newest awg-agent binaries from the project's GitHub
+ * releases (Service.ListAgentReleases, tag agent/v*), newest release first.
+ * Double-clicking a binary saves it as a URL agent source — its userspace flag
+ * inferred from the binary name — so an official build can be added without
+ * pasting a URL. A binary already saved as a source (matched by download URL)
+ * is marked and can't be added twice. Stays open so several can be added at
+ * once; onAdded lets the opener refresh its list after each add.
+ */
+function AgentReleasesModal({onClose, onAdded, existingUrls, arch}: {
+    onClose: () => void;
+    onAdded: () => void;
+    /** Download URLs already saved as sources, so they're shown as added. */
+    existingUrls: Set<string>;
+    /** Target server CPU arch; when set, only matching (and arch-unknown)
+     *  binaries are offered, since a wrong-CPU binary won't run. */
+    arch?: string;
+}) {
+    const {t} = useTranslation();
+    const [assets, setAssets] = useState<AgentReleaseAsset[] | null>(null);
+    const [failed, setFailed] = useState(false);
+    const [addingUrl, setAddingUrl] = useState<string | null>(null);
+    const [addedUrls, setAddedUrls] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const list = await listAgentReleases();
+            if (cancelled) return;
+            if (!list) {
+                setFailed(true);
+                setAssets([]);
+                return;
+            }
+            setAssets(list);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const isAdded = (url: string) => existingUrls.has(url) || addedUrls.has(url);
+
+    // Only offer binaries that can actually run on the target server: its arch,
+    // plus any whose arch couldn't be parsed. Unknown target arch (no agent yet
+    // or an older agent that doesn't report it) → offer everything.
+    const shown = (assets ?? []).filter(a => !arch || !a.arch || a.arch === arch);
+
+    const handleAdd = async (asset: AgentReleaseAsset) => {
+        if (addingUrl || isAdded(asset.url)) return;
+        const name = `${asset.userspace ? 'awg-agent-userspace' : 'awg-agent'} ${asset.version}${asset.arch ? ` (${asset.arch})` : ''}`;
+        setAddingUrl(asset.url);
+        try {
+            const src = await createAgentSource(name, asset.url, '', '', false, asset.userspace);
+            if (src) {
+                setAddedUrls(prev => new Set(prev).add(asset.url));
+                toast.success(t('servers.sourceAddedFromRelease', {name}));
+                onAdded();
+            } else {
+                toast.error(t('servers.sourceCreateError'));
+            }
+        } finally {
+            setAddingUrl(null);
+        }
+    };
+
+    return (
+        <Modal title={t('servers.githubReleasesTitle')} onClose={onClose} dimmed={false}>
+            <div className="space-y-3">
+                <p className="text-xs text-muted-foreground dark:text-zinc-500">
+                    {t('servers.githubReleasesHint')}
+                </p>
+                {arch && (
+                    <p className="text-xs text-muted-foreground dark:text-zinc-500">
+                        {t('servers.githubReleasesArchNote', {arch})}
+                    </p>
+                )}
+                {assets === null ? (
+                    <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground dark:text-zinc-500">
+                        <RefreshCw size={16} className="animate-spin"/>
+                        {t('common.loading')}
+                    </div>
+                ) : failed ? (
+                    <div className="py-10 text-center text-sm text-red-500">{t('servers.githubReleasesError')}</div>
+                ) : shown.length === 0 ? (
+                    <div className="py-10 text-center text-sm text-muted-foreground dark:text-zinc-500">
+                        {arch && (assets?.length ?? 0) > 0
+                            ? t('servers.githubReleasesNoArch', {arch})
+                            : t('servers.githubReleasesEmpty')}
+                    </div>
+                ) : (
+                    <div className="max-h-80 divide-y divide-border overflow-auto rounded-lg border border-border dark:divide-white/10 dark:border-white/10">
+                        {shown.map(asset => {
+                            const added = isAdded(asset.url);
+                            return (
+                                <div
+                                    key={asset.url}
+                                    role="button"
+                                    tabIndex={added ? -1 : 0}
+                                    onDoubleClick={() => handleAdd(asset)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void handleAdd(asset); } }}
+                                    title={added ? t('servers.releaseAssetAdded') : t('servers.releaseAssetDoubleClick')}
+                                    className={cn(
+                                        'flex select-none items-center justify-between gap-3 px-3 py-2 text-sm focus:outline-none',
+                                        added ? 'opacity-60' : 'cursor-pointer hover:bg-muted focus:bg-muted dark:hover:bg-white/5 dark:focus:bg-white/5',
+                                    )}
+                                >
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span className="font-mono text-xs text-foreground dark:text-zinc-200">{asset.version}</span>
+                                        <span className={cn(
+                                            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium',
+                                            asset.userspace
+                                                ? 'bg-violet-100 text-violet-700 dark:bg-violet-400/10 dark:text-violet-400'
+                                                : 'bg-sky-100 text-sky-700 dark:bg-sky-400/10 dark:text-sky-400',
+                                        )}>
+                                            {asset.userspace ? t('servers.releaseUserspace') : t('servers.releaseKernel')}
+                                        </span>
+                                        {asset.arch && (
+                                            <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-mono text-gray-600 dark:bg-zinc-500/10 dark:text-zinc-400">
+                                                {asset.arch}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground dark:text-zinc-500">
+                                        {addingUrl === asset.url ? (
+                                            <RefreshCw size={14} className="animate-spin"/>
+                                        ) : added ? (
+                                            <Check size={14} className="text-emerald-500"/>
+                                        ) : (
+                                            <span>{formatBytes(asset.size)}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+                <div className="flex justify-end pt-1">
+                    <button type="button" onClick={onClose} className={buttons.secondary}>
+                        {t('common.close')}
+                    </button>
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
+/**
  * Dropdown of saved agent-binary deploy presets (see models.AgentSource),
  * replacing a plain "Local directory"/"URL" choice: each preset is either a
  * named URL — optionally cached locally by awg-admin (prefixed with "*" in
@@ -278,11 +430,12 @@ function AgentSourceModal({onClose, onSaved, dockerAvailable, source}: {
  * one; each existing entry has a remove button on the right, like clearing
  * single entries from Chrome's address-bar history.
  */
-export function AgentSourceCombobox({value, onChange, disabled = false, dockerAvailable}: Props) {
+export function AgentSourceCombobox({value, onChange, disabled = false, dockerAvailable, arch}: Props) {
     const {t} = useTranslation();
     const [sources, setSources] = useState<AgentSource[]>([]);
     const [open, setOpen] = useState(false);
     const [adding, setAdding] = useState(false);
+    const [showReleases, setShowReleases] = useState(false);
     const [editingSource, setEditingSource] = useState<AgentSource | null>(null);
     const [refreshingId, setRefreshingId] = useState<string | null>(null);
     const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
@@ -499,6 +652,15 @@ export function AgentSourceCombobox({value, onChange, disabled = false, dockerAv
                             >
                                 {t('servers.addNewSource')}
                             </div>
+                            <div
+                                onClick={() => {
+                                    setShowReleases(true);
+                                    setOpen(false);
+                                }}
+                                className="px-3 py-2 text-sm cursor-pointer text-sky-600 dark:text-sky-400 hover:bg-muted dark:hover:bg-white/5 border-t border-border dark:border-white/10"
+                            >
+                                {t('servers.githubReleases')}
+                            </div>
                         </div>,
                         document.body,
                     )}
@@ -526,6 +688,15 @@ export function AgentSourceCombobox({value, onChange, disabled = false, dockerAv
                         setEditingSource(null);
                         void load();
                     }}
+                />
+            )}
+
+            {showReleases && (
+                <AgentReleasesModal
+                    arch={arch}
+                    existingUrls={new Set(sources.filter(s => s.url).map(s => s.url as string))}
+                    onClose={() => setShowReleases(false)}
+                    onAdded={() => void load()}
                 />
             )}
 

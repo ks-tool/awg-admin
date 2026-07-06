@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"runtime"
 	"time"
 
 	"github.com/ks-tool/awg-admin/agent/internal/service"
@@ -42,6 +43,7 @@ func gatherHostInfo(version string) models.HostInfo {
 		InDocker:       inDocker(),
 		KernelModule:   be.KernelModule,
 		InterfaceKinds: be.InterfaceKinds,
+		Arch:           runtime.GOARCH,
 	}
 }
 

@@ -123,3 +123,5 @@ tool (
 	github.com/gzuidhof/tygo
 	github.com/wailsapp/wails/v2/cmd/wails
 )
+
+replace github.com/ks-tool/awg-admin/agent => ./agent
