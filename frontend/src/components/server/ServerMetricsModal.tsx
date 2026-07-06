@@ -51,6 +51,10 @@ interface Props {
 const timeLabel = (point: SystemHistoryPoint) =>
     new Date(point.timestamp as unknown as string).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
 
+// tsMs parses a wire timestamp (RFC3339 string, typed as number by tygo — see
+// the timeLabel note) to epoch milliseconds for range filtering/comparison.
+const tsMs = (ts: unknown) => new Date(ts as string).getTime();
+
 // Y-axis bounds are dynamic: max is the largest value actually present in
 // the series rounded up to the next multiple of ten, min is the smallest
 // value rounded down to the previous multiple of ten — not a fixed 0/100,
@@ -149,6 +153,19 @@ function Sparkline({values, height = 28}: {values: number[]; height?: number}) {
 
 type MetricsTab = 'system' | 'peers';
 
+type RangeKey = '1h' | '3h' | '6h' | '24h' | 'all';
+
+// Selectable display windows for the CPU/RAM/Network/peers charts. `ms: null`
+// means "all retained history" (up to the agent's 48h retention). The window is
+// anchored to the newest retained sample, so it's a relative "last N" view.
+const RANGES: {key: RangeKey; ms: number | null}[] = [
+    {key: '1h', ms: 60 * 60 * 1000},
+    {key: '3h', ms: 3 * 60 * 60 * 1000},
+    {key: '6h', ms: 6 * 60 * 60 * 1000},
+    {key: '24h', ms: 24 * 60 * 60 * 1000},
+    {key: 'all', ms: null},
+];
+
 export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
     const {t} = useTranslation();
     const users = useAppStore((s) => s.users);
@@ -157,6 +174,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
     const [history, setHistory] = useState<SystemHistory | null>(null);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<MetricsTab>('system');
+    const [range, setRange] = useState<RangeKey>('all');
 
     useEffect(() => {
         let cancelled = false;
@@ -172,7 +190,37 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         };
     }, [serverId]);
 
-    const points = history?.points ?? null;
+    // Restrict every series (system points + each peer's points) to the
+    // selected window. The cutoff is relative to the newest retained sample —
+    // the agent's own clock — so it lines up with how the online dot is judged.
+    // Peers with no sample left in the window drop out of the peers tab.
+    const filtered = useMemo(() => {
+        if (!history) return null;
+        const rangeMs = RANGES.find((r) => r.key === range)?.ms ?? null;
+        if (rangeMs == null) return history;
+
+        let latest = 0;
+        for (const p of history.points) latest = Math.max(latest, tsMs(p.timestamp));
+        for (const iface of history.interfaces)
+            for (const pr of iface.peers)
+                for (const pt of pr.points) latest = Math.max(latest, tsMs(pt.timestamp));
+        if (!Number.isFinite(latest) || latest <= 0) return history;
+        const cutoff = latest - rangeMs;
+
+        return {
+            points: history.points.filter((p) => tsMs(p.timestamp) >= cutoff),
+            interfaces: history.interfaces
+                .map((iface) => ({
+                    ...iface,
+                    peers: iface.peers
+                        .map((pr) => ({...pr, points: pr.points.filter((pt) => tsMs(pt.timestamp) >= cutoff)}))
+                        .filter((pr) => pr.points.length > 0),
+                }))
+                .filter((iface) => iface.peers.length > 0),
+        };
+    }, [history, range]);
+
+    const points = filtered?.points ?? null;
 
     // Resolve a peer's public key to "<user>/<peer>" using the admin's own
     // user→peer records (the agent only knows public keys). Unknown keys —
@@ -219,7 +267,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
     }, [servers, interfacesById, serverId]);
 
     const peerRows = useMemo(() => {
-        const rows = (history?.interfaces ?? []).flatMap((iface) =>
+        const rows = (filtered?.interfaces ?? []).flatMap((iface) =>
             iface.peers.map((peer) => {
                 const activity = activitySeries(peer.points);
                 const known = peerLabels.get(peer.publicKey);
@@ -247,7 +295,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         );
         // Busiest peers first, like Uptrace's GROUPS ordered by count.
         return rows.sort((a, b) => b.total - a.total);
-    }, [history, peerLabels, tunnelLabelByIface, t]);
+    }, [filtered, peerLabels, tunnelLabelByIface, t]);
 
     const labels = points?.map(timeLabel) ?? [];
 
@@ -338,22 +386,41 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                 </div>
             ) : (
                 <div>
-                    <div className="mb-3 flex gap-1 border-b border-border dark:border-white/10">
-                        {tabs.map((tk) => (
-                            <button
-                                key={tk}
-                                type="button"
-                                onClick={() => setTab(tk)}
-                                className={cn(
-                                    '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-                                    tab === tk
-                                        ? 'border-sky-500 text-foreground dark:text-zinc-100'
-                                        : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
-                                )}
-                            >
-                                {t(tk === 'system' ? 'servers.metricsTabSystem' : 'servers.metricsTabPeers')}
-                            </button>
-                        ))}
+                    <div className="mb-3 flex items-end justify-between gap-2 border-b border-border dark:border-white/10">
+                        <div className="flex gap-1">
+                            {tabs.map((tk) => (
+                                <button
+                                    key={tk}
+                                    type="button"
+                                    onClick={() => setTab(tk)}
+                                    className={cn(
+                                        '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                                        tab === tk
+                                            ? 'border-sky-500 text-foreground dark:text-zinc-100'
+                                            : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
+                                    )}
+                                >
+                                    {t(tk === 'system' ? 'servers.metricsTabSystem' : 'servers.metricsTabPeers')}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="mb-1 flex items-center gap-1" role="group" aria-label={t('servers.metricsRange')}>
+                            {RANGES.map((r) => (
+                                <button
+                                    key={r.key}
+                                    type="button"
+                                    onClick={() => setRange(r.key)}
+                                    className={cn(
+                                        'rounded px-2 py-1 text-xs font-medium transition-colors',
+                                        range === r.key
+                                            ? 'bg-sky-500 text-white'
+                                            : 'text-muted-foreground hover:bg-black/5 hover:text-foreground dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-200',
+                                    )}
+                                >
+                                    {t(`servers.metricsRange_${r.key}`)}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {tab === 'system' ? (
