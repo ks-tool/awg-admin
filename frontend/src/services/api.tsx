@@ -14,25 +14,19 @@
   limitations under the License.
  */
 
-// Determine API base URL based on environment
-// In development: use localhost:18989 (backend server)
-// In production (Wails): use current origin (embedded backend)
+// Determine the API base URL for HTTP mode (this transport is unused in Wails
+// desktop/bindings mode). A build-time override wins when set —
+// frontend/.env.development sets it so `npm run dev` (SPA on :5173) can reach
+// the backend on :8080. When it's unset — every production build: the
+// standalone server and the embedded Wails build — the SPA is served by the
+// same origin that hosts the API, so use that origin directly. This works for
+// any host/port (e.g. a container published at http://host-ip:38080), which
+// the previous hardcoded http://localhost:8080 fallback broke (issue #2).
 const getApiBaseUrl = (): string => {
     if (import.meta.env.VITE_API_BASE_URL) {
         return import.meta.env.VITE_API_BASE_URL;
     }
-
-    // For Wails app (production), use same origin
-    if (window.location.protocol === 'http:' && window.location.hostname === 'localhost') {
-        // Check if this is a Wails app by checking for wails runtime
-        // In Wails, the frontend is embedded and serves from the same origin
-        if (window.location.port === '3000' || !window.location.port) {
-            return window.location.origin;
-        }
-    }
-
-    // For development, use the backend API server
-    return 'http://localhost:8080';
+    return window.location.origin;
 };
 
 export const API_BASE_URL = getApiBaseUrl();
