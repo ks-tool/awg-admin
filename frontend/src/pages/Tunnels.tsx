@@ -24,7 +24,16 @@ import { FormField } from '@/components/common/FormField';
 import { ConfirmModal } from '@/components/common/ConfirmModal';
 import { useAppStore } from '@/store';
 import { listTunnels, buildTunnel, removeTunnel } from '@/services/tunnels';
-import type { Interface, Server, Tunnel } from '@/types';
+import { byName } from '@/lib/utils';
+import type { Interface, Server, Tunnel, TunnelMember } from '@/types';
+
+// A tunnel has no name of its own, so order it by its entry endpoint's
+// "server/interface" label (falling back to the first member, then the id) so
+// the list stays alphabetically stable.
+const tunnelLabel = (tun: Tunnel): string => {
+    const m: TunnelMember | undefined = tun.members?.find((x) => x.role === 'entry') ?? tun.members?.[0];
+    return m ? `${m.serverName}/${m.interface}` : tun.id;
+};
 
 // An interface can anchor a tunnel entry only if it has a listen port and a
 // CIDR address, and isn't already part of a tunnel.
@@ -208,7 +217,7 @@ export default function Tunnels() {
 
     const load = async () => {
         const list = await listTunnels();
-        if (list) setTunnels(list);
+        if (list) setTunnels(list.sort(byName(tunnelLabel)));
     };
 
     useEffect(() => {

@@ -31,7 +31,7 @@ import {RefreshCw} from 'lucide-react';
 import {Modal} from '@/components/common/Modal';
 import {getServerMetricsHistory} from '@/services/servers';
 import {useAppStore} from '@/store';
-import {cn, formatBytes} from '@/lib/utils';
+import {byName, cn, formatBytes} from '@/lib/utils';
 import {b64ToHex, isPeerConnected} from '@/lib/peers';
 import type {PeerHistoryPoint, SystemHistory, SystemHistoryPoint} from '@/types';
 
@@ -332,6 +332,9 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                 const times = peer.points.slice(1).map((p) => tsMs(p.timestamp));
                 const known = peerLabels.get(peer.publicKey);
                 const tunnel = tunnelLabelByIface.get(iface.interface);
+                // A gateway peer of a tunnel: not a user peer, but sitting on a
+                // tunnel-member interface. Pinned to the top of the list below.
+                const isTunnel = !known && !!tunnel;
                 const label = known
                     ?? (tunnel
                         ? `${t('servers.metricsTunnelPeer')} ${tunnel}`
@@ -348,14 +351,19 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                     publicKey: peer.publicKey,
                     label,
                     online,
+                    isTunnel,
                     activity,
                     times,
                     total: activity.reduce((sum, v) => sum + v, 0),
                 };
             }),
         );
-        // Busiest peers first, like Uptrace's GROUPS ordered by count.
-        return rows.sort((a, b) => b.total - a.total);
+        // Tunnel gateway peers always pinned to the top; everyone else A→Z by
+        // label (case/locale-aware, so Cyrillic user names sort naturally).
+        const byLabel = byName<(typeof rows)[number]>((r) => r.label);
+        return rows.sort((a, b) =>
+            a.isTunnel !== b.isTunnel ? (a.isTunnel ? -1 : 1) : byLabel(a, b),
+        );
     }, [filtered, peerLabels, tunnelLabelByIface, t]);
 
     const labels = points?.map(timeLabel) ?? [];

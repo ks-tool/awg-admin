@@ -22,6 +22,7 @@ import * as interfacesService from '@/services/interfaces'
 import * as peersService from '@/services/peers'
 import type {ServerInput} from "@/services/servers";
 import {SSHPassphraseRequiredError} from "@/services/sshErrors";
+import {byName} from "@/lib/utils";
 
 /**
  * Helper function to calculate stats from servers and users
@@ -155,6 +156,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const servers = await serversService.listServers()
       if (servers) {
+        // Keep the canonical list alphabetical so every consumer (Dashboard,
+        // Servers page, tunnel/peer server dropdowns) renders in a stable order.
+        servers.sort(byName((s) => s.name))
         const interfacesMap = new Map<string, Interface>()
 
         // Fetch all interfaces for all servers concurrently
@@ -201,7 +205,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const server = await serversService.createServer(input)
       if (server) {
         const { servers, users, peers, interfaces } = get()
-        const newServers = [...servers, server]
+        const newServers = [...servers, server].sort(byName((s) => s.name))
         set({ 
           servers: newServers,
           stats: calculateStats(newServers, users, peers, interfaces)
@@ -220,7 +224,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const server = await serversService.updateServer(id, input)
       if (server) {
         const { servers, users, peers, interfaces } = get()
-        const newServers = servers.map((s) => (s.id === id ? server : s))
+        // Re-sort in case the name changed (an edit shouldn't reorder silently,
+        // but a rename should land in its new alphabetical slot).
+        const newServers = servers.map((s) => (s.id === id ? server : s)).sort(byName((s) => s.name))
         set({
           servers: newServers,
           stats: calculateStats(newServers, users, peers, interfaces)
@@ -258,6 +264,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const users = await usersService.listUsers()
       if (users) {
+        // Alphabetical users, and alphabetical peers within each user, so the
+        // Users list and UserDetail render in a stable order.
+        users.forEach((u) => u.peers?.sort(byName((p) => p.name)))
+        users.sort(byName((u) => u.name))
         set({ users })
         
         // Extract all peers from all users for the flattened peer list
@@ -309,7 +319,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const user = await usersService.createUser(input)
       if (user) {
         const { users, servers, peers, interfaces } = get()
-        const newUsers = [...users, user]
+        const newUsers = [...users, user].sort(byName((u) => u.name))
         set({ 
           users: newUsers,
           stats: calculateStats(servers, newUsers, peers, interfaces)
@@ -327,7 +337,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const user = await usersService.updateUser(id, input)
       if (user) {
         const { users, servers, peers, interfaces } = get()
-        const newUsers = users.map((u) => (u.id === id ? user : u))
+        const newUsers = users.map((u) => (u.id === id ? user : u)).sort(byName((u) => u.name))
         set({
           users: newUsers,
           stats: calculateStats(servers, newUsers, peers, interfaces)
