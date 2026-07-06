@@ -30,6 +30,7 @@ import (
 // ListAgentSources returns every saved agent-binary deploy preset (see
 // models.AgentSource), shown as options in the "Deploy agent" UI.
 func (s *Service) ListAgentSources() ([]models.AgentSource, error) {
+	debugOp("ListAgentSources").Msg("listing agent sources")
 	return s.store.AgentSources().List()
 }
 
@@ -40,6 +41,7 @@ func (s *Service) ListAgentSources() ([]models.AgentSource, error) {
 // run as a container on the server. cacheLocally is ignored (forced false) for
 // path (nothing to cache) and image (Docker pulls it itself).
 func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally, userspace bool) (*models.AgentSource, error) {
+	debugOp("CreateAgentSource").Str("name", name).Msg("creating agent source")
 	cacheLocally, userspace, err := validateAgentSourceInput(name, url, path, image, cacheLocally, userspace)
 	if err != nil {
 		return nil, err
@@ -67,6 +69,7 @@ func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally,
 // a changed URL would keep serving the stale cached binary until a manual
 // refresh.
 func (s *Service) UpdateAgentSource(id, name, url, path, image string, cacheLocally, userspace bool) (*models.AgentSource, error) {
+	debugOp("UpdateAgentSource").Str("agent_source_id", id).Str("name", name).Msg("updating agent source")
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err
@@ -136,6 +139,7 @@ func validateAgentSourceInput(name, url, path, image string, cacheLocally, users
 // on disk (if any) — best-effort, a cache cleanup failure doesn't block
 // removing the preset itself.
 func (s *Service) DeleteAgentSource(id string) error {
+	debugOp("DeleteAgentSource").Str("agent_source_id", id).Msg("deleting agent source")
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return err
@@ -159,6 +163,7 @@ func (s *Service) DeleteAgentSource(id string) error {
 // content changes over time, where a deploy would otherwise keep using
 // whatever was cached the first time forever.
 func (s *Service) RefreshAgentSourceCache(id string) error {
+	debugOp("RefreshAgentSourceCache").Str("agent_source_id", id).Msg("refreshing agent source cache")
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return err

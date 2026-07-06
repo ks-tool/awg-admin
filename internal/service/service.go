@@ -20,8 +20,22 @@ import (
 	"github.com/ks-tool/awg-admin/internal/sshclient"
 	"github.com/ks-tool/awg-admin/storage"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+// debugOp starts a debug-level log entry for a service operation, tagged with
+// its name. Operation logging lives in this shared layer — not only in
+// internal/api's per-request handlers — because the Wails desktop App embeds
+// *Service and calls it directly, bypassing internal/api entirely. Without
+// this, the desktop Settings "Logs" debug mode would capture nothing for
+// normal operations (only Warn/Error and startup). Callers attach fields and
+// finish with .Msg(...), e.g.
+//
+//	debugOp("SetPeerDisabled").Str("user_id", userID).Bool("disabled", disabled).Msg("setting peer disabled state")
+func debugOp(op string) *zerolog.Event {
+	return log.Debug().Str("op", op)
+}
 
 type Option func(*Service)
 

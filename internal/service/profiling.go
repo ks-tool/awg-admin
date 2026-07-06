@@ -61,6 +61,7 @@ type ProfileDump struct {
 // record so SyncServer re-applies it (a freshly (re)deployed agent starts with
 // profiling off). Mirrors SetServerMonitoring.
 func (s *Service) SetServerProfiling(serverID string, enabled bool) (*models.Server, error) {
+	debugOp("SetServerProfiling").Str("server_id", serverID).Bool("enabled", enabled).Msg("setting agent profiling state")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
@@ -89,6 +90,7 @@ func (s *Service) SetServerProfiling(serverID string, enabled bool) (*models.Ser
 // kinds and is ignored for the instantaneous ones. The agent answers 403 unless
 // profiling is enabled there (SetServerProfiling), surfaced as an error here.
 func (s *Service) GetServerProfile(serverID, name string, seconds int) (*ProfileDump, error) {
+	debugOp("GetServerProfile").Str("server_id", serverID).Str("profile", name).Int("seconds", seconds).Msg("fetching agent profile")
 	if !validProfileKinds[name] {
 		return nil, invalidInput("unknown profile kind %q", name)
 	}

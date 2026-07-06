@@ -47,6 +47,7 @@ const (
 // always the entry interface's own subnet (see below); the subnet argument is
 // only accepted when empty or equal to it, never an arbitrary value.
 func (s *Service) BuildTunnel(steps []models.TunnelStep, subnet string) (*models.Tunnel, error) {
+	debugOp("BuildTunnel").Str("subnet", subnet).Msg("building tunnel")
 	if len(steps) != 2 {
 		return nil, errors.New("a tunnel needs exactly two interfaces (entry and exit)")
 	}
@@ -138,6 +139,7 @@ func (s *Service) BuildTunnel(steps []models.TunnelStep, subnet string) (*models
 // ListTunnels groups every interface that carries a tunnel id into its Tunnel,
 // entry member first. Reconstructed from the interfaces (no separate storage).
 func (s *Service) ListTunnels() ([]models.Tunnel, error) {
+	debugOp("ListTunnels").Msg("listing tunnels")
 	servers, err := s.store.Servers().List()
 	if err != nil {
 		return nil, err
@@ -188,6 +190,7 @@ func (s *Service) ListTunnels() ([]models.Tunnel, error) {
 // it. Exit members are pushed before the entry so the relay's route/rule (which
 // the reconcile-on-update path removes via the old PostDown) go last.
 func (s *Service) RemoveTunnel(tunnelID string) error {
+	debugOp("RemoveTunnel").Str("tunnel_id", tunnelID).Msg("removing tunnel")
 	tid, err := uuid.Parse(tunnelID)
 	if err != nil {
 		return err

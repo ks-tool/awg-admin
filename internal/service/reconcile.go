@@ -50,6 +50,7 @@ type ReconcileReport struct {
 // DeleteAgentInterface (and the existing SyncServer/DeleteInterface) for
 // the actions a human can take on what it finds.
 func (s *Service) ReconcileServer(serverID string) (*ReconcileReport, error) {
+	debugOp("ReconcileServer").Str("server_id", serverID).Msg("reconciling server")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
@@ -118,6 +119,7 @@ func (s *Service) ReconcileServer(serverID string) (*ReconcileReport, error) {
 // keys — the old client configs/QR codes for them are gone for good,
 // since the private keys never lived anywhere but the lost DB).
 func (s *Service) ImportInterface(serverID, ifaceName string) (*models.Interface, error) {
+	debugOp("ImportInterface").Str("server_id", serverID).Str("interface", ifaceName).Msg("importing interface from agent")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
@@ -156,6 +158,7 @@ func (s *Service) ImportInterface(serverID, ifaceName string) (*models.Interface
 // other half of the "agent has it, DB doesn't" reconciliation choice,
 // alongside ImportInterface.
 func (s *Service) DeleteAgentInterface(serverID, ifaceName string) error {
+	debugOp("DeleteAgentInterface").Str("server_id", serverID).Str("interface", ifaceName).Msg("deleting agent-only interface")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return err

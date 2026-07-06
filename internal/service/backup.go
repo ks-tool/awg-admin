@@ -29,6 +29,7 @@ import "bytes"
 // the admin bcrypt hash) — it's a full backup, so callers must treat the
 // result as sensitive.
 func (s *Service) Backup() ([]byte, error) {
+	debugOp("Backup").Msg("creating database backup")
 	var buf bytes.Buffer
 	if err := s.store.Backup(&buf); err != nil {
 		return nil, err

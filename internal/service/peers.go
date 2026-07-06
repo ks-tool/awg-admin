@@ -55,6 +55,7 @@ type AddPeerInput struct {
 }
 
 func (s *Service) ListPeers(userID string) ([]models.Peer, error) {
+	debugOp("ListPeers").Str("user_id", userID).Msg("listing peers")
 	uID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
@@ -67,6 +68,7 @@ func (s *Service) ListPeers(userID string) ([]models.Peer, error) {
 }
 
 func (s *Service) GetPeer(userID string, publicKey string) (*models.Peer, error) {
+	debugOp("GetPeer").Str("user_id", userID).Str("public_key", publicKey).Msg("getting peer")
 	uID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
@@ -84,6 +86,7 @@ func (s *Service) GetPeer(userID string, publicKey string) (*models.Peer, error)
 }
 
 func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) {
+	debugOp("AddPeer").Str("user_id", userID).Str("interface_id", in.InterfaceID.String()).Msg("adding peer")
 	uID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
@@ -162,6 +165,7 @@ func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) 
 
 // DeletePeer removes the peer by public key from the user and the interface.
 func (s *Service) DeletePeer(userID string, key string) (*models.User, error) {
+	debugOp("DeletePeer").Str("user_id", userID).Str("public_key", key).Msg("deleting peer")
 	uID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
@@ -197,6 +201,7 @@ func (s *Service) DeletePeer(userID string, key string) (*models.User, error) {
 // interface's InterfacePeer carry the flag; both are updated in one storage
 // write, then the interface is re-pushed. Returns the updated (sanitized) user.
 func (s *Service) SetPeerDisabled(userID, publicKey string, disabled bool) (*models.User, error) {
+	debugOp("SetPeerDisabled").Str("user_id", userID).Str("public_key", publicKey).Bool("disabled", disabled).Msg("setting peer disabled state")
 	uID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, invalidInput("invalid user id %q", userID)
@@ -261,6 +266,7 @@ func (s *Service) SetPeerDisabled(userID, publicKey string, disabled bool) (*mod
 // auto-assigned. Both the source and target interfaces are re-pushed. Returns
 // the updated (sanitized) user.
 func (s *Service) MigratePeer(userID, publicKey, targetIfaceID string) (*models.User, error) {
+	debugOp("MigratePeer").Str("user_id", userID).Str("public_key", publicKey).Str("target_interface_id", targetIfaceID).Msg("migrating peer")
 	uID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, invalidInput("invalid user id %q", userID)

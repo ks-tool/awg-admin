@@ -59,9 +59,13 @@ type ServerInput struct {
 	Agent models.Agent
 }
 
-func (s *Service) ListServers() ([]models.Server, error) { return s.store.Servers().List() }
+func (s *Service) ListServers() ([]models.Server, error) {
+	debugOp("ListServers").Msg("listing servers")
+	return s.store.Servers().List()
+}
 
 func (s *Service) GetServer(id string) (*models.Server, error) {
+	debugOp("GetServer").Str("server_id", id).Msg("getting server")
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err
@@ -133,6 +137,7 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 }
 
 func (s *Service) CreateServer(in ServerInput) (*models.Server, error) {
+	debugOp("CreateServer").Str("name", in.Name).Msg("creating server")
 	if len(in.Name) == 0 {
 		return nil, fmt.Errorf("server name is required")
 	}
@@ -160,6 +165,7 @@ func (s *Service) CreateServer(in ServerInput) (*models.Server, error) {
 }
 
 func (s *Service) UpdateServer(id string, in ServerInput) (*models.Server, error) {
+	debugOp("UpdateServer").Str("server_id", id).Str("name", in.Name).Msg("updating server")
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err
@@ -233,6 +239,7 @@ func (s *Service) UpdateServer(id string, in ServerInput) (*models.Server, error
 // so a single entry covers every server sharing the same key/passphrase for
 // the session.
 func (s *Service) UnlockServerSSH(id string, passphrase string, applyToAll bool) error {
+	debugOp("UnlockServerSSH").Str("server_id", id).Bool("apply_to_all", applyToAll).Msg("unlocking server SSH")
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return err
@@ -250,6 +257,7 @@ func (s *Service) UnlockServerSSH(id string, passphrase string, applyToAll bool)
 // SAN is derived from Agent.Address so it matches whatever "white" IP or
 // hostname the agent will be reached on directly (without an SSH tunnel).
 func (s *Service) GenerateAgentTLS(id string) (*models.Server, error) {
+	debugOp("GenerateAgentTLS").Str("server_id", id).Msg("generating agent TLS material")
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err
@@ -295,6 +303,7 @@ func (s *Service) GenerateAgentTLS(id string) (*models.Server, error) {
 // up-front validation (server/source must exist) is synchronous — any
 // error returned here means the deploy never started at all.
 func (s *Service) DeployAgent(id string, agentSourceID string) error {
+	debugOp("DeployAgent").Str("server_id", id).Str("agent_source_id", agentSourceID).Msg("deploying agent")
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return err
@@ -364,6 +373,7 @@ func (s *Service) GetDeployStatus(id string) (*models.DeployStatus, error) {
 }
 
 func (s *Service) DeleteServer(id string) error {
+	debugOp("DeleteServer").Str("server_id", id).Msg("deleting server")
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return err

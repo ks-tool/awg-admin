@@ -91,6 +91,7 @@ func (s *Service) pushInterfaceDelete(serverID uuid.UUID, ifaceName string) {
 // is gone), after a prolonged outage (it may have missed pushes that failed
 // while it was down), or just as a manual "force re-apply" from the UI.
 func (s *Service) SyncServer(serverID string) error {
+	debugOp("SyncServer").Str("server_id", serverID).Msg("syncing server")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return err
