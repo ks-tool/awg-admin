@@ -104,6 +104,8 @@
     "metricsActivity": "Активность (rx+tx)",
     "metricsPeersNoData": "Активность пиров ещё не записана.",
     "metricsTunnelPeer": "Шлюз",
+    "peerOnline": "В сети",
+    "peerOffline": "Не в сети",
     "noServers": "Серверы не настроены",
     "noName": "Безымянный сервер",
     "addServer": "Добавить сервер",

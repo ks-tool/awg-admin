@@ -104,6 +104,8 @@
     "metricsActivity": "Activity (rx+tx)",
     "metricsPeersNoData": "No peer activity recorded yet.",
     "metricsTunnelPeer": "Gateway",
+    "peerOnline": "Online",
+    "peerOffline": "Offline",
     "noServers": "No servers configured",
     "noName": "Unnamed Server",
     "addServer": "Add Server",

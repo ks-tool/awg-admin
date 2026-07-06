@@ -32,7 +32,7 @@ import {Modal} from '@/components/common/Modal';
 import {getServerMetricsHistory} from '@/services/servers';
 import {useAppStore} from '@/store';
 import {cn, formatBytes} from '@/lib/utils';
-import {b64ToHex} from '@/lib/peers';
+import {b64ToHex, isPeerConnected} from '@/lib/peers';
 import type {PeerHistoryPoint, SystemHistory, SystemHistoryPoint} from '@/types';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -228,9 +228,18 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                     ?? (tunnel
                         ? `${t('servers.metricsTunnelPeer')} ${tunnel}`
                         : shortKey(peer.publicKey));
+                // "Online now" is judged from the peer's most recent retained
+                // sample: its lastHandshake against that sample's own timestamp
+                // (the agent's clock), so host clock skew cancels — same rule as
+                // the Dashboard's connected count.
+                const last = peer.points[peer.points.length - 1];
+                const online = last
+                    ? isPeerConnected(last.lastHandshake, new Date(last.timestamp as unknown as string).getTime())
+                    : false;
                 return {
                     publicKey: peer.publicKey,
                     label,
+                    online,
                     activity,
                     total: activity.reduce((sum, v) => sum + v, 0),
                 };
@@ -392,8 +401,18 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                                 {peerRows.map((row) => (
                                     <tr key={row.publicKey} className="border-b border-white/5 last:border-0">
                                         <td className="whitespace-nowrap py-2 pr-3 align-middle">
-                                            <span className="font-mono text-xs dark:text-zinc-300" title={row.publicKey}>
-                                                {row.label}
+                                            <span className="flex items-center gap-2">
+                                                <span
+                                                    className={cn(
+                                                        'h-2 w-2 shrink-0 rounded-full',
+                                                        row.online ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-600',
+                                                    )}
+                                                    title={t(row.online ? 'servers.peerOnline' : 'servers.peerOffline')}
+                                                    aria-label={t(row.online ? 'servers.peerOnline' : 'servers.peerOffline')}
+                                                />
+                                                <span className="font-mono text-xs dark:text-zinc-300" title={row.publicKey}>
+                                                    {row.label}
+                                                </span>
                                             </span>
                                         </td>
                                         <td className="w-full py-2 pl-3 align-middle">
