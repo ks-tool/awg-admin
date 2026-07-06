@@ -85,7 +85,7 @@ func fetchAgentReleases(ctx context.Context) ([]models.AgentReleaseAsset, error)
 	if err != nil {
 		return nil, fmt.Errorf("fetching github releases: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("github releases request failed: %s", resp.Status)
 	}
