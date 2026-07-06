@@ -20,17 +20,16 @@ RUN npm run build
 
 # ---------------------------------------------------------------------------
 # Backend: compile the standalone server (cmd/awg-admin.go), embedding the
-# frontend build produced above. The root module pulls in the agent module
-# via a local `replace` (see go.mod) for agent/models only — both go.work
-# member modules' manifests are copied before `go mod download` so that
-# step is cached independently of unrelated source changes.
+# frontend build produced above. The root module pulls in the agent module as
+# a normal versioned dependency (its agent/v* tag — no go.work/replace), so
+# only the root manifests are needed; they are copied before `go mod download`
+# so that step is cached independently of unrelated source changes.
 # ---------------------------------------------------------------------------
 FROM golang:1.26.3-alpine3.23 AS backend
 
 WORKDIR /src
 
-COPY go.mod go.sum go.work go.work.sum ./
-COPY agent/go.mod agent/go.sum ./agent/
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
