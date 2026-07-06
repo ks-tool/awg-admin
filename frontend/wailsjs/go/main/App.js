@@ -134,6 +134,10 @@ export function ImportInterface(arg1, arg2) {
   return window['go']['main']['App']['ImportInterface'](arg1, arg2);
 }
 
+export function ListAgentReleases() {
+  return window['go']['main']['App']['ListAgentReleases']();
+}
+
 export function ListAgentSources() {
   return window['go']['main']['App']['ListAgentSources']();
 }

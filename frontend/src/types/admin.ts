@@ -17,6 +17,55 @@
 import { type Key, type InterfaceConfig } from "./agent"
 
 //////////
+// source: agentrelease.go
+
+/**
+ * AgentReleaseAsset is one downloadable awg-agent binary published in a GitHub
+ * release (tagged agent/v*), offered by the "GitHub releases" picker in the
+ * Add-agent-source UI so an official binary can be turned into a URL
+ * AgentSource without pasting a URL by hand. Assembled by
+ * Service.ListAgentReleases from the public GitHub releases API — it is derived,
+ * never persisted.
+ */
+export interface AgentReleaseAsset {
+  /**
+   * Name is the release-relative asset filename, e.g.
+   * "awg-agent-userspace_linux_amd64".
+   */
+  name: string;
+  /**
+   * Version is the release version: the agent/v* tag with the "agent/" prefix
+   * stripped, e.g. "v1.0.0".
+   */
+  version: string;
+  /**
+   * Arch is the target CPU architecture parsed from the asset name
+   * ("amd64"/"arm64"), or "" if it couldn't be determined.
+   */
+  arch: string;
+  /**
+   * Userspace is true for the userspace agent binary (awg-agent-userspace),
+   * false for the kernel one (awg-agent). It maps straight onto
+   * AgentSource.Userspace so a source created from this asset skips (or keeps)
+   * the AmneziaWG kernel-module pre-check on deploy correctly.
+   */
+  userspace: boolean;
+  /**
+   * URL is the asset's direct download URL (GitHub's browser_download_url).
+   */
+  url: string;
+  /**
+   * Size is the asset size in bytes.
+   */
+  size: number /* int64 */;
+  /**
+   * PublishedAt is the owning release's publish time (RFC3339), for display
+   * and ordering in the picker.
+   */
+  publishedAt: string;
+}
+
+//////////
 // source: agentsource.go
 
 /**

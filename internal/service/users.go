@@ -25,6 +25,7 @@ import (
 )
 
 func (s *Service) ListUsers() ([]models.User, error) {
+	debugOp("ListUsers").Msg("listing users")
 	users, err := s.store.Users().List()
 	if err != nil {
 		return nil, err
@@ -33,6 +34,7 @@ func (s *Service) ListUsers() ([]models.User, error) {
 }
 
 func (s *Service) GetUser(id string) (*models.User, error) {
+	debugOp("GetUser").Str("user_id", id).Msg("getting user")
 	uID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err
@@ -52,6 +54,7 @@ type UserInput struct {
 }
 
 func (s *Service) CreateUser(in UserInput) (*models.User, error) {
+	debugOp("CreateUser").Str("name", in.Name).Msg("creating user")
 	if len(in.Name) == 0 {
 		return nil, fmt.Errorf("user name is required")
 	}
@@ -64,6 +67,7 @@ func (s *Service) CreateUser(in UserInput) (*models.User, error) {
 }
 
 func (s *Service) UpdateUser(id string, in UserInput) (*models.User, error) {
+	debugOp("UpdateUser").Str("user_id", id).Str("name", in.Name).Msg("updating user")
 	uID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err
@@ -85,6 +89,7 @@ func (s *Service) UpdateUser(id string, in UserInput) (*models.User, error) {
 
 // DeleteUser removes the user and cascades peer removal from all interfaces.
 func (s *Service) DeleteUser(id string) error {
+	debugOp("DeleteUser").Str("user_id", id).Msg("deleting user")
 	uID, err := uuid.Parse(id)
 	if err != nil {
 		return err

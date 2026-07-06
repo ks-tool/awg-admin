@@ -14,7 +14,7 @@
   limitations under the License.
  */
 
-import {useEffect, useMemo, useState} from 'react';
+import {type MouseEvent, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
     CategoryScale,
@@ -31,8 +31,8 @@ import {RefreshCw} from 'lucide-react';
 import {Modal} from '@/components/common/Modal';
 import {getServerMetricsHistory} from '@/services/servers';
 import {useAppStore} from '@/store';
-import {cn, formatBytes} from '@/lib/utils';
-import {b64ToHex} from '@/lib/peers';
+import {byName, cn, formatBytes} from '@/lib/utils';
+import {b64ToHex, isPeerConnected} from '@/lib/peers';
 import type {PeerHistoryPoint, SystemHistory, SystemHistoryPoint} from '@/types';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -50,6 +50,15 @@ interface Props {
 // way.
 const timeLabel = (point: SystemHistoryPoint) =>
     new Date(point.timestamp as unknown as string).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+
+// tsMs parses a wire timestamp (RFC3339 string, typed as number by tygo — see
+// the timeLabel note) to epoch milliseconds for range filtering/comparison.
+const tsMs = (ts: unknown) => new Date(ts as string).getTime();
+
+// Full clock label (with seconds — samples are ~45s apart) for the sparkline
+// hover tooltip.
+const clockLabel = (ms: number) =>
+    new Date(ms).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
 
 // Y-axis bounds are dynamic: max is the largest value actually present in
 // the series rounded up to the next multiple of ten, min is the smallest
@@ -110,7 +119,12 @@ const shortKey = (pk: string) => (pk.length > 12 ? `${pk.slice(0, 10)}…` : pk)
 // heavy for many peers) — for showing a peer's activity trend beside its
 // identifier. The SVG stretches horizontally to whatever room the row gives it
 // (preserveAspectRatio="none") while the stroke stays crisp (non-scaling).
-function Sparkline({values, height = 28}: {values: number[]; height?: number}) {
+// Hovering reveals the sample under the cursor: a vertical guide + dot in the
+// SVG and an HTML tooltip with that sample's time (and activity). `times[i]`
+// is the epoch-ms timestamp aligned to `values[i]`.
+function Sparkline({values, times, height = 28}: {values: number[]; times?: number[]; height?: number}) {
+    const [hover, setHover] = useState<number | null>(null);
+
     if (values.length === 0) {
         return <div className="w-full" style={{height}} aria-hidden="true"/>;
     }
@@ -120,34 +134,93 @@ function Sparkline({values, height = 28}: {values: number[]; height?: number}) {
     const n = values.length;
     const pad = 2;
     const h = height - pad * 2;
-    const xy = values.map((v, i) => {
-        const x = n > 1 ? (i / (n - 1)) * vbWidth : vbWidth / 2;
-        const y = pad + h - (v / max) * h;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
+    const xy = values.map((v, i) => ({
+        x: n > 1 ? (i / (n - 1)) * vbWidth : vbWidth / 2,
+        y: pad + h - (v / max) * h,
+    }));
+    const pointsStr = xy.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+
+    // Map the cursor's horizontal position (fraction of the real, rendered
+    // width — the SVG's own coord space is distorted by preserveAspectRatio)
+    // to the nearest sample index.
+    const onMove = (e: MouseEvent<HTMLDivElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const frac = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0;
+        setHover(Math.min(n - 1, Math.max(0, Math.round(frac * (n - 1)))));
+    };
+
+    const hv = hover != null ? xy[hover] : null;
+    const hoverFrac = hover != null && n > 1 ? hover / (n - 1) : 0.5;
 
     return (
-        <svg
-            width="100%"
-            height={height}
-            viewBox={`0 0 ${vbWidth} ${height}`}
-            preserveAspectRatio="none"
-            className="block"
+        <div
+            className="relative w-full"
+            style={{height}}
+            onMouseMove={onMove}
+            onMouseLeave={() => setHover(null)}
         >
-            <polygon points={`0,${height} ${xy.join(' ')} ${vbWidth},${height}`} fill="rgba(56,189,248,0.15)"/>
-            <polyline
-                points={xy.join(' ')}
-                fill="none"
-                stroke="rgb(56,189,248)"
-                strokeWidth={1.5}
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-            />
-        </svg>
+            <svg
+                width="100%"
+                height={height}
+                viewBox={`0 0 ${vbWidth} ${height}`}
+                preserveAspectRatio="none"
+                className="block"
+            >
+                <polygon points={`0,${height} ${pointsStr} ${vbWidth},${height}`} fill="rgba(56,189,248,0.15)"/>
+                <polyline
+                    points={pointsStr}
+                    fill="none"
+                    stroke="rgb(56,189,248)"
+                    strokeWidth={1.5}
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                />
+                {hv && (
+                    <line
+                        x1={hv.x}
+                        y1={0}
+                        x2={hv.x}
+                        y2={height}
+                        stroke="rgba(148,163,184,0.7)"
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                    />
+                )}
+            </svg>
+            {/* Dot + tooltip are HTML overlays (percent-positioned) so they stay
+                round/legible despite the SVG's non-uniform x-scaling. */}
+            {hv && (
+                <div
+                    className="pointer-events-none absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-400 ring-2 ring-sky-400/30"
+                    style={{left: `${hoverFrac * 100}%`, top: `${(hv.y / height) * 100}%`}}
+                />
+            )}
+            {hover != null && times?.[hover] != null && (
+                <div
+                    className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] leading-tight text-white shadow dark:bg-zinc-700"
+                    style={{left: `${hoverFrac * 100}%`}}
+                >
+                    {clockLabel(times[hover])} · {formatBytes(values[hover])}
+                </div>
+            )}
+        </div>
     );
 }
 
 type MetricsTab = 'system' | 'peers';
+
+type RangeKey = '1h' | '3h' | '6h' | '24h' | 'all';
+
+// Selectable display windows for the CPU/RAM/Network/peers charts. `ms: null`
+// means "all retained history" (up to the agent's 48h retention). The window is
+// anchored to the newest retained sample, so it's a relative "last N" view.
+const RANGES: {key: RangeKey; ms: number | null}[] = [
+    {key: '1h', ms: 60 * 60 * 1000},
+    {key: '3h', ms: 3 * 60 * 60 * 1000},
+    {key: '6h', ms: 6 * 60 * 60 * 1000},
+    {key: '24h', ms: 24 * 60 * 60 * 1000},
+    {key: 'all', ms: null},
+];
 
 export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
     const {t} = useTranslation();
@@ -157,6 +230,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
     const [history, setHistory] = useState<SystemHistory | null>(null);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<MetricsTab>('system');
+    const [range, setRange] = useState<RangeKey>('all');
 
     useEffect(() => {
         let cancelled = false;
@@ -172,7 +246,37 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         };
     }, [serverId]);
 
-    const points = history?.points ?? null;
+    // Restrict every series (system points + each peer's points) to the
+    // selected window. The cutoff is relative to the newest retained sample —
+    // the agent's own clock — so it lines up with how the online dot is judged.
+    // Peers with no sample left in the window drop out of the peers tab.
+    const filtered = useMemo(() => {
+        if (!history) return null;
+        const rangeMs = RANGES.find((r) => r.key === range)?.ms ?? null;
+        if (rangeMs == null) return history;
+
+        let latest = 0;
+        for (const p of history.points) latest = Math.max(latest, tsMs(p.timestamp));
+        for (const iface of history.interfaces)
+            for (const pr of iface.peers)
+                for (const pt of pr.points) latest = Math.max(latest, tsMs(pt.timestamp));
+        if (!Number.isFinite(latest) || latest <= 0) return history;
+        const cutoff = latest - rangeMs;
+
+        return {
+            points: history.points.filter((p) => tsMs(p.timestamp) >= cutoff),
+            interfaces: history.interfaces
+                .map((iface) => ({
+                    ...iface,
+                    peers: iface.peers
+                        .map((pr) => ({...pr, points: pr.points.filter((pt) => tsMs(pt.timestamp) >= cutoff)}))
+                        .filter((pr) => pr.points.length > 0),
+                }))
+                .filter((iface) => iface.peers.length > 0),
+        };
+    }, [history, range]);
+
+    const points = filtered?.points ?? null;
 
     // Resolve a peer's public key to "<user>/<peer>" using the admin's own
     // user→peer records (the agent only knows public keys). Unknown keys —
@@ -219,26 +323,48 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
     }, [servers, interfacesById, serverId]);
 
     const peerRows = useMemo(() => {
-        const rows = (history?.interfaces ?? []).flatMap((iface) =>
+        const rows = (filtered?.interfaces ?? []).flatMap((iface) =>
             iface.peers.map((peer) => {
                 const activity = activitySeries(peer.points);
+                // activity[k] is the delta ending at peer.points[k+1], so its
+                // timestamp is that sample's — i.e. points shifted by one, which
+                // keeps this array the same length as `activity`.
+                const times = peer.points.slice(1).map((p) => tsMs(p.timestamp));
                 const known = peerLabels.get(peer.publicKey);
                 const tunnel = tunnelLabelByIface.get(iface.interface);
+                // A gateway peer of a tunnel: not a user peer, but sitting on a
+                // tunnel-member interface. Pinned to the top of the list below.
+                const isTunnel = !known && !!tunnel;
                 const label = known
                     ?? (tunnel
                         ? `${t('servers.metricsTunnelPeer')} ${tunnel}`
                         : shortKey(peer.publicKey));
+                // "Online now" is judged from the peer's most recent retained
+                // sample: its lastHandshake against that sample's own timestamp
+                // (the agent's clock), so host clock skew cancels — same rule as
+                // the Dashboard's connected count.
+                const last = peer.points[peer.points.length - 1];
+                const online = last
+                    ? isPeerConnected(last.lastHandshake, new Date(last.timestamp as unknown as string).getTime())
+                    : false;
                 return {
                     publicKey: peer.publicKey,
                     label,
+                    online,
+                    isTunnel,
                     activity,
+                    times,
                     total: activity.reduce((sum, v) => sum + v, 0),
                 };
             }),
         );
-        // Busiest peers first, like Uptrace's GROUPS ordered by count.
-        return rows.sort((a, b) => b.total - a.total);
-    }, [history, peerLabels, tunnelLabelByIface, t]);
+        // Tunnel gateway peers always pinned to the top; everyone else A→Z by
+        // label (case/locale-aware, so Cyrillic user names sort naturally).
+        const byLabel = byName<(typeof rows)[number]>((r) => r.label);
+        return rows.sort((a, b) =>
+            a.isTunnel !== b.isTunnel ? (a.isTunnel ? -1 : 1) : byLabel(a, b),
+        );
+    }, [filtered, peerLabels, tunnelLabelByIface, t]);
 
     const labels = points?.map(timeLabel) ?? [];
 
@@ -329,22 +455,41 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                 </div>
             ) : (
                 <div>
-                    <div className="mb-3 flex gap-1 border-b border-border dark:border-white/10">
-                        {tabs.map((tk) => (
-                            <button
-                                key={tk}
-                                type="button"
-                                onClick={() => setTab(tk)}
-                                className={cn(
-                                    '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-                                    tab === tk
-                                        ? 'border-sky-500 text-foreground dark:text-zinc-100'
-                                        : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
-                                )}
-                            >
-                                {t(tk === 'system' ? 'servers.metricsTabSystem' : 'servers.metricsTabPeers')}
-                            </button>
-                        ))}
+                    <div className="mb-3 flex items-end justify-between gap-2 border-b border-border dark:border-white/10">
+                        <div className="flex gap-1">
+                            {tabs.map((tk) => (
+                                <button
+                                    key={tk}
+                                    type="button"
+                                    onClick={() => setTab(tk)}
+                                    className={cn(
+                                        '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                                        tab === tk
+                                            ? 'border-sky-500 text-foreground dark:text-zinc-100'
+                                            : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
+                                    )}
+                                >
+                                    {t(tk === 'system' ? 'servers.metricsTabSystem' : 'servers.metricsTabPeers')}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="mb-1 flex items-center gap-1" role="group" aria-label={t('servers.metricsRange')}>
+                            {RANGES.map((r) => (
+                                <button
+                                    key={r.key}
+                                    type="button"
+                                    onClick={() => setRange(r.key)}
+                                    className={cn(
+                                        'rounded px-2 py-1 text-xs font-medium transition-colors',
+                                        range === r.key
+                                            ? 'bg-sky-500 text-white'
+                                            : 'text-muted-foreground hover:bg-black/5 hover:text-foreground dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-200',
+                                    )}
+                                >
+                                    {t(`servers.metricsRange_${r.key}`)}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {tab === 'system' ? (
@@ -392,8 +537,18 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                                 {peerRows.map((row) => (
                                     <tr key={row.publicKey} className="border-b border-white/5 last:border-0">
                                         <td className="whitespace-nowrap py-2 pr-3 align-middle">
-                                            <span className="font-mono text-xs dark:text-zinc-300" title={row.publicKey}>
-                                                {row.label}
+                                            <span className="flex items-center gap-2">
+                                                <span
+                                                    className={cn(
+                                                        'h-2 w-2 shrink-0 rounded-full',
+                                                        row.online ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-600',
+                                                    )}
+                                                    title={t(row.online ? 'servers.peerOnline' : 'servers.peerOffline')}
+                                                    aria-label={t(row.online ? 'servers.peerOnline' : 'servers.peerOffline')}
+                                                />
+                                                <span className="font-mono text-xs dark:text-zinc-300" title={row.publicKey}>
+                                                    {row.label}
+                                                </span>
                                             </span>
                                         </td>
                                         <td className="w-full py-2 pl-3 align-middle">
@@ -402,7 +557,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                                                     {formatBytes(row.total)}
                                                 </span>
                                                 <div className="min-w-0 flex-1">
-                                                    <Sparkline values={row.activity}/>
+                                                    <Sparkline values={row.activity} times={row.times}/>
                                                 </div>
                                             </div>
                                         </td>

@@ -84,6 +84,30 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class AgentReleaseAsset {
+	    name: string;
+	    version: string;
+	    arch: string;
+	    userspace: boolean;
+	    url: string;
+	    size: number;
+	    publishedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentReleaseAsset(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.arch = source["arch"];
+	        this.userspace = source["userspace"];
+	        this.url = source["url"];
+	        this.size = source["size"];
+	        this.publishedAt = source["publishedAt"];
+	    }
+	}
 	export class AgentSource {
 	    id: number[];
 	    name: string;
@@ -133,6 +157,7 @@ export namespace models {
 	    inDocker: boolean;
 	    kernelModule: boolean;
 	    interfaceKinds: string[];
+	    arch: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new HostInfo(source);
@@ -146,6 +171,7 @@ export namespace models {
 	        this.inDocker = source["inDocker"];
 	        this.kernelModule = source["kernelModule"];
 	        this.interfaceKinds = source["interfaceKinds"];
+	        this.arch = source["arch"];
 	    }
 	}
 	export class InterfacePeer {

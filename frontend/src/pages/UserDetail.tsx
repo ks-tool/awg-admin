@@ -715,8 +715,13 @@ export default function UserDetail() {
                                     className="rounded-lg border border-input bg-background p-4 dark:border-white/10 dark:bg-white/5"
                                 >
                                     <div className="flex items-center justify-between mb-2">
-                                        <div
-                                            className="text-sm font-medium text-foreground dark:text-zinc-300">{peer.name}</div>
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <div
+                                                className="min-w-0 truncate text-sm font-medium text-foreground dark:text-zinc-300">{peer.name}</div>
+                                            <span className="shrink-0">
+                                                <StatusBadge status={peer.disabled ? 'disabled' : 'enabled'} size="sm"/>
+                                            </span>
+                                        </div>
                                         <div className="flex items-center gap-2">
                                             {/*<CopyButton value={peer.pk}/>*/}
                                             <button
@@ -755,14 +760,11 @@ export default function UserDetail() {
                                             </button>
                                         </div>
                                     </div>
-                                    <div
-                                        className="flex items-center justify-between text-xs text-muted-foreground dark:text-zinc-500">
+                                    <div className="text-xs text-muted-foreground dark:text-zinc-500">
                     <span className="text-foreground font-semibold dark:text-zinc-300">
                       {t('peers.server')}: {getServerForInterface(peer.interface)?.name}/
                         {getInterfaceName(peer.interface) || peer.interface}
                     </span>
-                                        {peer.disabled &&
-                                            <span className="text-orange-500">{t('common.disabled')}</span>}
                                     </div>
                                 </div>
                             ))}

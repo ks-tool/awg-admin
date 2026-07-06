@@ -133,6 +133,7 @@ func (s *Service) defaultInterfaceAddress() (string, error) {
 }
 
 func (s *Service) ListInterfaces(serverID string) ([]models.Interface, error) {
+	debugOp("ListInterfaces").Str("server_id", serverID).Msg("listing interfaces")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
@@ -141,6 +142,7 @@ func (s *Service) ListInterfaces(serverID string) ([]models.Interface, error) {
 }
 
 func (s *Service) GetInterface(serverID, ifaceID string) (*models.Interface, error) {
+	debugOp("GetInterface").Str("server_id", serverID).Str("interface_id", ifaceID).Msg("getting interface")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
@@ -153,6 +155,7 @@ func (s *Service) GetInterface(serverID, ifaceID string) (*models.Interface, err
 }
 
 func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfig) (*models.Interface, error) {
+	debugOp("CreateInterface").Str("server_id", serverID).Str("name", in.Interface).Msg("creating interface")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
@@ -200,6 +203,7 @@ func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfi
 // add-interface form calls it to pre-fill the "Amnezia" tab; it touches no
 // storage and reaches no agent, so it's safe to call on every modal open.
 func (s *Service) GenerateInterfaceDefaults() agentmodels.InterfaceConfig {
+	debugOp("GenerateInterfaceDefaults").Msg("generating interface defaults")
 	var cfg agentmodels.InterfaceConfig
 	agentmodels.GenerateAmneziaParams(&cfg)
 	return cfg
@@ -207,6 +211,7 @@ func (s *Service) GenerateInterfaceDefaults() agentmodels.InterfaceConfig {
 
 // UpdateInterfaceConfig replaces all config fields but always preserves peers.
 func (s *Service) UpdateInterfaceConfig(serverID, ifaceID string, cfg agentmodels.InterfaceConfig) (*models.Interface, error) {
+	debugOp("UpdateInterfaceConfig").Str("server_id", serverID).Str("interface_id", ifaceID).Msg("updating interface config")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
@@ -248,6 +253,7 @@ func (s *Service) UpdateInterfaceConfig(serverID, ifaceID string, cfg agentmodel
 }
 
 func (s *Service) DeleteInterface(serverID, ifaceID string) error {
+	debugOp("DeleteInterface").Str("server_id", serverID).Str("interface_id", ifaceID).Msg("deleting interface")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return err

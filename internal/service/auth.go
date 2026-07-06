@@ -31,6 +31,7 @@ var ErrInvalidCredentials = errors.New("invalid username or password")
 // flow (internal/api) — the Wails desktop app never calls this, since it
 // already runs as a local single-user process with no network exposure.
 func (s *Service) Login(username, password string) error {
+	debugOp("Login").Str("username", username).Msg("login attempt")
 	creds, err := s.store.Auth().Get()
 	if err != nil {
 		return err
@@ -47,6 +48,7 @@ func (s *Service) Login(username, password string) error {
 // CurrentUsername returns the stored admin account's username, so the
 // frontend can confirm a session is still valid and show who's logged in.
 func (s *Service) CurrentUsername() (string, error) {
+	debugOp("CurrentUsername").Msg("getting current username")
 	creds, err := s.store.Auth().Get()
 	if err != nil {
 		return "", err
@@ -58,6 +60,7 @@ func (s *Service) CurrentUsername() (string, error) {
 // gate (internal/api.BasicAuthMiddleware) is currently turned on. Off by
 // default; toggled via SetBasicAuthEnabled from the Settings page.
 func (s *Service) BasicAuthEnabled() (bool, error) {
+	debugOp("BasicAuthEnabled").Msg("checking basic auth status")
 	creds, err := s.store.Auth().Get()
 	if err != nil {
 		return false, err
@@ -69,6 +72,7 @@ func (s *Service) BasicAuthEnabled() (bool, error) {
 // Basic Auth (checked against the same admin account as session login) in
 // front of every request, including the login page and static assets.
 func (s *Service) SetBasicAuthEnabled(enabled bool) error {
+	debugOp("SetBasicAuthEnabled").Bool("enabled", enabled).Msg("setting basic auth enabled")
 	creds, err := s.store.Auth().Get()
 	if err != nil {
 		return err
@@ -84,6 +88,7 @@ func (s *Service) SetBasicAuthEnabled(enabled bool) error {
 // check. When on, it's a straight comparison against the same stored
 // admin account session login uses.
 func (s *Service) VerifyBasicAuth(username, password string) (bool, error) {
+	debugOp("VerifyBasicAuth").Str("username", username).Msg("verifying basic auth")
 	creds, err := s.store.Auth().Get()
 	if err != nil {
 		return false, err
@@ -101,6 +106,7 @@ func (s *Service) VerifyBasicAuth(username, password string) (bool, error) {
 // requiring the current password to confirm the change. Pass "" for
 // newUsername/newPassword to leave that field as-is.
 func (s *Service) ChangeCredentials(currentPassword, newUsername, newPassword string) error {
+	debugOp("ChangeCredentials").Str("username", newUsername).Msg("changing credentials")
 	creds, err := s.store.Auth().Get()
 	if err != nil {
 		return err

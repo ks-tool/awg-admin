@@ -142,6 +142,28 @@ After startup, the agent exposes its management API and waits for connections fr
 default, the API is bound to the loopback interface (`127.0.0.1`) and is expected to be accessed through an SSH tunnel.
 Direct mTLS connections are supported when SSH tunneling is not available or not desired.
 
+#### Obtaining the agent
+
+The agent is released independently of the desktop/standalone application: its releases are tagged `agent/v*` (the
+application itself uses `v*` tags), and both appear on the project's [Releases](../../../releases) page. Every agent
+release provides prebuilt Linux binaries for `amd64` and `arm64`:
+
+- `awg-agent_<version>_linux_<arch>` — the **kernel** backend (`awg-agent`), which drives the AmneziaWG kernel module.
+- `awg-agent-userspace_<version>_linux_<arch>` — the **userspace** backend (`awg-agent-userspace`), which needs no
+  kernel module.
+
+These assets are plain executables, not archives, so no extraction is required. The userspace agent is additionally
+published as a multi-arch Docker image:
+
+```
+ghcr.io/<owner>/awg-agent-userspace:latest
+```
+
+In most cases the agent is not downloaded by hand: point an [agent source](#agent-sources-deploy-presets) at the
+binary's release URL (or at the image) and let **Deploy agent** fetch and install it over SSH. In the desktop
+application a binary already on disk can also be selected directly through a file picker. See
+[Deploying the agent](#deploying-the-agent) for which artifact matches which backend and deployment method.
+
 ### Agent configuration
 
 | Variable                                                               | Description                                                                  |

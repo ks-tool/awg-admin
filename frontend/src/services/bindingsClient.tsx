@@ -206,6 +206,19 @@ export const bindingsClient = {
         }
     },
 
+    async listAgentReleases(): Promise<ApiResponse<models.AgentReleaseAsset[]>> {
+        try {
+            const data = await AppBindings.ListAgentReleases();
+            return { data: data || [] };
+        } catch (error) {
+            console.error('Bindings ListAgentReleases failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async createAgentSource(name: string, url: string, path: string, image: string, cacheLocally: boolean, userspace: boolean): Promise<ApiResponse<models.AgentSource>> {
         try {
             const data = await AppBindings.CreateAgentSource(name, url, path, image, cacheLocally, userspace);

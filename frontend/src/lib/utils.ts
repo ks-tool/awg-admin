@@ -51,6 +51,21 @@ export function formatBytes(bytes: number): string {
   return `${exp === 0 ? value : value.toFixed(1)} ${units[exp]}`
 }
 
+/**
+ * Locale-aware, case-insensitive comparator for sorting lists alphabetically
+ * by a display name. `numeric` so "peer2" sorts before "peer10", `sensitivity:
+ * 'base'` so case/accents don't split the order; handles Cyrillic. Items whose
+ * name is empty/missing sink to the end.
+ */
+export function byName<T>(nameOf: (item: T) => string | undefined | null) {
+  return (a: T, b: T): number => {
+    const an = nameOf(a) || ''
+    const bn = nameOf(b) || ''
+    if (!an || !bn) return (an ? 0 : 1) - (bn ? 0 : 1)
+    return an.localeCompare(bn, undefined, { numeric: true, sensitivity: 'base' })
+  }
+}
+
 export function truncateKey(key: string, chars = 12): string {
   if (key.length <= chars * 2) return key
   return `${key.slice(0, chars)}…${key.slice(-chars)}`

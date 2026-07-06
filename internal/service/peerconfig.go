@@ -36,6 +36,7 @@ import (
 // key plus its owning interface's server public key, listen port and
 // AmneziaWG obfuscation params (if any).
 func (s *Service) GetPeerConfig(userID string, key string) (string, error) {
+	debugOp("GetPeerConfig").Str("user_id", userID).Str("public_key", key).Msg("rendering peer config")
 	uID, err := uuid.Parse(userID)
 	if err != nil {
 		return "", err
@@ -125,6 +126,7 @@ const qrCodeSize = 384
 // browser has to hold onto and could leak via devtools/extensions/clipboard
 // history.
 func (s *Service) GetPeerQRCode(userID string, key string) (string, error) {
+	debugOp("GetPeerQRCode").Str("user_id", userID).Str("public_key", key).Msg("rendering peer QR code")
 	cfg, err := s.GetPeerConfig(userID, key)
 	if err != nil {
 		return "", err

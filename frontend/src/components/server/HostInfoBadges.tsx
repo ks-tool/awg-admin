@@ -60,7 +60,7 @@ export function HostInfoBadges({ info }: { info: HostInfo | null | undefined }) 
     const yn = (b: boolean) => (b ? t('common.yes') : t('common.no'))
     const title = [
         `${t('servers.hostInfo.backend')}: ${info.backend}`,
-        info.version ? `${t('servers.hostInfo.version')}: ${info.version}` : null,
+        info.version ? `${t('servers.hostInfo.version')}: ${info.version}${info.arch ? ` (${info.arch})` : ''}` : null,
         `${t('servers.hostInfo.dockerHost')}: ${yn(info.docker)}`,
         `${t('servers.hostInfo.container')}: ${yn(info.inDocker)}`,
         info.backend === 'kernel' ? `${t('servers.hostInfo.kernelModule')}: ${yn(info.kernelModule)}` : null,

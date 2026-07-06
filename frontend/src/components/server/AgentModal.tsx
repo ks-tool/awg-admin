@@ -280,7 +280,11 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
                 <div className="flex items-center justify-between gap-4 pb-3 border-b border-border dark:border-white/5">
                     <div className="text-sm">
                         <span className="text-muted-foreground dark:text-zinc-500">{t('servers.hostInfo.version')}: </span>
-                        <span className="font-mono text-foreground dark:text-zinc-200">{hostInfo?.version || '—'}</span>
+                        <span className="font-mono text-foreground dark:text-zinc-200">
+                            {hostInfo?.version
+                                ? `${hostInfo.version}${hostInfo.arch ? ` (${hostInfo.arch})` : ''}`
+                                : '—'}
+                        </span>
                     </div>
                     <HostInfoBadges info={hostInfo}/>
                 </div>
@@ -291,7 +295,7 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
                     <div className="mt-0.5 mb-2 text-xs text-muted-foreground dark:text-zinc-500">{t('servers.agentModal.deployHint')}</div>
                     <div className="flex items-end gap-2">
                         <div className="flex-1 min-w-0">
-                            <AgentSourceCombobox value={agentSourceId} onChange={setAgentSourceId} disabled={deployLoading} dockerAvailable={hostInfo?.docker}/>
+                            <AgentSourceCombobox value={agentSourceId} onChange={setAgentSourceId} disabled={deployLoading} dockerAvailable={hostInfo?.docker} arch={hostInfo?.arch}/>
                         </div>
                         <button onClick={onDeployClick} disabled={deployLoading} className={cn(buttons.primary, 'inline-flex items-center gap-1.5')}>
                             <Rocket size={14}/>

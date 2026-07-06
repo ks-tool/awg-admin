@@ -69,6 +69,8 @@ export function GetUser(arg1:string):Promise<models.User>;
 
 export function ImportInterface(arg1:string,arg2:string):Promise<models.Interface>;
 
+export function ListAgentReleases():Promise<Array<models.AgentReleaseAsset>>;
+
 export function ListAgentSources():Promise<Array<models.AgentSource>>;
 
 export function ListInterfaces(arg1:string):Promise<Array<models.Interface>>;
