@@ -101,7 +101,12 @@ func (s *Service) GetPeerConfig(userID string, key string) (string, error) {
 	// IPv4-only, so routing ::/0 through it would just break the client's
 	// IPv6 connectivity for no benefit.
 	b.WriteString("AllowedIPs = 0.0.0.0/0\n")
-	if host := srv.SSH.Host; len(host) > 0 {
+	// Only emit an Endpoint when the interface actually has a listen port. A
+	// port-0 interface (it binds a random ephemeral port and only dials out —
+	// e.g. was a tunnel exit) has no stable inbound port, so "Endpoint = host:0"
+	// would be invalid; omit the line rather than hand the client an unusable
+	// endpoint to fill in by hand.
+	if host := srv.SSH.Host; len(host) > 0 && iface.ListenPort != 0 {
 		_, _ = fmt.Fprintf(&b, "Endpoint = %s\n", net.JoinHostPort(host, strconv.Itoa(int(iface.ListenPort))))
 	}
 	if ifacePeer.KeepaliveInterval > 0 {

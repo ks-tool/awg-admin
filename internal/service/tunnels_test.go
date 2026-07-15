@@ -121,8 +121,8 @@ func TestBuildAndRemoveTunnel(t *testing.T) {
 	if xi.Tunnel == nil || *xi.Tunnel != tun.ID {
 		t.Errorf("exit Tunnel id not set")
 	}
-	if xi.ListenPort != 0 {
-		t.Errorf("exit ListenPort = %d, want 0", xi.ListenPort)
+	if xi.ListenPort != 51820 {
+		t.Errorf("exit ListenPort = %d, want 51820 (kept so clients can connect directly to the exit)", xi.ListenPort)
 	}
 	if !strings.HasPrefix(xi.Address, "172.23.24.") {
 		t.Errorf("exit Address %q not on the entry subnet 172.23.24.0/24", xi.Address)

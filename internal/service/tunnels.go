@@ -42,8 +42,9 @@ const (
 // the internet via the exit. Both interfaces already exist and are reused: the
 // entry keeps its clients + listen port and gains a "gateway peer" to the exit
 // plus policy-routing hooks; the exit is reconfigured onto the shared subnet
-// with the same obfuscation params, no listen port, a peer back to the entry
-// and MASQUERADE hooks. All members get one tunnel id. The shared subnet is
+// with the same obfuscation params, a peer back to the entry and MASQUERADE
+// hooks (its listen port is kept so clients can also connect directly to the
+// exit). All members get one tunnel id. The shared subnet is
 // always the entry interface's own subnet (see below); the subnet argument is
 // only accepted when empty or equal to it, never an arbitrary value.
 func (s *Service) BuildTunnel(steps []models.TunnelStep, subnet string) (*models.Tunnel, error) {
@@ -163,8 +164,13 @@ func (s *Service) ListTunnels() ([]models.Tunnel, error) {
 				byID[id] = t
 				order = append(order, id)
 			}
+			// The entry (relay) carries the policy-routing table; the exit has
+			// Table==0. Role is keyed off that, not the listen port — the exit
+			// keeps a listen port too (so clients can connect directly to it),
+			// which also keeps this correct for pre-fix tunnels whose exit still
+			// has ListenPort==0.
 			role := "exit"
-			if ifaces[j].ListenPort != 0 {
+			if ifaces[j].Table != 0 {
 				role = "entry"
 			}
 			t.Members = append(t.Members, models.TunnelMember{
@@ -214,7 +220,7 @@ func (s *Service) RemoveTunnel(tunnelID string) error {
 		}
 		for j := range ifaces {
 			if ifaces[j].Tunnel != nil && *ifaces[j].Tunnel == tid {
-				members = append(members, member{srvID: servers[i].ID, iface: ifaces[j], isExit: ifaces[j].ListenPort == 0})
+				members = append(members, member{srvID: servers[i].ID, iface: ifaces[j], isExit: ifaces[j].Table == 0})
 			}
 		}
 	}
@@ -284,23 +290,25 @@ func applyRelayTemplate(iface *models.Interface, tunnelID uuid.UUID, exitPub, ps
 		fmt.Sprintf("ip route del default dev %%i table %d 2>/dev/null || true", table),
 		fmt.Sprintf("ip rule del iif %%i table %d priority %d 2>/dev/null || true", table, prio),
 	)
-	pskCopy := psk
 	iface.Peers = append(iface.Peers, agentmodels.InterfacePeer{
 		Key:          exitPub,
-		PresharedKey: &pskCopy,
+		PresharedKey: new(psk),
 		AllowedIPs:   []string{"0.0.0.0/0"},
 	})
-	id := tunnelID
-	iface.Tunnel = &id
+	iface.Tunnel = new(tunnelID)
 }
 
 // applyExitTemplate turns the exit interface into the tunnel's dedicated
 // egress: it moves onto the shared subnet with the entry's obfuscation params,
-// drops its listen port (it dials the entry), keeps a single peer back to the
-// entry (routing the whole subnet), and MASQUERADEs the relayed traffic out.
+// keeps a peer back to the entry (routing the whole subnet), and MASQUERADEs the
+// relayed traffic out. Its listen port is KEPT: the exit dials the relay (its
+// relay-facing peer has an Endpoint) regardless of its own port, and keeping a
+// port is what lets clients be added directly on the exit — they connect to it
+// like any interface and egress through the same MARK/MASQUERADE. The exit is
+// identified by role via Table==0 (see ListTunnels/RemoveTunnel), not the port,
+// so keeping the port doesn't confuse entry/exit detection.
 func applyExitTemplate(iface *models.Interface, tunnelID uuid.UUID, entry *models.Interface, entryPub, psk agentmodels.Key, entrySubnet, endpoint, exitAddress string) {
 	iface.Address = exitAddress
-	iface.ListenPort = 0
 	iface.Table = 0
 	copyAmneziaParams(&iface.InterfaceConfig, &entry.InterfaceConfig)
 
@@ -316,16 +324,14 @@ func applyExitTemplate(iface *models.Interface, tunnelID uuid.UUID, entry *model
 		"iptables -t nat -D POSTROUTING ! -o %i -m mark --mark " + tunnelMark + " -j MASQUERADE 2>/dev/null || true",
 	}
 
-	pskCopy := psk
 	iface.Peers = []agentmodels.InterfacePeer{{
 		Key:               entryPub,
-		PresharedKey:      &pskCopy,
+		PresharedKey:      new(psk),
 		AllowedIPs:        []string{entrySubnet},
 		Endpoint:          endpoint,
 		KeepaliveInterval: tunnelKeepalive,
 	}}
-	id := tunnelID
-	iface.Tunnel = &id
+	iface.Tunnel = new(tunnelID)
 }
 
 func copyAmneziaParams(dst, src *agentmodels.InterfaceConfig) {
@@ -339,16 +345,14 @@ func copyIntPtr(p *int) *int {
 	if p == nil {
 		return nil
 	}
-	v := *p
-	return &v
+	return new(*p)
 }
 
 func copyStrPtr(p *string) *string {
 	if p == nil {
 		return nil
 	}
-	v := *p
-	return &v
+	return new(*p)
 }
 
 // nextFreeSubnet returns the first /24 in 172.23.0.0/16 that doesn't overlap
