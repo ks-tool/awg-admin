@@ -294,6 +294,51 @@ func TestDeleteInterfaceCascadesPeers(t *testing.T) {
 	}
 }
 
+// TestRenameInterfaceDeletesOldNameOnAgent guards the fix for the duplicated
+// per-peer metrics after an interface rename: the agent keys everything
+// (link, stored config, metrics) by interface name, so renaming must tear the
+// OLD name down on the agent, not just push the new one — otherwise the stale
+// interface lingers and every peer is sampled twice (once per name).
+func TestRenameInterfaceDeletesOldNameOnAgent(t *testing.T) {
+	ts, tlsMaterial, fa := newFakeAgentTLS(t)
+	defer ts.Close()
+
+	svc := newTestService(t)
+
+	srv, err := svc.CreateServer(ServerInput{
+		Name:  "srv1",
+		SSH:   models.SSHConfig{Host: "example.invalid", User: "root", Password: "x"},
+		Agent: models.Agent{Address: ts.Listener.Addr().String(), TLS: tlsMaterial},
+	})
+	if err != nil {
+		t.Fatalf("CreateServer: %v", err)
+	}
+
+	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
+	})
+	if err != nil {
+		t.Fatalf("CreateInterface: %v", err)
+	}
+	if _, ok := fa.get("wg0"); !ok {
+		t.Fatal("agent did not receive the created interface")
+	}
+
+	// Rename wg0 -> awg0 (keeping the same UUID, address and port).
+	if _, err = svc.UpdateInterfaceConfig(srv.ID.String(), iface.ID.String(), agentmodels.InterfaceConfig{
+		Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820,
+	}); err != nil {
+		t.Fatalf("UpdateInterfaceConfig (rename): %v", err)
+	}
+
+	if _, ok := fa.get("awg0"); !ok {
+		t.Fatal("agent did not receive the renamed interface")
+	}
+	if _, ok := fa.get("wg0"); ok {
+		t.Fatal("agent still has the OLD interface name after rename — its peers would be double-counted in metrics")
+	}
+}
+
 func TestSyncServerResendsAllInterfaces(t *testing.T) {
 	ts, tlsMaterial, fa := newFakeAgentTLS(t)
 	defer ts.Close()

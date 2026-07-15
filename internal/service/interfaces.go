@@ -243,10 +243,23 @@ func (s *Service) UpdateInterfaceConfig(serverID, ifaceID string, cfg agentmodel
 	if err := s.validateInterfaceUnique(sID, cfg, iID, iface); err != nil {
 		return nil, err
 	}
+	oldName := iface.Interface
 	cfg.Peers = iface.Peers // immutable via this endpoint
 	iface.InterfaceConfig = cfg
 	if err = ifaces.Set(iface); err != nil {
 		return nil, err
+	}
+	// A rename changes the OS interface name the agent keys everything by. The
+	// agent's PUT /interfaces creates/stores the config under the NEW name but
+	// has no way to know it superseded the old one, so the old-named link, its
+	// stored config, and its metrics would linger — every peer keeps being
+	// sampled under the old name too, duplicating it in /metrics and
+	// /metrics/history (agent.List still returns the stale interface, so the
+	// collector's retainOnly never evicts it). Tear the old name down first, so
+	// its UDP ListenPort is also freed before the new-named link tries to bind
+	// it (DELETE /interfaces/{old} → ForgetInterface drops its metrics too).
+	if oldName != cfg.Interface {
+		s.pushInterfaceDelete(sID, oldName)
 	}
 	s.pushInterface(sID, iface)
 	return iface, nil
