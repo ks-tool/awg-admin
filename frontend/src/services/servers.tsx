@@ -17,7 +17,7 @@
 import {API_BASE_URL, get, patch, post, put, remove} from './api';
 import {getCurrentApiMode} from './apiMode';
 import {bindingsClient} from './bindingsClient';
-import {throwIfPassphraseRequired} from './sshErrors';
+import {throwIfPassphraseRequired, throwIfSudoPasswordRequired} from './sshErrors';
 import {reportError} from './errorReporting';
 import type {Agent, DeployStatus, HostInfo, Interface, InterfaceConfig, MetricsSnapshot, Server, ServerInfo, SSHConfig, SystemHistory} from '@/types';
 
@@ -166,6 +166,7 @@ export async function deployAgent(serverId: string, agentSourceId: string): Prom
         const {error} = await client.deployAgent(serverId, agentSourceId);
         if (error) {
             throwIfPassphraseRequired(error);
+            throwIfSudoPasswordRequired(error);
             console.error(`Failed to deploy agent to ${serverId} (bindings):`, error);
             return false;
         }
@@ -175,6 +176,7 @@ export async function deployAgent(serverId: string, agentSourceId: string): Prom
     const {error} = await post<void, {agentSourceId: string}>(`/servers/${serverId}/deploy`, {agentSourceId});
     if (error) {
         throwIfPassphraseRequired(error);
+        throwIfSudoPasswordRequired(error);
         console.error(`Failed to deploy agent to ${serverId}:`, error);
         return false;
     }
@@ -186,8 +188,9 @@ export async function deployAgent(serverId: string, agentSourceId: string): Prom
  * models.DeployStatus) — null if no deploy has been started yet (404,
  * normal right after opening the modal for a server that was never
  * deployed to before). Throws SSHPassphraseRequiredError if the deploy
- * that just finished failed because the SSH key needs a passphrase, same
- * as deployAgent itself would for an immediate failure.
+ * that just finished failed because the SSH key needs a passphrase, or
+ * SudoPasswordRequiredError if it needs a sudo password — same as
+ * deployAgent itself would for an immediate failure.
  */
 export async function getDeployStatus(serverId: string): Promise<DeployStatus | null> {
     const client = getClient();
@@ -196,12 +199,14 @@ export async function getDeployStatus(serverId: string): Promise<DeployStatus | 
         const {data, error} = await client.getDeployStatus(serverId);
         if (error) return null;
         throwIfPassphraseRequired(data?.error);
+        throwIfSudoPasswordRequired(data?.error);
         return data as unknown as DeployStatus;
     }
 
     const {data, error} = await get<DeployStatus>(`/servers/${serverId}/deploy/status`);
     if (error) return null;
     throwIfPassphraseRequired(data?.error);
+    throwIfSudoPasswordRequired(data?.error);
     return data;
 }
 
@@ -231,6 +236,38 @@ export async function unlockServerSSH(
     const {error} = await post<void, typeof body>(`/servers/${serverId}/ssh/unlock`, body);
     if (error) {
         console.error(`Failed to unlock SSH key for ${serverId}:`, error);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Caches password as the sudo password for serverId's non-root SSH user for
+ * the remainder of the current session (never persisted). The caller then
+ * retries the deploy, which escalates its privileged commands with it. When
+ * applyToAll is true the password also becomes the fallback for any other
+ * server whose host needs a sudo password.
+ */
+export async function unlockServerSudo(
+    serverId: string,
+    password: string,
+    applyToAll: boolean,
+): Promise<boolean> {
+    const client = getClient();
+    const body = {password, applyToAll};
+
+    if (client) {
+        const {error} = await client.unlockServerSudo(serverId, password, applyToAll);
+        if (error) {
+            console.error(`Failed to cache sudo password for ${serverId} (bindings):`, error);
+            return false;
+        }
+        return true;
+    }
+
+    const {error} = await post<void, typeof body>(`/servers/${serverId}/sudo/unlock`, body);
+    if (error) {
+        console.error(`Failed to cache sudo password for ${serverId}:`, error);
         return false;
     }
     return true;

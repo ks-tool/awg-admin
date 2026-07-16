@@ -48,6 +48,17 @@ export interface ServerFormData {
 
 export type AuthType = 'key' | 'password';
 
+/**
+ * Derives which SSH auth method a server uses, so the edit form opens on the
+ * right tab instead of always defaulting to 'key'. Key material (a stored path
+ * or uploaded key) wins; otherwise a stored password means password auth.
+ */
+export function authTypeForServer(server: Server): AuthType {
+    if (server.ssh?.key || server.ssh?.keyData) return 'key';
+    if (server.ssh?.password) return 'password';
+    return 'key';
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------

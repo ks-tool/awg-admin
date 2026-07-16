@@ -65,14 +65,17 @@ type (
 // by the docker method so remote clients can reach them (ignored by systemd,
 // which runs on the host network directly). passphrase decrypts srv.SSH's key
 // when it's passphrase-protected (see sshclient.Dial); pass "" when none is
-// cached. onStep, if non-nil, is called with a stable step-name key right
-// before each step runs, so a caller can surface deploy progress (e.g.
-// Service.DeployAgent's in-memory status, polled by the frontend) — the names
-// are deliberately untranslated keys, not human-readable text, so the UI can
-// localize them itself. Step keys: "connect"; systemd: "check_kernel_module",
-// "upload_binary", "upload_unit", "upload_env", "upload_tls", "start_service";
-// docker: "check_docker", "upload_tls", "start_container".
-func ToAgent(ctx context.Context, srv models.Server, src models.AgentSource, udpPorts []uint16, passphrase string, onStep func(string)) error {
+// cached. sudoPassword is the cached sudo password used when the SSH user isn't
+// root and the host needs one for sudo (see resolveSudo); pass "" to try
+// passwordless sudo first. onStep, if non-nil, is called with a stable
+// step-name key right before each step runs, so a caller can surface deploy
+// progress (e.g. Service.DeployAgent's in-memory status, polled by the
+// frontend) — the names are deliberately untranslated keys, not human-readable
+// text, so the UI can localize them itself. Step keys: "connect", "check_sudo";
+// systemd: "check_kernel_module", "upload_binary", "upload_unit", "upload_env",
+// "upload_tls", "start_service"; docker: "check_docker", "upload_tls",
+// "start_container".
+func ToAgent(ctx context.Context, srv models.Server, src models.AgentSource, udpPorts []uint16, passphrase, sudoPassword string, onStep func(string)) error {
 	l := log.With().Str("server_id", srv.ID.String()).Logger()
 	l.Info().Str("agent_source", src.Name).Bool("cache_locally", src.CacheLocally).Bool("docker", len(src.Image) > 0).Msg("deploying agent")
 
@@ -94,22 +97,63 @@ func ToAgent(ctx context.Context, srv models.Server, src models.AgentSource, udp
 	}
 	defer func() { _ = client.Close() }()
 
-	if len(src.Image) > 0 {
-		return deployDocker(client, srv, src, udpPorts, step, failed)
+	// A non-root SSH user can't write /usr/local/bin, /etc/systemd, /etc/awg-agent
+	// or drive systemctl/docker directly — escalate every privileged remote
+	// command with sudo. resolveSudo probes the host and, if sudo needs a
+	// password we don't have, returns *SudoPasswordRequiredError for the frontend
+	// to prompt on.
+	if needsSudo(srv.SSH.User) {
+		step("check_sudo").Msg("deploy step")
 	}
-	return deploySystemd(ctx, client, srv, src, step, failed)
+	sudo, err := resolveSudo(client, srv.SSH.User, sudoPassword)
+	if err != nil {
+		return failed("check_sudo", err)
+	}
+
+	if len(src.Image) > 0 {
+		return deployDocker(client, sudo, srv, src, udpPorts, step, failed)
+	}
+	return deploySystemd(ctx, client, sudo, srv, src, step, failed)
+}
+
+// needsSudo reports whether the deploy must escalate for this SSH user. An
+// empty user means root (sshclient.Dial's default), so only a non-empty,
+// non-root user needs sudo.
+func needsSudo(user string) bool {
+	return user != "" && user != "root"
+}
+
+// resolveSudo decides how the deploy escalates privileges for user. root (or an
+// empty user) needs none. Otherwise it prefers passwordless sudo (`sudo -n
+// true`); failing that it needs a password — validating cachedPassword if we
+// have one, or returning *sshclient.SudoPasswordRequiredError so the caller can
+// prompt. A wrong/expired cachedPassword also returns that error, to re-prompt.
+func resolveSudo(client *ssh.Client, user, cachedPassword string) (sshclient.Sudo, error) {
+	if !needsSudo(user) {
+		return sshclient.Sudo{}, nil
+	}
+	if err := sshclient.ProbeSudo(client, ""); err == nil {
+		return sshclient.Sudo{Enabled: true}, nil // passwordless sudo works
+	}
+	if len(cachedPassword) == 0 {
+		return sshclient.Sudo{}, &sshclient.SudoPasswordRequiredError{}
+	}
+	if err := sshclient.ProbeSudo(client, cachedPassword); err != nil {
+		return sshclient.Sudo{}, &sshclient.SudoPasswordRequiredError{Err: err}
+	}
+	return sshclient.Sudo{Enabled: true, Password: cachedPassword}, nil
 }
 
 // uploadAgentTLS writes the CA + server cert/key into the agent's config dir on
 // the server — shared by the systemd and docker deploy paths.
-func uploadAgentTLS(client *ssh.Client, tls *models.AgentTLS) error {
-	if err := sshclient.UploadFile(client, remoteCACertPath, 0o644, []byte(tls.CA.Certificate)); err != nil {
+func uploadAgentTLS(client *ssh.Client, sudo sshclient.Sudo, tls *models.AgentTLS) error {
+	if err := sshclient.UploadFileAs(client, sudo, remoteCACertPath, 0o644, []byte(tls.CA.Certificate)); err != nil {
 		return fmt.Errorf("upload CA certificate: %w", err)
 	}
-	if err := sshclient.UploadFile(client, remoteServerCertPath, 0o644, []byte(tls.Server.Certificate)); err != nil {
+	if err := sshclient.UploadFileAs(client, sudo, remoteServerCertPath, 0o644, []byte(tls.Server.Certificate)); err != nil {
 		return fmt.Errorf("upload server certificate: %w", err)
 	}
-	if err := sshclient.UploadFile(client, remoteServerKeyPath, 0o600, []byte(tls.Server.PrivateKey)); err != nil {
+	if err := sshclient.UploadFileAs(client, sudo, remoteServerKeyPath, 0o600, []byte(tls.Server.PrivateKey)); err != nil {
 		return fmt.Errorf("upload server key: %w", err)
 	}
 	return nil

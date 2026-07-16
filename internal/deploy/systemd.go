@@ -45,7 +45,7 @@ const (
 // unit, the env file and (if configured) the mTLS certificates, then enables
 // and restarts the service. The kernel agent drives the AmneziaWG kernel module
 // (amneziawg-dkms), so a pre-check verifies the module is present first.
-func deploySystemd(ctx context.Context, client *ssh.Client, srv models.Server, src models.AgentSource, step stepFunc, failed failFunc) error {
+func deploySystemd(ctx context.Context, client *ssh.Client, sudo sshclient.Sudo, srv models.Server, src models.AgentSource, step stepFunc, failed failFunc) error {
 	// The kernel agent needs the AmneziaWG kernel module (amneziawg-dkms).
 	// Pre-check it's present so a missing module fails fast with an actionable
 	// message instead of the agent later crash-looping. Skipped for a userspace
@@ -53,7 +53,7 @@ func deploySystemd(ctx context.Context, client *ssh.Client, srv models.Server, s
 	// systemd too and needs no kernel module — its whole point.
 	if !src.Userspace {
 		step("check_kernel_module").Msg("deploy step")
-		if _, err := sshclient.Run(client, "modinfo amneziawg"); err != nil {
+		if _, err := sshclient.RunAs(client, sudo, "modinfo amneziawg"); err != nil {
 			return failed("check_kernel_module", fmt.Errorf("AmneziaWG kernel module (amneziawg-dkms) not found on %s — install it, mark the source as the userspace agent, or deploy the userspace agent via a Docker image source: %w", srv.SSH.Host, err))
 		}
 	}
@@ -70,7 +70,7 @@ func deploySystemd(ctx context.Context, client *ssh.Client, srv models.Server, s
 		if len(binary) == 0 {
 			return failed("upload_binary", fmt.Errorf("agent binary source is empty"))
 		}
-		if err := sshclient.UploadFile(client, remoteBinPath, 0o755, binary); err != nil {
+		if err := sshclient.UploadFileAs(client, sudo, remoteBinPath, 0o755, binary); err != nil {
 			return failed("upload_binary", fmt.Errorf("upload agent binary: %w", err))
 		}
 	case src.CacheLocally:
@@ -84,30 +84,30 @@ func deploySystemd(ctx context.Context, client *ssh.Client, srv models.Server, s
 		if len(binary) == 0 {
 			return failed("upload_binary", fmt.Errorf("agent binary source is empty"))
 		}
-		if err := sshclient.UploadFile(client, remoteBinPath, 0o755, binary); err != nil {
+		if err := sshclient.UploadFileAs(client, sudo, remoteBinPath, 0o755, binary); err != nil {
 			return failed("upload_binary", fmt.Errorf("upload agent binary: %w", err))
 		}
 	default:
 		// The server downloads src.URL itself (curl/wget) — awg-admin's own
 		// machine never sees the bytes.
-		if err := sshclient.DownloadFile(client, src.URL, remoteBinPath, 0o755); err != nil {
+		if err := sshclient.DownloadFileAs(client, sudo, src.URL, remoteBinPath, 0o755); err != nil {
 			return failed("upload_binary", fmt.Errorf("download agent binary on server: %w", err))
 		}
 	}
 
 	step("upload_unit").Msg("deploy step")
-	if err := sshclient.UploadFile(client, remoteUnitPath, 0o644, systemdUnit); err != nil {
+	if err := sshclient.UploadFileAs(client, sudo, remoteUnitPath, 0o644, systemdUnit); err != nil {
 		return failed("upload_unit", fmt.Errorf("upload systemd unit: %w", err))
 	}
 
 	step("upload_env").Msg("deploy step")
-	if err := sshclient.UploadFile(client, remoteEnvPath, 0o600, []byte(buildEnvFile(srv))); err != nil {
+	if err := sshclient.UploadFileAs(client, sudo, remoteEnvPath, 0o600, []byte(buildEnvFile(srv))); err != nil {
 		return failed("upload_env", fmt.Errorf("upload env file: %w", err))
 	}
 
 	if tls := srv.Agent.TLS; !tls.IsZero() {
 		step("upload_tls").Msg("deploy step")
-		if err := uploadAgentTLS(client, tls); err != nil {
+		if err := uploadAgentTLS(client, sudo, tls); err != nil {
 			return failed("upload_tls", err)
 		}
 	}
@@ -118,7 +118,7 @@ func deploySystemd(ctx context.Context, client *ssh.Client, srv models.Server, s
 	// leaving the old process running untouched; restarting a unit that isn't
 	// currently active is equivalent to starting it, so this also covers the
 	// "agent was stopped" case in the same command.
-	if _, err := sshclient.Run(client, "systemctl daemon-reload && systemctl enable awg-agent && systemctl restart awg-agent"); err != nil {
+	if _, err := sshclient.RunAs(client, sudo, "systemctl daemon-reload && systemctl enable awg-agent && systemctl restart awg-agent"); err != nil {
 		return failed("start_service", fmt.Errorf("start agent service: %w", err))
 	}
 

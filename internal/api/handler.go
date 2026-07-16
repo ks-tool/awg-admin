@@ -127,6 +127,7 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 			gr.PATCH("/profiling", h.serverSetProfiling)
 			gr.GET("/profile", h.serverProfileDownload)
 			gr.POST("/ssh/unlock", h.serverUnlockSSH)
+			gr.POST("/sudo/unlock", h.serverUnlockSudo)
 
 			gr.WithGroup("/interfaces", func(gr *bunrouter.Group) {
 				gr.POST("", h.interfaceCreate)

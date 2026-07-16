@@ -193,6 +193,7 @@
     "confirmRefreshCache": "Re-download this source now, replacing the cached copy?",
     "deploySteps": {
       "connect": "Connecting…",
+      "check_sudo": "Checking sudo access…",
       "check_kernel_module": "Checking AmneziaWG kernel module…",
       "check_docker": "Checking Docker…",
       "upload_binary": "Transferring agent binary…",
@@ -504,6 +505,9 @@
     "sshKeyProtectedTitle": "SSH key is passphrase-protected",
     "sshKeyProtectedDescription": "Connecting to the server requires the private SSH key's passphrase.",
     "keyPassphrase": "Key passphrase",
+    "sudoRequiredTitle": "sudo password required",
+    "sudoRequiredDescription": "This server's SSH user isn't root, so the agent is deployed with sudo — and this host requires a password for it.",
+    "sudoPassword": "sudo password",
     "useForAllConnections": "Use for all connections",
     "connecting": "Connecting…",
     "connect": "Connect",

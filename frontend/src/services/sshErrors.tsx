@@ -33,3 +33,22 @@ export function throwIfPassphraseRequired(message: string | undefined): void {
         throw new SSHPassphraseRequiredError();
     }
 }
+
+// Matches internal/sshclient.sudoPasswordMarker. Same cross-transport string
+// detection as the passphrase marker above — surfaced when a deploy needs sudo
+// (non-root SSH user) but the host requires a password for it.
+const SUDO_PASSWORD_MARKER = 'SUDO_PASSWORD_REQUIRED';
+
+export class SudoPasswordRequiredError extends Error {
+    constructor() {
+        super('sudo requires a password on the remote host');
+        this.name = 'SudoPasswordRequiredError';
+    }
+}
+
+/** Throws SudoPasswordRequiredError if message carries the backend's marker. */
+export function throwIfSudoPasswordRequired(message: string | undefined): void {
+    if (message?.includes(SUDO_PASSWORD_MARKER)) {
+        throw new SudoPasswordRequiredError();
+    }
+}

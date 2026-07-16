@@ -429,6 +429,32 @@ func (h *Handler) serverUnlockSSH(w http.ResponseWriter, r bunrouter.Request) er
 	return nil
 }
 
+func (h *Handler) serverUnlockSudo(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+
+	var req struct {
+		Password   string `json:"password"`
+		ApplyToAll bool   `json:"applyToAll"`
+	}
+	if err = decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	log.Debug().Fields(fields).Bool("apply_to_all", req.ApplyToAll).Msg("caching sudo password")
+
+	if err = h.svc.UnlockServerSudo(sID, req.Password, req.ApplyToAll); err != nil {
+		return handleErr(err, fields)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
 func (h *Handler) serverDelete(w http.ResponseWriter, r bunrouter.Request) error {
 	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
 

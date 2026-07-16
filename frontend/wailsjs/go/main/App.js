@@ -246,6 +246,10 @@ export function UnlockServerSSH(arg1, arg2, arg3) {
   return window['go']['main']['App']['UnlockServerSSH'](arg1, arg2, arg3);
 }
 
+export function UnlockServerSudo(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UnlockServerSudo'](arg1, arg2, arg3);
+}
+
 export function UpdateAgentSource(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['UpdateAgentSource'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
