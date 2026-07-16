@@ -29,9 +29,11 @@ import {
     setServerProfiling,
     syncServer,
     unlockServerSSH,
+    unlockServerSudo,
 } from '@/services/servers';
-import {SSHPassphraseRequiredError} from '@/services/sshErrors';
+import {SSHPassphraseRequiredError, SudoPasswordRequiredError} from '@/services/sshErrors';
 import {SSHPassphraseModal} from '@/components/server/SSHPassphraseModal';
+import {SudoPasswordModal} from '@/components/server/SudoPasswordModal';
 import {AgentSourceCombobox} from '@/components/server/AgentSourceCombobox';
 import {HostInfoBadges} from '@/components/server/HostInfoBadges';
 import {ReconcileModal} from '@/components/server/ReconcileModal';
@@ -98,6 +100,13 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
     const [unlockLoading, setUnlockLoading] = useState(false);
     const [unlockError, setUnlockError] = useState<string | undefined>();
 
+    // Sudo-password prompt, mirroring the passphrase flow above: a deploy under
+    // a non-root SSH user whose host needs a sudo password surfaces as a
+    // SudoPasswordRequiredError, handled via the nested SudoPasswordModal.
+    const [sudoUnlock, setSudoUnlock] = useState<{retry: () => void} | null>(null);
+    const [sudoUnlockLoading, setSudoUnlockLoading] = useState(false);
+    const [sudoUnlockError, setSudoUnlockError] = useState<string | undefined>();
+
     const timed = TIMED_KINDS.has(profileKind);
 
     // Agent version/capabilities (GET /info via the agent). Best-effort — null
@@ -155,6 +164,10 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
                 setSshUnlock({retry: () => handleDeployAgentRef.current(sourceId)});
                 return;
             }
+            if (err instanceof SudoPasswordRequiredError) {
+                setSudoUnlock({retry: () => handleDeployAgentRef.current(sourceId)});
+                return;
+            }
             console.error('Failed to poll deploy status:', err);
             toast.error(t('servers.deployError'));
         }
@@ -178,6 +191,10 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
             setDeployLoading(false);
             if (err instanceof SSHPassphraseRequiredError) {
                 setSshUnlock({retry: () => handleDeployAgentRef.current(sourceId)});
+                return;
+            }
+            if (err instanceof SudoPasswordRequiredError) {
+                setSudoUnlock({retry: () => handleDeployAgentRef.current(sourceId)});
                 return;
             }
             console.error('Failed to deploy agent:', err);
@@ -209,6 +226,26 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
             }
         } finally {
             setUnlockLoading(false);
+        }
+    };
+
+    const handleSudoUnlockSubmit = async (password: string) => {
+        if (!sudoUnlock) return;
+        setSudoUnlockLoading(true);
+        setSudoUnlockError(undefined);
+        try {
+            // No "use for all connections" for sudo — the password is cached for
+            // this server only (applyToAll = false).
+            const ok = await unlockServerSudo(server.id, password, false);
+            if (ok) {
+                const {retry} = sudoUnlock;
+                setSudoUnlock(null);
+                retry();
+            } else {
+                setSudoUnlockError(t('auth.unlockError'));
+            }
+        } finally {
+            setSudoUnlockLoading(false);
         }
     };
 
@@ -273,7 +310,7 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
             onClose={onClose}
             size="md"
             loading={deployLoading}
-            dimmed={!(showReconcile || sshUnlock)}
+            dimmed={!(showReconcile || sshUnlock || sudoUnlock)}
         >
             <div className="space-y-1">
                 {/* Agent version / capabilities */}
@@ -414,6 +451,15 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
                     onClose={() => setSshUnlock(null)}
                     loading={unlockLoading}
                     error={unlockError}
+                />
+            )}
+
+            {sudoUnlock && (
+                <SudoPasswordModal
+                    onSubmit={handleSudoUnlockSubmit}
+                    onClose={() => setSudoUnlock(null)}
+                    loading={sudoUnlockLoading}
+                    error={sudoUnlockError}
                 />
             )}
         </Modal>

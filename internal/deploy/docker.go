@@ -46,21 +46,21 @@ const (
 // output reusable later for server info), uploads mTLS material if configured,
 // then (re)creates the container with a single `docker run -d` (no separate
 // pull — run fetches the image if it's missing).
-func deployDocker(client *ssh.Client, srv models.Server, src models.AgentSource, udpPorts []uint16, step stepFunc, failed failFunc) error {
+func deployDocker(client *ssh.Client, sudo sshclient.Sudo, srv models.Server, src models.AgentSource, udpPorts []uint16, step stepFunc, failed failFunc) error {
 	step("check_docker").Msg("deploy step")
-	if _, err := sshclient.Run(client, "docker info"); err != nil {
+	if _, err := sshclient.RunAs(client, sudo, "docker info"); err != nil {
 		return failed("check_docker", fmt.Errorf("the Docker not available on %s (docker info failed) — install/start Docker or use a binary agent source: %w", srv.SSH.Host, err))
 	}
 
 	if tls := srv.Agent.TLS; !tls.IsZero() {
 		step("upload_tls").Msg("deploy step")
-		if err := uploadAgentTLS(client, tls); err != nil {
+		if err := uploadAgentTLS(client, sudo, tls); err != nil {
 			return failed("upload_tls", err)
 		}
 	}
 
 	step("start_container").Msg("deploy step")
-	if _, err := sshclient.Run(client, dockerRunCmd(srv, src, udpPorts)); err != nil {
+	if _, err := sshclient.RunAs(client, sudo, dockerRunCmd(srv, src, udpPorts)); err != nil {
 		return failed("start_container", fmt.Errorf("start agent container: %w", err))
 	}
 

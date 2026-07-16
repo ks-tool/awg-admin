@@ -179,22 +179,26 @@ func (s *Service) UpdateServer(id string, in ServerInput) (*models.Server, error
 		return nil, err
 	}
 
-	// The edit form only sends a non-empty Key/KeyData/Password when the user
-	// actually wants to change SSH credentials; preserve the existing ones
-	// otherwise instead of wiping them out on unrelated edits. A newly
-	// uploaded KeyData supersedes any previously stored Key path (and vice
-	// versa) rather than leaving both set. This merge must happen before
-	// validation, since an edit that only touches an unrelated field (e.g.
-	// SSH port) arrives with empty Key/KeyData/Password and would otherwise
-	// fail "SSH auth required" despite the server already having valid
-	// stored credentials.
-	if len(in.SSH.KeyData) > 0 {
-		in.SSH.Key = ""
-	} else if len(in.SSH.Key) == 0 {
+	// The edit form sends only the one credential the user actually entered
+	// (Key path, uploaded KeyData, or Password), never re-sending unchanged
+	// secrets. Treat *which* one is present as the intended auth method and
+	// clear the others, so switching key⇄password actually drops the previous
+	// credential instead of leaving both set — with both set, Dial prefers the
+	// key (see sshclient.authMethod), so a switch to password would keep
+	// failing on the stale key ("attempted methods [publickey]"). When the user
+	// entered nothing, this is an unrelated edit (e.g. the SSH port): preserve
+	// every stored credential as-is, so validation doesn't fail "SSH auth
+	// required" and the auth method stays untouched. Runs before validation.
+	switch {
+	case len(in.SSH.KeyData) > 0:
+		in.SSH.Key, in.SSH.Password = "", ""
+	case len(in.SSH.Key) > 0:
+		in.SSH.KeyData, in.SSH.Password = "", ""
+	case len(in.SSH.Password) > 0:
+		in.SSH.Key, in.SSH.KeyData = "", ""
+	default:
 		in.SSH.Key = srv.SSH.Key
 		in.SSH.KeyData = srv.SSH.KeyData
-	}
-	if len(in.SSH.Password) == 0 {
 		in.SSH.Password = srv.SSH.Password
 	}
 
@@ -250,6 +254,27 @@ func (s *Service) UnlockServerSSH(id string, passphrase string, applyToAll bool)
 	}
 	s.tunnels.SetPassphrase(sID, passphrase, applyToAll)
 	return s.ensureTunnel(srv)
+}
+
+// UnlockServerSudo caches password as the sudo password for the server's SSH
+// user for the remainder of the process's lifetime (never persisted — see
+// sshclient.Manager.SetSudoPassword), so the next DeployAgent for this server
+// can escalate a non-root user's privileged commands. When applyToAll is true
+// the password also becomes the fallback for any other server whose host turns
+// out to need a sudo password. Unlike UnlockServerSSH it doesn't reconnect
+// anything — the caller simply retries the deploy, which reads the cached
+// password (see Service.DeployAgent / the AgentModal retry flow).
+func (s *Service) UnlockServerSudo(id string, password string, applyToAll bool) error {
+	debugOp("UnlockServerSudo").Str("server_id", id).Bool("apply_to_all", applyToAll).Msg("caching server sudo password")
+	sID, err := uuid.Parse(id)
+	if err != nil {
+		return err
+	}
+	if _, err := s.store.Servers().Get(sID); err != nil {
+		return err
+	}
+	s.tunnels.SetSudoPassword(sID, password, applyToAll)
+	return nil
 }
 
 // GenerateAgentTLS (re)issues a CA, server and client certificate for the
@@ -336,7 +361,7 @@ func (s *Service) DeployAgent(id string, agentSourceID string) error {
 
 	s.deployStatus.start(sID)
 	go func() {
-		err := deploy.ToAgent(context.Background(), *srv, *src, udpPorts, s.tunnels.PassphraseFor(sID), func(step string) {
+		err := deploy.ToAgent(context.Background(), *srv, *src, udpPorts, s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID), func(step string) {
 			s.deployStatus.setStep(sID, step)
 		})
 		s.deployStatus.finish(sID, err)

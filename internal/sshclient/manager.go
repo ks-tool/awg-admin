@@ -48,14 +48,23 @@ type Manager struct {
 	passphrases      map[uuid.UUID]string
 	globalPassphrase string
 	hasGlobal        bool
+
+	// sudoPasswords caches per-server sudo passwords used by the deploy for a
+	// non-root SSH user whose host requires a password for sudo — same
+	// process-lifetime, never-persisted lifecycle as passphrases above, with
+	// the same "use for all connections" fallback (globalSudoPassword).
+	sudoPasswords      map[uuid.UUID]string
+	globalSudoPassword string
+	hasGlobalSudo      bool
 }
 
 // NewManager returns an empty Manager. Call Open for each server to
 // populate it (typically done once at startup via OpenAll).
 func NewManager() *Manager {
 	return &Manager{
-		clients:     make(map[uuid.UUID]*TunnelClient),
-		passphrases: make(map[uuid.UUID]string),
+		clients:       make(map[uuid.UUID]*TunnelClient),
+		passphrases:   make(map[uuid.UUID]string),
+		sudoPasswords: make(map[uuid.UUID]string),
 	}
 }
 
@@ -84,6 +93,36 @@ func (m *Manager) PassphraseFor(serverID uuid.UUID) string {
 	}
 	if m.hasGlobal {
 		return m.globalPassphrase
+	}
+	return ""
+}
+
+// SetSudoPassword caches password as serverID's sudo password for every future
+// deploy to that server (see Sudo). When applyToAll is true it also becomes the
+// fallback tried for any other server whose host turns out to need a sudo
+// password — mirroring SetPassphrase.
+func (m *Manager) SetSudoPassword(serverID uuid.UUID, password string, applyToAll bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sudoPasswords[serverID] = password
+	if applyToAll {
+		m.globalSudoPassword = password
+		m.hasGlobalSudo = true
+	}
+}
+
+// SudoPasswordFor returns the cached sudo password for serverID, falling back
+// to the "use for all connections" one when none was cached for this server.
+// Empty means none is known yet — the deploy first tries passwordless sudo and,
+// if that fails, surfaces a SudoPasswordRequiredError to prompt.
+func (m *Manager) SudoPasswordFor(serverID uuid.UUID) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if p, ok := m.sudoPasswords[serverID]; ok {
+		return p
+	}
+	if m.hasGlobalSudo {
+		return m.globalSudoPassword
 	}
 	return ""
 }

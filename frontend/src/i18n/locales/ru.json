@@ -193,6 +193,7 @@
     "confirmRefreshCache": "Скачать источник заново сейчас, заменив закэшированную копию?",
     "deploySteps": {
       "connect": "Подключение…",
+      "check_sudo": "Проверка доступа sudo…",
       "check_kernel_module": "Проверка модуля ядра AmneziaWG…",
       "check_docker": "Проверка Docker…",
       "upload_binary": "Передача бинарника агента…",
@@ -504,6 +505,9 @@
     "sshKeyProtectedTitle": "SSH-ключ защищён паролем",
     "sshKeyProtectedDescription": "Для подключения к серверу нужен пароль (passphrase) от приватного SSH-ключа.",
     "keyPassphrase": "Пароль ключа",
+    "sudoRequiredTitle": "Требуется пароль sudo",
+    "sudoRequiredDescription": "SSH-пользователь этого сервера не root, поэтому агент разворачивается через sudo — а на этом хосте для sudo нужен пароль.",
+    "sudoPassword": "Пароль sudo",
     "useForAllConnections": "Использовать для всех подключений",
     "connecting": "Подключение…",
     "connect": "Подключиться",

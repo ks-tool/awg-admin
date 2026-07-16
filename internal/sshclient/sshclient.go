@@ -20,6 +20,7 @@
 package sshclient
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -55,6 +56,85 @@ func (e *PassphraseRequiredError) Error() string {
 }
 
 func (e *PassphraseRequiredError) Unwrap() error { return e.Err }
+
+// sudoPasswordMarker is the cross-transport sentinel for
+// SudoPasswordRequiredError, matched verbatim by the frontend — exactly like
+// sshPassphraseMarker (see that field's doc).
+const sudoPasswordMarker = "SUDO_PASSWORD_REQUIRED"
+
+// SudoPasswordRequiredError indicates the deploy's SSH user isn't root and so
+// needs sudo, but the host asks for a sudo password and none is cached (Err
+// nil) or the cached/supplied one was rejected (Err set). Like
+// PassphraseRequiredError its message carries a stable marker so the frontend
+// recognizes it across the HTTP-body / Wails-error string boundary and prompts
+// for the sudo password instead of showing a generic deploy failure.
+type SudoPasswordRequiredError struct {
+	Err error
+}
+
+func (e *SudoPasswordRequiredError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("%s: sudo requires a password on the remote host: %v", sudoPasswordMarker, e.Err)
+	}
+	return sudoPasswordMarker + ": sudo requires a password on the remote host"
+}
+
+func (e *SudoPasswordRequiredError) Unwrap() error { return e.Err }
+
+// Sudo controls privilege escalation for a deploy's remote commands. The zero
+// value (Enabled false) runs each command unchanged — used when the SSH user
+// is root. When Enabled, commands run through sudo: non-interactively
+// (`sudo -n …`) when Password is empty (the host has passwordless sudo), else
+// with Password fed to `sudo -S` on stdin. deploy.resolveSudo builds it after
+// probing the host (see ProbeSudo).
+type Sudo struct {
+	Enabled  bool
+	Password string
+}
+
+// sudoPasswordFlags feeds the password on stdin (`-S`, empty prompt) and resets
+// any cached grant first (`-k`) so `sudo -S` *always* reads the password rather
+// than skipping it on a still-valid timestamp — which matters for the upload
+// path, where that unread password line would otherwise be left on stdin and
+// prepended to the file `install` reads from /dev/stdin (see stdinPrefix).
+const sudoPasswordFlags = "sudo -k -S -p '' "
+
+// shell wraps cmd to run through sudo + `sh -c`, so shell operators in cmd
+// (pipes, &&, redirects) still apply under sudo. Returns cmd unchanged when
+// sudo is disabled.
+func (s Sudo) shell(cmd string) string {
+	if !s.Enabled {
+		return cmd
+	}
+	if len(s.Password) > 0 {
+		return sudoPasswordFlags + "sh -c " + shellQuote(cmd)
+	}
+	return "sudo -n sh -c " + shellQuote(cmd)
+}
+
+// simple prefixes a single command (no shell operators) with sudo, without an
+// extra `sh -c` — used for the `install` upload so /dev/stdin still refers to
+// the session's own stdin.
+func (s Sudo) simple(cmd string) string {
+	if !s.Enabled {
+		return cmd
+	}
+	if len(s.Password) > 0 {
+		return sudoPasswordFlags + cmd
+	}
+	return "sudo -n " + cmd
+}
+
+// stdinPrefix is the password line to prepend to a command's stdin so `sudo -S`
+// can read it (nil for passwordless / disabled sudo). sudo reads the password
+// one byte at a time up to the newline, so a command that also reads stdin
+// (the /dev/stdin upload) still gets the bytes that follow.
+func (s Sudo) stdinPrefix() []byte {
+	if s.Enabled && len(s.Password) > 0 {
+		return []byte(s.Password + "\n")
+	}
+	return nil
+}
 
 // Dial opens an SSH connection to the server using its stored SSH config.
 // cfg.Key is a path to a private key file on the machine running awg-admin
@@ -208,35 +288,84 @@ func Run(client *ssh.Client, cmd string) (string, error) {
 	return string(out), nil
 }
 
+// runStdin is Run with a stdin payload: it runs cmd, writes stdin to the
+// process, and returns combined stdout+stderr. Used to feed `sudo -S` its
+// password and to stream file bytes to the remote `install`.
+func runStdin(client *ssh.Client, cmd string, stdin []byte) (string, error) {
+	session, err := client.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("open session: %w", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	var out bytes.Buffer
+	session.Stdout = &out
+	session.Stderr = &out
+
+	sp, err := session.StdinPipe()
+	if err != nil {
+		return "", fmt.Errorf("open stdin pipe: %w", err)
+	}
+	if err := session.Start(cmd); err != nil {
+		return out.String(), fmt.Errorf("start %q: %w", cmd, err)
+	}
+	if _, err := sp.Write(stdin); err != nil {
+		return out.String(), fmt.Errorf("write stdin: %w", err)
+	}
+	if err := sp.Close(); err != nil {
+		return out.String(), fmt.Errorf("close stdin: %w", err)
+	}
+	if err := session.Wait(); err != nil {
+		return out.String(), fmt.Errorf("run %q: %w (output: %s)", cmd, err, out.String())
+	}
+	return out.String(), nil
+}
+
+// RunAs runs cmd on the remote host, escalating with sudo per sudo. It wraps
+// cmd in `sh -c` under sudo so shell operators keep working; a sudo password
+// (Sudo.Password) is fed on stdin via `sudo -S`.
+func RunAs(client *ssh.Client, sudo Sudo, cmd string) (string, error) {
+	full := sudo.shell(cmd)
+	if prefix := sudo.stdinPrefix(); prefix != nil {
+		return runStdin(client, full, prefix)
+	}
+	return Run(client, full)
+}
+
+// ProbeSudo reports whether sudo is usable for the connected user. With an
+// empty password it checks passwordless sudo (`sudo -n true`); with a password
+// it validates it (`sudo -S` fed the password, after `-k` drops any cached
+// grant so the password is actually exercised). A nil error means sudo works
+// that way — see deploy.resolveSudo.
+func ProbeSudo(client *ssh.Client, password string) error {
+	if len(password) == 0 {
+		_, err := Run(client, "sudo -n true")
+		return err
+	}
+	_, err := runStdin(client, "sudo -k -S -p '' true", []byte(password+"\n"))
+	return err
+}
+
 // UploadFile writes data to remotePath on the remote host with the given
 // permissions, creating parent directories as needed. It streams the file
 // over the session's stdin rather than relying on SFTP/SCP being installed,
 // since `install` ships with coreutils on essentially every Linux distro.
 func UploadFile(client *ssh.Client, remotePath string, mode os.FileMode, data []byte) error {
-	session, err := client.NewSession()
-	if err != nil {
-		return fmt.Errorf("open session: %w", err)
-	}
-	defer func() { _ = session.Close() }()
+	return UploadFileAs(client, Sudo{}, remotePath, mode, data)
+}
 
-	stdin, err := session.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("open stdin pipe: %w", err)
-	}
+// UploadFileAs is UploadFile with privilege escalation (see Sudo). For a sudo
+// password it prepends the password line to stdin so `sudo -S` consumes it and
+// the following `install` reads the file bytes from the same /dev/stdin (sudo
+// reads the password one byte at a time, so it doesn't over-read the file).
+func UploadFileAs(client *ssh.Client, sudo Sudo, remotePath string, mode os.FileMode, data []byte) error {
+	cmd := sudo.simple(fmt.Sprintf("install -D -m %o /dev/stdin %s", mode.Perm(), shellQuote(remotePath)))
 
-	cmd := fmt.Sprintf("install -D -m %o /dev/stdin %s", mode.Perm(), shellQuote(remotePath))
-	if err := session.Start(cmd); err != nil {
-		return fmt.Errorf("start %q: %w", cmd, err)
+	stdin := data
+	if prefix := sudo.stdinPrefix(); prefix != nil {
+		stdin = append(append([]byte{}, prefix...), data...)
 	}
-
-	if _, err := stdin.Write(data); err != nil {
-		return fmt.Errorf("write file data: %w", err)
-	}
-	if err := stdin.Close(); err != nil {
-		return fmt.Errorf("close stdin: %w", err)
-	}
-
-	if err := session.Wait(); err != nil {
+	if _, err := runStdin(client, cmd, stdin); err != nil {
 		return fmt.Errorf("upload %s: %w", remotePath, err)
 	}
 	return nil
@@ -254,6 +383,13 @@ func UploadFile(client *ssh.Client, remotePath string, mode os.FileMode, data []
 // `install -D -m` (mirroring UploadFile), so a failed/partial download never
 // leaves a broken file at remotePath.
 func DownloadFile(client *ssh.Client, url, remotePath string, mode os.FileMode) error {
+	return DownloadFileAs(client, Sudo{}, url, remotePath, mode)
+}
+
+// DownloadFileAs is DownloadFile with privilege escalation (see Sudo): the
+// whole fetch-then-install pipeline runs through RunAs, so writing remotePath
+// (e.g. /usr/local/bin/awg-agent) works for a non-root SSH user.
+func DownloadFileAs(client *ssh.Client, sudo Sudo, url, remotePath string, mode os.FileMode) error {
 	tmp := remotePath + ".download"
 	cmd := fmt.Sprintf(
 		"if { command -v curl >/dev/null 2>&1 && curl -fsSL -o %[1]s %[3]s; } || "+
@@ -262,7 +398,7 @@ func DownloadFile(client *ssh.Client, url, remotePath string, mode os.FileMode) 
 			"else echo 'download failed: no working curl/wget on the server (a curl without HTTPS support fails an https URL), or the URL is unreachable' >&2; exit 1; fi",
 		shellQuote(tmp), mode.Perm(), shellQuote(url), shellQuote(remotePath),
 	)
-	if _, err := Run(client, cmd); err != nil {
+	if _, err := RunAs(client, sudo, cmd); err != nil {
 		return fmt.Errorf("download %s on remote host: %w", url, err)
 	}
 	return nil

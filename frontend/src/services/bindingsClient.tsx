@@ -400,6 +400,19 @@ export const bindingsClient = {
         }
     },
 
+    async unlockServerSudo(id: string, password: string, applyToAll: boolean): Promise<ApiResponse<void>> {
+        try {
+            await AppBindings.UnlockServerSudo(id, password, applyToAll);
+            return { data: undefined };
+        } catch (error) {
+            console.error('Bindings UnlockServerSudo failed:', error);
+            return {
+                data: undefined,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async getServerMetrics(id: string): Promise<ApiResponse<models.MetricsSnapshot>> {
         try {
             const data = await AppBindings.GetServerMetrics(id);

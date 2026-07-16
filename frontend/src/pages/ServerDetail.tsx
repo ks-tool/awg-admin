@@ -48,7 +48,7 @@ import {Container} from '@/components/common/Container';
 import {cn} from '@/lib/utils';
 import {ServerFormFields} from '@/components/server/ServerFormFields';
 import {AgentModal} from '@/components/server/AgentModal';
-import {formDataToServerInput, serverToFormData, useServerForm} from '@/hooks/useServerForm';
+import {authTypeForServer, formDataToServerInput, serverToFormData, useServerForm} from '@/hooks/useServerForm';
 import type {AuthType} from '@/hooks/useServerForm';
 
 // ---------------------------------------------------------------------------
@@ -316,6 +316,9 @@ export default function ServerDetail() {
 
     const [isLoading, setIsLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    // Initialized to 'key' but corrected from the loaded server in the effect
+    // below (server isn't in scope yet here) so the edit form opens on the tab
+    // the server actually uses.
     const [authType, setAuthType] = useState<AuthType>('key');
     // All agent operations (deploy, sync, metrics, reconcile, profiling) live in
     // the AgentModal now — this page just opens it.
@@ -350,6 +353,7 @@ export default function ServerDetail() {
     useEffect(() => {
         if (server) {
             resetForm(serverToFormData(server));
+            setAuthType(authTypeForServer(server));
             loadInterfaces();
         }
     }, [server]);
@@ -401,7 +405,10 @@ export default function ServerDetail() {
     };
 
     const handleCancel = () => {
-        if (server) resetForm(serverToFormData(server));
+        if (server) {
+            resetForm(serverToFormData(server));
+            setAuthType(authTypeForServer(server));
+        }
         setIsEditing(false);
     };
 
