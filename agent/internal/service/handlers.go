@@ -76,7 +76,7 @@ func (h *Handler) StopEnabled() {
 // interface (nil for a brand-new one), used by InterfaceUpdate to reconcile
 // hooks on an in-place edit.
 func (h *Handler) One(prev *models.InterfaceConfig, cfg models.InterfaceConfig) error {
-	logger := log.Debug().Str("interface", cfg.Interface)
+	logger := log.With().Str("interface", cfg.Interface).Logger()
 
 	// A disabled interface must not be present in the kernel: tear its link down
 	// if it exists (the stored config stays — this is desired state) and don't
@@ -84,20 +84,20 @@ func (h *Handler) One(prev *models.InterfaceConfig, cfg models.InterfaceConfig) 
 	// every stored config) bring up only the enabled interfaces.
 	if cfg.Disabled {
 		if IsInterfaceExist(cfg) {
-			logger.Str("action", "deactivate").Send()
+			logger.Debug().Str("action", "deactivate").Send()
 			return InterfaceDelete(cfg)
 		}
-		logger.Str("action", "skip-disabled").Send()
+		logger.Debug().Str("action", "skip-disabled").Send()
 		return nil
 	}
 
 	if ok := IsInterfaceExist(cfg); ok {
-		logger.Str("action", "update").Send()
+		logger.Debug().Str("action", "update").Send()
 		if err := InterfaceUpdate(prev, cfg); err != nil {
 			return err
 		}
 	} else {
-		logger.Str("action", "create").Send()
+		logger.Debug().Str("action", "create").Send()
 		if err := InterfaceCreate(cfg); err != nil {
 			return err
 		}
@@ -106,7 +106,7 @@ func (h *Handler) One(prev *models.InterfaceConfig, cfg models.InterfaceConfig) 
 	// Apply the FULL device config — private key, listen port, firewall mark,
 	// AmneziaWG obfuscation params AND peers — not just the peer set.
 	// ToAmneziaConfig builds all of it; ReplacePeers makes the peers authoritative.
-	logger.Str("action", "configure").Send()
+	logger.Debug().Str("action", "configure").Send()
 	awgCfg := cfg.ToAmneziaConfig()
 	awgCfg.ReplacePeers = true
 	return h.awg.ConfigureDevice(cfg.Interface, *awgCfg)
