@@ -376,6 +376,8 @@
     "qrCodeTitle": "QR Code — {{name}}",
     "downloadQrCode": "Save as PNG",
     "qrCodeSaved": "QR code saved",
+    "saveConfig": "Save config (.conf)",
+    "configSaved": "Config saved",
     "generateConfigError": "Failed to generate peer config",
     "configGenerateFailed": "Failed to generate config"
   },

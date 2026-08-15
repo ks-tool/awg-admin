@@ -97,6 +97,8 @@ export function SaveBackup():Promise<boolean>;
 
 export function SaveLogs():Promise<boolean>;
 
+export function SavePeerConfig(arg1:string,arg2:string,arg3:string):Promise<boolean>;
+
 export function SavePeerQRCode(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
 export function SaveServerProfile(arg1:string,arg2:string,arg3:number):Promise<boolean>;

@@ -190,6 +190,10 @@ export function SaveLogs() {
   return window['go']['main']['App']['SaveLogs']();
 }
 
+export function SavePeerConfig(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SavePeerConfig'](arg1, arg2, arg3);
+}
+
 export function SavePeerQRCode(arg1, arg2, arg3) {
   return window['go']['main']['App']['SavePeerQRCode'](arg1, arg2, arg3);
 }
