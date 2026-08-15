@@ -657,6 +657,19 @@ export const bindingsClient = {
         }
     },
 
+    async savePeerConfig(userId: string, publicKey: string, defaultName: string): Promise<ApiResponse<boolean>> {
+        try {
+            const data = await AppBindings.SavePeerConfig(userId, publicKey, defaultName);
+            return { data };
+        } catch (error) {
+            console.error('Bindings SavePeerConfig failed:', error);
+            return {
+                data: false,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     // Desktop-only: the captured stdout logs (NDJSON text) for the Settings
     // "Logs" modal.
     async getLogs(): Promise<ApiResponse<string>> {
