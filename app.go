@@ -147,6 +147,52 @@ func (a *App) SavePeerQRCode(userID, key, defaultName string) (bool, error) {
 	return true, nil
 }
 
+// SavePeerConfig writes key's client config (see GetPeerConfig) to a file the
+// user chooses via a native save dialog — the desktop path for the QR modal's
+// "save config to file" button, mirroring SavePeerQRCode (an <a download> is a
+// no-op in the Wails webview). Keeping this in Go also means the config text —
+// which embeds the peer's private key — reaches the disk without ever crossing
+// into the JS runtime, so it's written 0600 like Backup. Returns true if a
+// file was written, false if the dialog was cancelled. Desktop-only (a.ctx is
+// set in startup); in any other mode it returns false so the frontend falls
+// back to a browser download.
+func (a *App) SavePeerConfig(userID, key, defaultName string) (bool, error) {
+	if a.ctx == nil {
+		return false, nil
+	}
+
+	cfg, err := a.GetPeerConfig(userID, key)
+	if err != nil {
+		return false, err
+	}
+
+	if defaultName == "" {
+		defaultName = "peer"
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save config",
+		DefaultFilename: defaultName + ".conf",
+		Filters: []runtime.FileFilter{{
+			DisplayName: "WireGuard config (*.conf)",
+			Pattern:     "*.conf",
+		}},
+	})
+	if err != nil {
+		return false, err
+	}
+	if path == "" {
+		return false, nil // dialog cancelled
+	}
+	if filepath.Ext(path) == "" {
+		path += ".conf"
+	}
+
+	if err := os.WriteFile(path, []byte(cfg), 0o600); err != nil {
+		return false, fmt.Errorf("write config: %w", err)
+	}
+	return true, nil
+}
+
 // GetLogs returns the captured stdout log entries as newline-joined NDJSON
 // (one zerolog JSON object per line, oldest first) for the Settings "Logs"
 // modal. Returns an empty string when the buffer was never wired up (i.e. not

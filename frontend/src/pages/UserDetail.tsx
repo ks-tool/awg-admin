@@ -18,12 +18,12 @@ import * as React from 'react';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {ArrowLeft, ArrowRightLeft, Download, Key, Plus, Power, PowerOff, QrCode, Trash2, User as UserIcon, UserPen} from 'lucide-react';
+import {ArrowLeft, ArrowRightLeft, Download, FileDown, Key, Plus, Power, PowerOff, QrCode, Trash2, User as UserIcon, UserPen} from 'lucide-react';
 import {PageHeader} from '@/components/layout/PageHeader';
 import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {listInterfaces} from '@/services/interfaces';
-import {getPeerConfig, getPeerQRCode, migratePeer, savePeerQRCode, setPeerDisabled} from '@/services/peers';
+import {getPeerConfig, getPeerQRCode, migratePeer, savePeerConfig, savePeerQRCode, setPeerDisabled} from '@/services/peers';
 import {CopyButton} from '@/components/common/CopyButton';
 import {StatusBadge} from '@/components/common/StatusBadge';
 import {Container} from '@/components/common/Container';
@@ -76,21 +76,35 @@ function PeerQRModal({userId, publicKey, peerName, onClose}: {
         };
     }, [userId, publicKey]);
 
+    // Strip only characters that are actually illegal in filenames (keep
+    // Unicode letters, e.g. Cyrillic peer names, intact), then trim stray
+    // separators so the result is never empty.
+    const safeName = (peerName || 'peer')
+        .replace(/[/\\:*?"<>|\x00-\x1f]+/g, '_')
+        .replace(/^[.\s]+|[.\s]+$/g, '') || 'peer';
+
     // Save the (already-rendered, server-produced) PNG to a file. The browser
     // and the Wails desktop webview need different mechanisms — savePeerQRCode
     // picks the right one (native save dialog on desktop, anchor download in a
     // plain browser); see its doc comment.
     const handleDownload = async () => {
         if (!qrDataUrl) return;
-        // Strip only characters that are actually illegal in filenames (keep
-        // Unicode letters, e.g. Cyrillic peer names, intact), then trim stray
-        // separators so the result is never empty.
-        const safeName = (peerName || 'peer')
-            .replace(/[/\\:*?"<>|\x00-\x1f]+/g, '_')
-            .replace(/^[.\s]+|[.\s]+$/g, '') || 'peer';
         const saved = await savePeerQRCode(userId, publicKey, safeName, qrDataUrl);
         if (saved) {
             toast.success(t('peers.qrCodeSaved'));
+        }
+    };
+
+    // Save the same config the QR encodes as a ready-to-import .conf file
+    // (savePeerConfig picks the transport, like savePeerQRCode above). The
+    // filename stem is capped at 15 characters because WireGuard clients
+    // derive the tunnel name from it, and Linux interface names are limited
+    // to 15 characters — a longer stem makes `wg-quick up ./file.conf` fail.
+    const handleSaveConfig = async () => {
+        if (!config) return;
+        const saved = await savePeerConfig(userId, publicKey, safeName.slice(0, 15), config);
+        if (saved) {
+            toast.success(t('peers.configSaved'));
         }
     };
 
@@ -117,6 +131,13 @@ function PeerQRModal({userId, publicKey, peerName, onClose}: {
                         >
                             <Download size={16}/>
                             {t('peers.downloadQrCode')}
+                        </button>
+                        <button
+                            onClick={handleSaveConfig}
+                            className={cn('w-full inline-flex items-center justify-center gap-2', buttons.secondary)}
+                        >
+                            <FileDown size={16}/>
+                            {t('peers.saveConfig')}
                         </button>
                     </>
                 ) : (

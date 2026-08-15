@@ -175,6 +175,48 @@ export async function savePeerQRCode(
 }
 
 /**
+ * Save a peer's client config to a `.conf` file.
+ *
+ * Same dual mechanism as savePeerQRCode: desktop routes through a native save
+ * dialog in Go (`SavePeerConfig` — the config text, which embeds the peer's
+ * private key, then never crosses into the JS runtime and is written 0600),
+ * while the plain browser already holds the config text from the modal and
+ * downloads it locally as a Blob. Returns true if a file was saved (or the
+ * download was triggered), false if the user cancelled the desktop save
+ * dialog or an error was reported.
+ */
+export async function savePeerConfig(
+  userId: string,
+  publicKey: Key,
+  defaultName: string,
+  config: string,
+): Promise<boolean> {
+  const client = getClient();
+
+  if (client) {
+    const { data, error } = await client.savePeerConfig(userId, publicKey, defaultName);
+    if (error) {
+      reportError(`save-peer-config-${publicKey}`, `Failed to save config for peer ${publicKey}`, error);
+      return false;
+    }
+    return data;
+  }
+
+  const url = URL.createObjectURL(new Blob([config], { type: 'text/plain' }));
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${defaultName}.conf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  return true;
+}
+
+/**
  * Add a peer to a user
  */
 export async function addPeer(userId: string, input: AddPeerInput): Promise<boolean> {
