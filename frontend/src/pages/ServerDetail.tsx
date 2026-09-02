@@ -23,6 +23,7 @@ import {
     ArrowLeft,
     CheckCircle2,
     Edit2,
+    FileInput,
     Network,
     Plus,
     Server as ServerIcon,
@@ -35,11 +36,11 @@ import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {CopyButton} from '@/components/common/CopyButton';
 import {getInterfaceDefaults, updateInterfaceConfig} from '@/services/interfaces';
-import {unlockServerSSH} from '@/services/servers';
+import {listUnmanagedInterfaces, unlockServerSSH} from '@/services/servers';
 import {SSHPassphraseRequiredError} from '@/services/sshErrors';
 import {SSHPassphraseModal} from '@/components/server/SSHPassphraseModal';
 import {formatRelativeTime} from '@/lib/utils';
-import type {InterfaceConfig} from '@/types';
+import type {InterfaceConfig, UnmanagedInterface} from '@/types';
 import {FormField} from '@/components/common/FormField';
 import {buttons, inputs, Modal} from '@/components/common/Modal';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
@@ -48,6 +49,7 @@ import {Container} from '@/components/common/Container';
 import {cn} from '@/lib/utils';
 import {ServerFormFields} from '@/components/server/ServerFormFields';
 import {AgentModal} from '@/components/server/AgentModal';
+import {ImportInterfaceModal} from '@/components/server/ImportInterfaceModal';
 import {authTypeForServer, formDataToServerInput, serverToFormData, useServerForm} from '@/hooks/useServerForm';
 import type {AuthType} from '@/hooks/useServerForm';
 
@@ -324,6 +326,11 @@ export default function ServerDetail() {
     // the AgentModal now — this page just opens it.
     const [showAgentModal, setShowAgentModal] = useState(false);
     const [serverInterfaces, setServerInterfaces] = useState<any[]>([]);
+    // Live interfaces on the server the agent doesn't manage (wg-quick ones),
+    // listed read-only with an Import action. Best-effort: [] when the agent
+    // can't be asked.
+    const [unmanaged, setUnmanaged] = useState<UnmanagedInterface[]>([]);
+    const [importTarget, setImportTarget] = useState<string | null>(null);
     // sshUnlock is still used here for the server-save passphrase retry (handleSave);
     // the deploy passphrase flow moved into the AgentModal with the deploy action.
     const [sshUnlock, setSshUnlock] = useState<{retry: () => void} | null>(null);
@@ -360,8 +367,12 @@ export default function ServerDetail() {
 
     const loadInterfaces = useCallback(async () => {
         if (!selectedServerId) return;
-        const list = await listInterfacesForServer(selectedServerId);
+        const [list, unmanagedList] = await Promise.all([
+            listInterfacesForServer(selectedServerId),
+            listUnmanagedInterfaces(selectedServerId),
+        ]);
         if (list) setServerInterfaces(list);
+        setUnmanaged(unmanagedList ?? []);
     }, [selectedServerId, listInterfacesForServer]);
 
     // ---- Server handlers ----------------------------------------------------
@@ -675,7 +686,7 @@ export default function ServerDetail() {
                         </button>
                     </div>
 
-                    {serverInterfaces.length > 0 ? (
+                    {serverInterfaces.length > 0 || unmanaged.length > 0 ? (
                         <div className="space-y-3">
                             {serverInterfaces.map(iface => (
                                 <div
@@ -757,6 +768,36 @@ export default function ServerDetail() {
                                     )}
                                 </div>
                             ))}
+                            {/* Unmanaged (wg-quick) interfaces: read-only, no edit/delete/peers —
+                                the only action is taking them over via the import. */}
+                            {unmanaged.map(u => (
+                                <div
+                                    key={`unmanaged-${u.name}`}
+                                    className="rounded-lg border border-dashed border-amber-300/70 bg-background p-4 dark:border-amber-500/30 dark:bg-white/5"
+                                    title={t('servers.import.notManagedTooltip')}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-semibold text-foreground dark:text-zinc-100 flex items-center gap-2">
+                                            <Network size={16}/>
+                                            {u.name}
+                                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+                                                {t('servers.import.notManagedBadge')}
+                                            </span>
+                                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono font-medium text-muted-foreground dark:bg-white/10 dark:text-zinc-400">
+                                                {u.kind}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => setImportTarget(u.name)}
+                                            className={cn(buttons.secondary, 'inline-flex items-center gap-1.5 px-3 py-1')}
+                                            title={t('servers.import.rowHint')}
+                                        >
+                                            <FileInput size={14}/>
+                                            {t('servers.import.button')}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     ) : (
                         <div className="text-center text-muted-foreground dark:text-zinc-500 py-4">
@@ -777,6 +818,16 @@ export default function ServerDetail() {
                     onClose={() => setInterfaceModal(null)}
                     loading={false}
                     submitLabel={interfaceModal.mode === 'add' ? t('servers.interfaces.addTitle') : t('common.save')}
+                />
+            )}
+
+            {importTarget !== null && (
+                <ImportInterfaceModal
+                    serverId={server.id}
+                    initialInterface={importTarget}
+                    unmanaged={unmanaged}
+                    onClose={() => setImportTarget(null)}
+                    onImported={() => { void refreshData(); void loadInterfaces(); }}
                 />
             )}
 

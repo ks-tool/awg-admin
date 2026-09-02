@@ -18,7 +18,7 @@ import * as React from 'react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {Activity, Download, GitCompareArrows, RefreshCw, Rocket} from 'lucide-react';
+import {Activity, Download, FileInput, GitCompareArrows, RefreshCw, Rocket} from 'lucide-react';
 import {buttons, inputs, Modal} from '@/components/common/Modal';
 import {
     deployAgent,
@@ -37,6 +37,7 @@ import {SudoPasswordModal} from '@/components/server/SudoPasswordModal';
 import {AgentSourceCombobox} from '@/components/server/AgentSourceCombobox';
 import {HostInfoBadges} from '@/components/server/HostInfoBadges';
 import {ReconcileModal} from '@/components/server/ReconcileModal';
+import {ImportInterfaceModal} from '@/components/server/ImportInterfaceModal';
 import {useAppStore} from '@/store';
 import {cn} from '@/lib/utils';
 import type {HostInfo, Server} from '@/types';
@@ -85,6 +86,7 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
     const [profileSeconds, setProfileSeconds] = useState(30);
 
     const [showReconcile, setShowReconcile] = useState(false);
+    const [showImport, setShowImport] = useState(false);
 
     // Deploy state (mirrors the old ServerDetail flow): DeployAgent starts a
     // background deploy and returns immediately; pollDeployStatus watches step
@@ -310,7 +312,7 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
             onClose={onClose}
             size="md"
             loading={deployLoading}
-            dimmed={!(showReconcile || sshUnlock || sudoUnlock)}
+            dimmed={!(showReconcile || showImport || sshUnlock || sudoUnlock)}
         >
             <div className="space-y-1">
                 {/* Agent version / capabilities */}
@@ -377,6 +379,18 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
                     </button>
                 </Row>
 
+                {/* Import a wg-quick / awg-quick interface. Hidden for a
+                    containerized agent: it lives in its own network namespace
+                    and sees neither the host's links nor its conf files. */}
+                {!hostInfo?.inDocker && (
+                    <Row title={t('servers.import.row')} hint={t('servers.import.rowHint')}>
+                        <button onClick={() => setShowImport(true)} className={cn(buttons.secondary, 'inline-flex items-center gap-1.5')}>
+                            <FileInput size={14}/>
+                            {t('servers.import.button')}
+                        </button>
+                    </Row>
+                )}
+
                 {/* Profiling */}
                 <Row title={t('servers.agentModal.profiling')} hint={t('servers.agentModal.profilingHint')}>
                     <button
@@ -442,6 +456,14 @@ export function AgentModal({server, onClose, onChanged}: {server: Server; onClos
                     serverId={server.id}
                     onClose={() => setShowReconcile(false)}
                     onChanged={() => { void afterChange(); }}
+                />
+            )}
+
+            {showImport && (
+                <ImportInterfaceModal
+                    serverId={server.id}
+                    onClose={() => setShowImport(false)}
+                    onImported={() => { void afterChange(); }}
                 />
             )}
 
