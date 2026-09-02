@@ -172,6 +172,9 @@ func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfi
 	if err := s.validateInterfaceUnique(sID, in, uuid.Nil, nil); err != nil {
 		return nil, err
 	}
+	if err := s.rejectUnmanagedName(sID, in.Interface); err != nil {
+		return nil, err
+	}
 	in.Peers = nil // peers managed via Peers API only
 	// Every interface needs a private key; generate one when the caller didn't
 	// supply it. Done here rather than only in internal/api's HTTP handler so
@@ -242,6 +245,11 @@ func (s *Service) UpdateInterfaceConfig(serverID, ifaceID string, cfg agentmodel
 	}
 	if err := s.validateInterfaceUnique(sID, cfg, iID, iface); err != nil {
 		return nil, err
+	}
+	if iface.Interface != cfg.Interface {
+		if err := s.rejectUnmanagedName(sID, cfg.Interface); err != nil {
+			return nil, err
+		}
 	}
 	oldName := iface.Interface
 	cfg.Peers = iface.Peers // immutable via this endpoint

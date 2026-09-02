@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	"github.com/ks-tool/awg-admin/models"
 )
 
 // NotFoundError is returned by Get/Delete when the agent has no interface
@@ -130,6 +131,63 @@ func (c *Client) List(ctx context.Context) ([]agentmodels.InterfaceConfig, error
 		return nil, fmt.Errorf("decode interface list: %w", err)
 	}
 	return cfgs, nil
+}
+
+// ListUnmanaged fetches the live WireGuard/AmneziaWG devices on the agent's
+// host that it has no stored config for — interfaces brought up outside the
+// agent, e.g. by wg-quick/awg-quick before it was installed (GET
+// /interfaces/unmanaged). Each carries the link kind (amneziawg/wireguard). An
+// agent predating the endpoint answers 404 (surfaced as *NotFoundError), which
+// callers treat as "unknown". Decoded into the root models' twin of the agent
+// type so the admin builds against the published agent module.
+func (c *Client) ListUnmanaged(ctx context.Context) ([]models.UnmanagedInterface, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/interfaces/unmanaged", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GET /interfaces/unmanaged: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, responseError(resp, "")
+	}
+
+	var list []models.UnmanagedInterface
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		return nil, fmt.Errorf("decode unmanaged interface list: %w", err)
+	}
+	return list, nil
+}
+
+// ImportSource fetches the wg-quick/awg-quick conf file the agent's host has
+// for the named interface (GET /interfaces/{name}/import-source) — the raw
+// text plus the path it was found at. A *NotFoundError means the host has no
+// such conf (in either /etc/amnezia/amneziawg or /etc/wireguard).
+func (c *Client) ImportSource(ctx context.Context, name string) (*models.ImportSource, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/interfaces/"+name+"/import-source", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GET /interfaces/%s/import-source: %w", name, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, responseError(resp, name)
+	}
+
+	var src models.ImportSource
+	if err := json.NewDecoder(resp.Body).Decode(&src); err != nil {
+		return nil, fmt.Errorf("decode import source: %w", err)
+	}
+	return &src, nil
 }
 
 // Delete removes the named interface from the agent (DELETE /interfaces/{name}).

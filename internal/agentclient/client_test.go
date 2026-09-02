@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	"github.com/ks-tool/awg-admin/models"
 )
 
 // fakeAgent mimics agent/internal/api/handlers.go's actual routes/status
@@ -86,6 +87,16 @@ func newFakeAgent() *httptest.Server {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("GET /interfaces/unmanaged", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]models.UnmanagedInterface{{Name: "wg-legacy", Kind: models.InterfaceKindWireGuard}})
+	})
+	mux.HandleFunc("GET /interfaces/{name}/import-source", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("name") != "wg-legacy" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(models.ImportSource{Path: "/etc/wireguard/wg-legacy.conf", Content: "[Interface]\n"})
 	})
 	mux.HandleFunc("PATCH /metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -254,5 +265,36 @@ func TestClientSetRejectsMissingInterfaceName(t *testing.T) {
 	c := New(srv.Client(), srv.URL)
 	if err := c.Set(context.Background(), agentmodels.InterfaceConfig{}); err == nil {
 		t.Fatal("expected error for missing interface name, got nil")
+	}
+}
+
+func TestClientUnmanagedAndImportSource(t *testing.T) {
+	srv := newFakeAgent()
+	defer srv.Close()
+
+	c := New(srv.Client(), srv.URL)
+	ctx := context.Background()
+
+	list, err := c.ListUnmanaged(ctx)
+	if err != nil {
+		t.Fatalf("ListUnmanaged: %v", err)
+	}
+	if len(list) != 1 || list[0].Name != "wg-legacy" || list[0].Kind != models.InterfaceKindWireGuard {
+		t.Fatalf("ListUnmanaged = %+v, want [wg-legacy/wireguard]", list)
+	}
+
+	src, err := c.ImportSource(ctx, "wg-legacy")
+	if err != nil {
+		t.Fatalf("ImportSource: %v", err)
+	}
+	if src.Path != "/etc/wireguard/wg-legacy.conf" || src.Content != "[Interface]\n" {
+		t.Fatalf("ImportSource = %+v", src)
+	}
+
+	// No conf on the host → the agent's 404 → NotFoundError, so callers can
+	// give a specific "no wg-quick config found" message.
+	var nf *NotFoundError
+	if _, err := c.ImportSource(ctx, "wg9"); !errors.As(err, &nf) || nf.Interface != "wg9" {
+		t.Fatalf("ImportSource(wg9) err = %v, want NotFoundError", err)
 	}
 }

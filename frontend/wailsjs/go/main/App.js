@@ -134,6 +134,10 @@ export function ImportInterface(arg1, arg2) {
   return window['go']['main']['App']['ImportInterface'](arg1, arg2);
 }
 
+export function ImportInterfaceFromServer(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ImportInterfaceFromServer'](arg1, arg2, arg3);
+}
+
 export function ListAgentReleases() {
   return window['go']['main']['App']['ListAgentReleases']();
 }
@@ -158,6 +162,10 @@ export function ListTunnels() {
   return window['go']['main']['App']['ListTunnels']();
 }
 
+export function ListUnmanagedInterfaces(arg1) {
+  return window['go']['main']['App']['ListUnmanagedInterfaces'](arg1);
+}
+
 export function ListUsers() {
   return window['go']['main']['App']['ListUsers']();
 }
@@ -168,6 +176,10 @@ export function Login(arg1, arg2) {
 
 export function MigratePeer(arg1, arg2, arg3) {
   return window['go']['main']['App']['MigratePeer'](arg1, arg2, arg3);
+}
+
+export function PreviewImport(arg1, arg2, arg3) {
+  return window['go']['main']['App']['PreviewImport'](arg1, arg2, arg3);
 }
 
 export function ReconcileServer(arg1) {

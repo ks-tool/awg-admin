@@ -174,6 +174,141 @@ export namespace models {
 	        this.arch = source["arch"];
 	    }
 	}
+	export class ImportPreviewHooks {
+	    preUp?: string[];
+	    postUp?: string[];
+	    preDown?: string[];
+	    postDown?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportPreviewHooks(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.preUp = source["preUp"];
+	        this.postUp = source["postUp"];
+	        this.preDown = source["preDown"];
+	        this.postDown = source["postDown"];
+	    }
+	}
+	export class ImportPreviewPeer {
+	    name?: string;
+	    publicKey: string;
+	    allowedIPs: string[];
+	    endpoint?: string;
+	    keepalive: number;
+	    presharedKey: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportPreviewPeer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.publicKey = source["publicKey"];
+	        this.allowedIPs = source["allowedIPs"];
+	        this.endpoint = source["endpoint"];
+	        this.keepalive = source["keepalive"];
+	        this.presharedKey = source["presharedKey"];
+	    }
+	}
+	export class ImportPreviewUser {
+	    name: string;
+	    exists: boolean;
+	    peers: ImportPreviewPeer[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportPreviewUser(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.exists = source["exists"];
+	        this.peers = this.convertValues(source["peers"], ImportPreviewPeer);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ImportPreview {
+	    interface: string;
+	    source: string;
+	    live: boolean;
+	    liveKind?: string;
+	    address: string;
+	    listenPort: number;
+	    amnezia: boolean;
+	    mtu?: number;
+	    dns?: string[];
+	    table?: number;
+	    users: ImportPreviewUser[];
+	    embeddedPeers: ImportPreviewPeer[];
+	    hooks: ImportPreviewHooks;
+	    generatedHooks: ImportPreviewHooks;
+	    warnings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.interface = source["interface"];
+	        this.source = source["source"];
+	        this.live = source["live"];
+	        this.liveKind = source["liveKind"];
+	        this.address = source["address"];
+	        this.listenPort = source["listenPort"];
+	        this.amnezia = source["amnezia"];
+	        this.mtu = source["mtu"];
+	        this.dns = source["dns"];
+	        this.table = source["table"];
+	        this.users = this.convertValues(source["users"], ImportPreviewUser);
+	        this.embeddedPeers = this.convertValues(source["embeddedPeers"], ImportPreviewPeer);
+	        this.hooks = this.convertValues(source["hooks"], ImportPreviewHooks);
+	        this.generatedHooks = this.convertValues(source["generatedHooks"], ImportPreviewHooks);
+	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	
 	export class InterfacePeer {
 	    key: number[];
 	    psk?: number[];
@@ -876,6 +1011,20 @@ export namespace models {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.serverId = source["serverId"];
 	        this.ifaceId = source["ifaceId"];
+	    }
+	}
+	export class UnmanagedInterface {
+	    name: string;
+	    kind: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UnmanagedInterface(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.kind = source["kind"];
 	    }
 	}
 	export class User {
