@@ -50,7 +50,9 @@ type Handler struct {
 func New(hostInfo models.HostInfo, store storage.Storage, collector *metrics.Collector, mws ...mux.Middleware) http.Handler {
 	// PUT         /interfaces     		=> set
 	// GET         /interfaces/ 		=> list
+	// GET         /interfaces/unmanaged	=> live devices with no stored config (wg-quick etc.)
 	// GET, DELETE /interfaces/{name}	=> get, delete
+	// GET         /interfaces/{name}/import-source => the host's wg-quick conf for the interface
 
 	// GET         /info				=> host capabilities gathered at startup
 	// GET         /metrics			=> metrics snapshot (CPU/RAM/LA/network, peer rx/tx/handshake)
@@ -67,7 +69,12 @@ func New(hostInfo models.HostInfo, store storage.Storage, collector *metrics.Col
 	router := mux.NewServeMux(mws...)
 	router.PUT("/interfaces", h.set)
 	router.GET("/interfaces/", h.list)
+	// A literal segment outranks the {name} wildcard in Go's ServeMux, so this
+	// never shadows a real interface's GET — except one literally named
+	// "unmanaged", which is an acceptable loss.
+	router.GET("/interfaces/unmanaged", h.unmanaged)
 	router.GET("/interfaces/{name}", h.get)
+	router.GET("/interfaces/{name}/import-source", h.importSource)
 	router.DELETE("/interfaces/{name}", h.delete)
 	router.GET("/info", h.info)
 	router.GET("/metrics", h.metrics)
@@ -166,6 +173,59 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	}
 
 	encode(w, devices)
+}
+
+// unmanaged lists the live WireGuard/AmneziaWG devices on the host that have no
+// stored config — interfaces brought up outside the agent (wg-quick/awg-quick).
+// Scanned per request, not cached: see service.Handler.ListUnmanaged.
+func (h *Handler) unmanaged(w http.ResponseWriter, r *http.Request) {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+	log.Debug().Fields(fields).Msg("listing unmanaged interfaces")
+
+	list, err := service.NewHandler(h.store, h.awg).ListUnmanaged()
+	if err != nil {
+		log.Error().Fields(fields).Err(err).Msg("list unmanaged interfaces failed")
+		handleErr(w, err)
+		return
+	}
+
+	encode(w, list)
+}
+
+// importSource serves the host's wg-quick/awg-quick conf file for the named
+// interface (see service.ReadImportSource for the search paths) — the raw
+// material the admin parses to adopt an unmanaged interface. 404 when no conf
+// exists, 400 for a name that isn't a valid interface name.
+func (h *Handler) importSource(w http.ResponseWriter, r *http.Request) {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	iface, err := ifaceName(r)
+	if err != nil {
+		log.Debug().Fields(fields).Err(err).Send()
+		badRequest(w, err)
+		return
+	}
+
+	fields["interface"] = iface
+	log.Debug().Fields(fields).Msg("reading wg-quick import source")
+
+	src, err := service.ReadImportSource(iface)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidInterfaceName):
+			log.Debug().Fields(fields).Err(err).Send()
+			badRequest(w, err)
+		case storage.IsNotFound(err):
+			log.Debug().Fields(fields).Err(err).Msg("no import source")
+			handleErr(w, err)
+		default:
+			log.Error().Fields(fields).Err(err).Msg("read import source failed")
+			handleErr(w, err)
+		}
+		return
+	}
+
+	encode(w, src)
 }
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
