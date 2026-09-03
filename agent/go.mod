@@ -27,3 +27,5 @@ require (
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446 // indirect
 )
+
+replace github.com/Jipok/wgctrl-go v1.2.0 => github.com/ks-tool/wgctrl-go v0.0.0-20260810064903-89095162862d

@@ -169,6 +169,149 @@ export interface DeployStatus {
 }
 
 //////////
+// source: importplan.go
+
+/**
+ * Interface kinds as reported by the agent (HostInfo.InterfaceKinds and
+ * UnmanagedInterface.Kind) — the OS link type of a WireGuard-family device.
+ */
+export const InterfaceKindAmnezia = "amneziawg";
+/**
+ * Interface kinds as reported by the agent (HostInfo.InterfaceKinds and
+ * UnmanagedInterface.Kind) — the OS link type of a WireGuard-family device.
+ */
+export const InterfaceKindWireGuard = "wireguard";
+/**
+ * UnmanagedInterface is a live WireGuard/AmneziaWG device on a server that
+ * its agent has no stored config for — typically brought up by wg-quick/
+ * awg-quick before the agent was installed. The admin-side twin of the agent's
+ * models.UnmanagedInterface (same JSON shape; kept here so the admin builds
+ * against the published agent module without a local replace). Read-only in
+ * the UI: the way to take one over is the wg-quick import (ImportPreview).
+ */
+export interface UnmanagedInterface {
+  /**
+   * Name is the OS interface name (e.g. "wg0", "awg0").
+   */
+  name: string;
+  /**
+   * Kind is the link type: InterfaceKindAmnezia or InterfaceKindWireGuard.
+   */
+  kind: string;
+}
+/**
+ * ImportSource is a wg-quick/awg-quick conf file read from a server by its
+ * agent (GET /interfaces/{name}/import-source) — the admin-side twin of the
+ * agent's models.ImportSource.
+ */
+export interface ImportSource {
+  path: string;
+  content: string;
+}
+/**
+ * ImportPreview is the dry-run report of importing a wg-quick/awg-quick
+ * interface from a server (Service.PreviewImport): what the import would
+ * create, what it translated, and everything worth a second look before
+ * confirming. It carries no private keys — the peer map the admin typed
+ * already holds those, and the interface key never needs to round-trip.
+ */
+export interface ImportPreview {
+  /**
+   * Interface is the OS interface name being imported.
+   */
+  interface: string;
+  /**
+   * Source is the conf file path on the server the config was read from.
+   */
+  source: string;
+  /**
+   * Live reports whether a link with this name is currently up on the server
+   * (the import then adopts it in place); false means the conf exists on
+   * disk but the interface is down, so the agent will create it.
+   */
+  live: boolean;
+  /**
+   * LiveKind is the live link's type (InterfaceKindAmnezia/InterfaceKindWireGuard)
+   * when Live, else empty.
+   */
+  liveKind?: string;
+  address: string;
+  listenPort: number /* uint16 */;
+  amnezia: boolean;
+  mtu?: number /* int */;
+  dns?: string[];
+  table?: number /* int */;
+  /**
+   * Users lists the users that will own imported peers — existing ones matched
+   * by exact name, missing ones created — with the peers assigned to each.
+   */
+  users: ImportPreviewUser[];
+  /**
+   * EmbeddedPeers are the conf's [Peer] sections the peer map didn't cover:
+   * imported as interface peers without a user (the client keeps working, but
+   * no config/QR can be rendered for it until it's re-issued).
+   */
+  embeddedPeers: ImportPreviewPeer[];
+  /**
+   * Hooks are the conf's own PreUp/PostUp/PreDown/PostDown, carried over
+   * verbatim (with %i as wg-quick expands it).
+   */
+  hooks: ImportPreviewHooks;
+  /**
+   * GeneratedHooks are the commands the import adds to reproduce what
+   * wg-quick did implicitly — routes for AllowedIPs outside the interface
+   * subnet, and the Table=N routes — appended after Hooks.
+   */
+  generatedHooks: ImportPreviewHooks;
+  /**
+   * Warnings are non-blocking findings (ignored keys, non-idempotent hooks,
+   * peers without keepalive, link-kind mismatches, …), in plain English.
+   */
+  warnings: string[];
+}
+/**
+ * ImportPreviewUser is one user in an ImportPreview.
+ */
+export interface ImportPreviewUser {
+  name: string;
+  /**
+   * Exists is true when a user of this name is already in the database (the
+   * peers are added to it), false when the import creates the user.
+   */
+  exists: boolean;
+  peers: ImportPreviewPeer[];
+}
+/**
+ * ImportPreviewPeer is one peer in an ImportPreview, identified by public key.
+ */
+export interface ImportPreviewPeer {
+  /**
+   * Name is the display name from the peer map; empty for an embedded peer.
+   */
+  name?: string;
+  publicKey: string;
+  allowedIPs: string[];
+  endpoint?: string;
+  /**
+   * Keepalive is the PersistentKeepalive in seconds, 0 when the conf had none.
+   */
+  keepalive: number /* int */;
+  /**
+   * PresharedKey reports whether the peer has a PSK (the key itself isn't shown).
+   */
+  presharedKey: boolean;
+}
+/**
+ * ImportPreviewHooks groups lifecycle hook commands by phase.
+ */
+export interface ImportPreviewHooks {
+  preUp?: string[];
+  postUp?: string[];
+  preDown?: string[];
+  postDown?: string[];
+}
+
+//////////
 // source: server.go
 
 export interface Server {

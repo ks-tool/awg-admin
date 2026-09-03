@@ -17,6 +17,8 @@
 package service
 
 import (
+	"sort"
+
 	"github.com/ks-tool/awg-admin/agent/models"
 	"github.com/ks-tool/awg-admin/agent/storage"
 
@@ -138,8 +140,28 @@ func (h *Handler) Delete(iface string) error {
 // "an administrator created an unrelated WireGuard interface by hand, with
 // nothing to do with awg-admin" — deciding what to do about a mismatch is
 // left to a human (see awg-admin's agent↔DB reconciliation), this just
-// surfaces the list.
+// surfaces the list. The same diff, with the link kind attached, is what
+// ListUnmanaged serves to the admin.
 func (h *Handler) DetectOrphans() ([]string, error) {
+	unmanaged, err := h.ListUnmanaged()
+	if err != nil {
+		return nil, err
+	}
+	var orphans []string
+	for _, u := range unmanaged {
+		orphans = append(orphans, u.Name)
+	}
+	return orphans, nil
+}
+
+// ListUnmanaged returns every live WireGuard/AmneziaWG device on the host that
+// h's storage has no config for — interfaces brought up outside the agent
+// (wg-quick/awg-quick, `ip link`), which the admin's interface list would
+// otherwise never see. Scanned on every call rather than cached at startup: the
+// diff is cheap, and an interface raised after the agent started must show up
+// without a restart. Each entry carries the link kind (amneziawg/wireguard) so
+// the admin can warn when an import config doesn't match the live link.
+func (h *Handler) ListUnmanaged() ([]models.UnmanagedInterface, error) {
 	configs, err := h.store.List()
 	if err != nil {
 		return nil, err
@@ -150,23 +172,40 @@ func (h *Handler) DetectOrphans() ([]string, error) {
 		return nil, err
 	}
 
-	return orphanInterfaces(configs, devices), nil
+	return unmanagedInterfaces(configs, devices), nil
 }
 
-// orphanInterfaces is DetectOrphans's pure diffing logic, split out so it's
-// testable without a real WireGuard device (h.awg.Devices() needs netlink
-// and CAP_NET_ADMIN, neither available to a unit test).
-func orphanInterfaces(configs []models.InterfaceConfig, devices []*wgtypes.Device) []string {
+// unmanagedInterfaces is ListUnmanaged's pure diffing logic, split out so it's
+// testable without a real WireGuard device (h.awg.Devices() needs netlink and
+// CAP_NET_ADMIN, neither available to a unit test). Returns a non-nil, name-
+// sorted slice so it marshals as [] rather than null and lists stably.
+func unmanagedInterfaces(configs []models.InterfaceConfig, devices []*wgtypes.Device) []models.UnmanagedInterface {
 	known := make(map[string]bool, len(configs))
 	for _, cfg := range configs {
 		known[cfg.Interface] = true
 	}
 
-	var orphans []string
+	out := make([]models.UnmanagedInterface, 0)
 	for _, dev := range devices {
-		if !known[dev.Name] {
-			orphans = append(orphans, dev.Name)
+		if known[dev.Name] {
+			continue
 		}
+		kind := models.InterfaceKindWireGuard
+		if dev.IsAmnezia {
+			kind = models.InterfaceKindAmnezia
+		}
+		out = append(out, models.UnmanagedInterface{Name: dev.Name, Kind: kind})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// orphanInterfaces is DetectOrphans's pure diffing logic: the unmanaged
+// device names, in host order.
+func orphanInterfaces(configs []models.InterfaceConfig, devices []*wgtypes.Device) []string {
+	var orphans []string
+	for _, u := range unmanagedInterfaces(configs, devices) {
+		orphans = append(orphans, u.Name)
 	}
 	return orphans
 }

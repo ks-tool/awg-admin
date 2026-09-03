@@ -40,13 +40,46 @@ import (
 type fakeAgentTLS struct {
 	mu    sync.Mutex
 	store map[string]agentmodels.InterfaceConfig
+
+	// Discovery/import inputs (see the wg-quick import tests): live devices the
+	// agent has no config for, the conf files "on disk" by interface name, and
+	// the host facts served by /info.
+	unmanaged []models.UnmanagedInterface
+	sources   map[string]string
+	info      agentmodels.HostInfo
 }
 
 func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAgentTLS) {
 	t.Helper()
 
-	fa := &fakeAgentTLS{store: make(map[string]agentmodels.InterfaceConfig)}
+	fa := &fakeAgentTLS{
+		store:   make(map[string]agentmodels.InterfaceConfig),
+		sources: make(map[string]string),
+		info:    agentmodels.HostInfo{Backend: "kernel", Version: "test", InterfaceKinds: []string{"amneziawg", "wireguard"}},
+	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /interfaces/unmanaged", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		out := append([]models.UnmanagedInterface{}, fa.unmanaged...)
+		fa.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(out)
+	})
+	mux.HandleFunc("GET /interfaces/{name}/import-source", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		content, ok := fa.sources[r.PathValue("name")]
+		fa.mu.Unlock()
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(models.ImportSource{Path: "/etc/wireguard/" + r.PathValue("name") + ".conf", Content: content})
+	})
+	mux.HandleFunc("GET /info", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		info := fa.info
+		fa.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(info)
+	})
 	mux.HandleFunc("PUT /interfaces", func(w http.ResponseWriter, r *http.Request) {
 		var cfg agentmodels.InterfaceConfig
 		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {

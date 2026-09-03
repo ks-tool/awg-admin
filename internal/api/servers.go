@@ -248,6 +248,87 @@ func (h *Handler) serverDeleteAgentInterface(w http.ResponseWriter, r bunrouter.
 	return nil
 }
 
+// serverUnmanagedInterfaces lists the live interfaces on the server that its
+// agent doesn't manage (wg-quick/awg-quick ones) — read-only discovery, the
+// input to the wg-quick import below.
+func (h *Handler) serverUnmanagedInterfaces(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+	log.Debug().Fields(fields).Msg("listing unmanaged interfaces")
+
+	list, err := h.svc.ListUnmanagedInterfaces(sID)
+	if err != nil {
+		return handleErr(err, fields)
+	}
+
+	return bunrouter.JSON(w, list)
+}
+
+// importRequest is the body of both wg-quick import endpoints: the interface
+// name (conf read from the server by the agent) and the user→peer map text.
+type importRequest struct {
+	Interface string `json:"interface"`
+	PeerMap   string `json:"peerMap"`
+}
+
+// serverImportPreview dry-runs a wg-quick import (Service.PreviewImport):
+// nothing is written, the response is the report. Validation → 400.
+func (h *Handler) serverImportPreview(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+
+	var req importRequest
+	if err = decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	fields["interface"] = req.Interface
+	log.Debug().Fields(fields).Msg("previewing wg-quick import")
+
+	preview, err := h.svc.PreviewImport(sID, req.Interface, req.PeerMap)
+	if err != nil {
+		return handleErr(err, fields)
+	}
+
+	return bunrouter.JSON(w, preview)
+}
+
+// serverImportFromServer performs a wg-quick import
+// (Service.ImportInterfaceFromServer) and returns the created interface.
+func (h *Handler) serverImportFromServer(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+
+	var req importRequest
+	if err = decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	fields["interface"] = req.Interface
+	log.Debug().Fields(fields).Msg("importing wg-quick interface")
+
+	iface, err := h.svc.ImportInterfaceFromServer(sID, req.Interface, req.PeerMap)
+	if err != nil {
+		return handleErr(err, fields)
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	return bunrouter.JSON(w, iface)
+}
+
 func (h *Handler) serverMetrics(w http.ResponseWriter, r bunrouter.Request) error {
 	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
 

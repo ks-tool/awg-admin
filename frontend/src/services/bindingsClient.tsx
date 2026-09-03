@@ -348,6 +348,45 @@ export const bindingsClient = {
         }
     },
 
+    async listUnmanagedInterfaces(id: string): Promise<ApiResponse<models.UnmanagedInterface[]>> {
+        try {
+            const data = await AppBindings.ListUnmanagedInterfaces(id);
+            return { data: data || [] };
+        } catch (error) {
+            console.error('Bindings ListUnmanagedInterfaces failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
+    async previewImport(id: string, iface: string, peerMap: string): Promise<ApiResponse<models.ImportPreview>> {
+        try {
+            const data = await AppBindings.PreviewImport(id, iface, peerMap);
+            return { data };
+        } catch (error) {
+            console.error('Bindings PreviewImport failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
+    async importInterfaceFromServer(id: string, iface: string, peerMap: string): Promise<ApiResponse<models.Interface>> {
+        try {
+            const data = await AppBindings.ImportInterfaceFromServer(id, iface, peerMap);
+            return { data };
+        } catch (error) {
+            console.error('Bindings ImportInterfaceFromServer failed:', error);
+            return {
+                data: null as any,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async setServerMonitoring(id: string, enabled: boolean): Promise<ApiResponse<models.Server>> {
         try {
             const data = await AppBindings.SetServerMonitoring(id, enabled);

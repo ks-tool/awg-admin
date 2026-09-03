@@ -17,6 +17,7 @@
 package boltdb
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 
@@ -132,6 +133,91 @@ func (i *interfaces) Delete(id uuid.UUID) error {
 			return err
 		}
 		return ib.Delete(idKey(id))
+	})
+}
+
+// Import writes an imported interface and its user-side peers atomically —
+// see storage.Interfaces.Import. Same single-bbolt-transaction shape as
+// SetWithIfacePeer / cascadeDeletePeers: the server's interface list, the
+// interface record (peers kept as given), and every touched user record are
+// updated in one db.Update, so a failure part-way leaves no half-imported
+// state (the caller's follow-up push to the agent is outside this, best-effort
+// like every other push). A user name matching more than one user is an
+// error: silently picking one would attach peers to the wrong account.
+func (i *interfaces) Import(iface *models.Interface, peers []storage.ImportPeer) error {
+	return i.db.Update(func(tx *bolt.Tx) error {
+		sb := tx.Bucket(bktServers)
+		srv, err := get[models.Server](sb, idKey(i.serverID))
+		if err != nil {
+			return fmt.Errorf("server: %w", err)
+		}
+		ib := tx.Bucket(bktInterfaces)
+		if ib.Get(idKey(iface.ID)) != nil {
+			return fmt.Errorf("interface %s: %w", iface.ID, storage.ErrAlreadyExists)
+		}
+		for _, id := range srv.Interfaces {
+			if id == iface.ID {
+				return fmt.Errorf("interface %s: %w", iface.ID, storage.ErrAlreadyExists)
+			}
+		}
+
+		ub := tx.Bucket(bktUsers)
+		// Index existing users by name once; a scan per peer would be quadratic
+		// and — more importantly — wouldn't see users created earlier in this
+		// same transaction (bbolt does, but keeping our own map is simpler).
+		byName := map[string][]*models.User{}
+		if err := ub.ForEach(func(_, v []byte) error {
+			var u models.User
+			if err := json.Unmarshal(v, &u); err != nil {
+				return err
+			}
+			byName[u.Name] = append(byName[u.Name], &u)
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		touched := map[uuid.UUID]*models.User{}
+		for _, ip := range peers {
+			candidates := byName[ip.UserName]
+			if len(candidates) > 1 {
+				return fmt.Errorf("user name %q matches %d users; rename one before importing", ip.UserName, len(candidates))
+			}
+			var u *models.User
+			if len(candidates) == 1 {
+				u = candidates[0]
+			} else {
+				u = &models.User{ID: uuid.New(), Name: ip.UserName}
+				byName[ip.UserName] = []*models.User{u}
+			}
+			touched[u.ID] = u
+
+			peer := ip.Peer
+			peer.InterfaceId = iface.ID
+			pub := peer.PrivateKey.PublicKey()
+			replaced := false
+			for j := range u.Peers {
+				if u.Peers[j].PrivateKey.PublicKey() == pub {
+					u.Peers[j] = peer
+					replaced = true
+					break
+				}
+			}
+			if !replaced {
+				u.Peers = append(u.Peers, peer)
+			}
+		}
+		for id, u := range touched {
+			if err := put(ub, idKey(id), u); err != nil {
+				return fmt.Errorf("user %s: %w", u.Name, err)
+			}
+		}
+
+		srv.Interfaces = append(srv.Interfaces, iface.ID)
+		if err = put(sb, idKey(i.serverID), srv); err != nil {
+			return err
+		}
+		return put(ib, idKey(iface.ID), iface)
 	})
 }
 

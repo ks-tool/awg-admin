@@ -68,6 +68,24 @@ type Interfaces interface {
 	Set(iface *models.Interface) error
 	Delete(id uuid.UUID) error
 	UsedIPs(ifaceID uuid.UUID) ([]net.IPNet, error)
+	// Import creates iface — keeping its Peers list exactly as given, unlike Set
+	// which wipes peers on create — together with the user-side peer records in
+	// peers, all in ONE transaction: users are matched by exact name (created
+	// when missing) and each peer is attached to the matching user with its
+	// InterfaceId set to iface.ID. Nothing is written if any step fails. This is
+	// the wg-quick import's write path (see internal/service PreviewImport /
+	// ImportInterfaceFromServer); the caller has already validated that every
+	// peer in peers has a matching entry in iface.Peers.
+	Import(iface *models.Interface, peers []ImportPeer) error
+}
+
+// ImportPeer is one user-owned peer to create by Interfaces.Import: the name
+// of the user it belongs to (matched exactly; created if absent) and the peer
+// record itself. Peer.InterfaceId is overwritten with the imported interface's
+// ID.
+type ImportPeer struct {
+	UserName string
+	Peer     models.Peer
 }
 
 type Users interface {

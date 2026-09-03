@@ -67,3 +67,30 @@ func TestOrphanInterfacesIgnoresMissingDevice(t *testing.T) {
 		t.Fatalf("orphanInterfaces() = %v, want none", got)
 	}
 }
+
+func TestUnmanagedInterfacesReportsKindSorted(t *testing.T) {
+	configs := []models.InterfaceConfig{{Interface: "wg0"}}
+	devices := []*wgtypes.Device{
+		{Name: "wg0", IsAmnezia: true},
+		{Name: "wg-plain"},
+		{Name: "awg1", IsAmnezia: true},
+	}
+
+	got := unmanagedInterfaces(configs, devices)
+	want := []models.UnmanagedInterface{
+		{Name: "awg1", Kind: models.InterfaceKindAmnezia},
+		{Name: "wg-plain", Kind: models.InterfaceKindWireGuard},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unmanagedInterfaces() = %v, want %v", got, want)
+	}
+}
+
+// An empty result must still be a non-nil slice: the admin's UI reads .length
+// off the JSON, and a nil slice would marshal as null.
+func TestUnmanagedInterfacesEmptyIsNotNil(t *testing.T) {
+	got := unmanagedInterfaces([]models.InterfaceConfig{{Interface: "wg0"}}, []*wgtypes.Device{{Name: "wg0"}})
+	if got == nil || len(got) != 0 {
+		t.Fatalf("unmanagedInterfaces() = %#v, want empty non-nil slice", got)
+	}
+}

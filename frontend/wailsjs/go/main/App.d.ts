@@ -69,6 +69,8 @@ export function GetUser(arg1:string):Promise<models.User>;
 
 export function ImportInterface(arg1:string,arg2:string):Promise<models.Interface>;
 
+export function ImportInterfaceFromServer(arg1:string,arg2:string,arg3:string):Promise<models.Interface>;
+
 export function ListAgentReleases():Promise<Array<models.AgentReleaseAsset>>;
 
 export function ListAgentSources():Promise<Array<models.AgentSource>>;
@@ -81,11 +83,15 @@ export function ListServers():Promise<Array<models.Server>>;
 
 export function ListTunnels():Promise<Array<models.Tunnel>>;
 
+export function ListUnmanagedInterfaces(arg1:string):Promise<Array<models.UnmanagedInterface>>;
+
 export function ListUsers():Promise<Array<models.User>>;
 
 export function Login(arg1:string,arg2:string):Promise<void>;
 
 export function MigratePeer(arg1:string,arg2:string,arg3:string):Promise<models.User>;
+
+export function PreviewImport(arg1:string,arg2:string,arg3:string):Promise<models.ImportPreview>;
 
 export function ReconcileServer(arg1:string):Promise<service.ReconcileReport>;
 

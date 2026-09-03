@@ -25,6 +25,7 @@ guide covers everything required to run the application and use its features.
     - [Agent sources (deploy presets)](#agent-sources-deploy-presets)
     - [Sync](#sync)
     - [Reconcile (agent ↔ database)](#reconcile-agent--database)
+    - [Importing a wg-quick / awg-quick interface](#importing-a-wg-quick--awg-quick-interface)
     - [Monitoring toggle](#monitoring-toggle)
     - [Profiling](#profiling)
 - [Interfaces](#interfaces)
@@ -337,6 +338,69 @@ When both sides agree, reconciliation reports that no action is required. Note t
 interface
 itself (address, keys, AmneziaWG parameters, and the peers the agent reports); the association between a peer and the
 user it belongs to exists only in the administrative database and cannot be reconstructed from the agent.
+
+### Importing a wg-quick / awg-quick interface
+
+An interface that was brought up on the server by `wg-quick`/`awg-quick` before the agent was installed is invisible to
+Amnezia-WG Admin: the agent only knows the interfaces it was asked to create. Such interfaces are shown on the server
+page with a **Not managed** badge (the agent lists every live WireGuard/AmneziaWG device it has no configuration for,
+on every request), read-only — they cannot be edited or given peers until they are **imported**. Creating a new
+interface with the same name is refused for the same reason: the agent would take over the live link and replace its
+keys and peers.
+
+The import is a one-off migration, started from the agent dialog (**Import interface**) or from the **Import…** button
+on the unmanaged interface itself. The agent reads the interface's configuration file from the server
+(`/etc/amnezia/amneziawg/<name>.conf`, then `/etc/wireguard/<name>.conf`); the file is the source of truth, so keep it
+current before importing. The dialog takes two inputs:
+
+- **Interface** — one of the unmanaged interfaces, or a name typed by hand (for a configuration file whose interface is
+  currently down).
+- **Peer map** — which peers belong to which users. A server configuration only holds each peer's *public* key, while
+  Amnezia-WG Admin renders client configurations and QR codes from the *private* key, which only exists in the client
+  configurations handed out earlier. The map is a short YAML-like text: an unindented `user:` line followed by indented
+  `private-key: peer name` lines. Users are matched by exact name and created when missing; each private key is matched
+  to the `[Peer]` with the same public key; peer names are labels and need not be unique. Peers left out of the map are
+  imported **without a user**: their clients keep working, but no configuration or QR code can be produced for them
+  until they are re-issued. The map may be empty.
+
+**Preview** performs a dry run and shows what the import will create — the interface, the users (new or existing) and
+their peers, the peers without a user — together with the hook commands taken from the configuration file, the hook
+commands the import **generates**, and warnings. Nothing is written until **Import** is confirmed, and changing the
+inputs requires a new preview.
+
+Because the agent does not run wg-quick, what wg-quick did implicitly is turned into explicit
+[hook commands](#hook-commands): a route for every `AllowedIPs` prefix outside the interface's own subnet, and with
+`Table = N` a route in table `N` for every prefix (the `Table` value itself is carried over; `off` adds no routes). The
+generated commands are idempotent (`ip route replace`, `ip route del … || true`) and are appended after the file's own
+hooks. The file's own hooks are copied verbatim (`%i` is supported) but **linted**: an `iptables -A` without a `-C`
+check, an `ip rule add` without a preceding `del`, or an `ip route add` is reported as not idempotent — this matters
+because on adoption the hooks run on top of the rules wg-quick already applied, and the agent re-runs the previous
+configuration's down-hooks plus the new up-hooks on every later update.
+
+Other things the preview warns about: `DNS` in `[Interface]` changes meaning (wg-quick set the host's resolver; here it
+becomes the default client DNS for the interface's peers), `SaveConfig` is ignored, peers without `PersistentKeepalive`
+keep `0` rather than receiving the default, a default route under `Table = auto` (wg-quick's fwmark policy routing) is
+not translated, and a mismatch between the live link's type and the configuration (AmneziaWG parameters on a plain
+WireGuard link, or the reverse). The configuration must have exactly one IPv4 `Address`, a `ListenPort`, and no unknown
+keys; every peer needs `PublicKey` and `AllowedIPs`, and host addresses must lie inside the interface subnet and be
+unique. Conflicts with the server's existing interfaces (name, port, subnet) are rejected as for a new interface.
+
+The import writes the interface, the users and the peers to the database in a single transaction, then pushes the
+configuration to the agent like any other change. When the interface is up, the agent **adopts** it in place: the link
+keeps its type, nothing is recreated, and the device configuration is applied with the file's peers as the complete
+set, so anything on the live device that is not in the file is removed. When the interface is down, the agent creates
+it. A failed push is recorded on the interface's sync status and retried with **Sync** — the database record is never
+rolled back, since the interface still exists on the server either way.
+
+Two migration paths are possible. The **seamless** one imports over the live interface (clients stay connected) and
+relies on idempotent hooks. The **clean** one runs `wg-quick down <name>` first and imports the configuration file, so
+the agent brings the interface up itself; use it when the preview reports non-idempotent hooks or a link-type mismatch,
+and always with the **userspace agent**, which cannot adopt a kernel link it did not create (its first push fails while
+the link is up; bring it down and press **Sync**). After either path, disable the wg-quick unit
+(`systemctl disable --now wg-quick@<name>` or `awg-quick@<name>`) so the interface has a single owner after a reboot,
+and turn `SaveConfig` off *before* stopping the unit, since stopping rewrites the file. A containerized (Docker) agent
+runs in its own network namespace and sees neither the host's links nor its configuration files, so the import is not
+offered for it.
 
 ### Monitoring toggle
 

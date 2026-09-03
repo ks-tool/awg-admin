@@ -19,7 +19,7 @@ import {getCurrentApiMode} from './apiMode';
 import {bindingsClient} from './bindingsClient';
 import {throwIfPassphraseRequired, throwIfSudoPasswordRequired} from './sshErrors';
 import {reportError} from './errorReporting';
-import type {Agent, DeployStatus, HostInfo, Interface, InterfaceConfig, MetricsSnapshot, Server, ServerInfo, SSHConfig, SystemHistory} from '@/types';
+import type {Agent, DeployStatus, HostInfo, ImportPreview, Interface, InterfaceConfig, MetricsSnapshot, Server, ServerInfo, SSHConfig, SystemHistory, UnmanagedInterface} from '@/types';
 
 export interface ServerInput {
     name: string;
@@ -406,6 +406,76 @@ export async function deleteAgentInterface(serverId: string, iface: string): Pro
         return false;
     }
     return true;
+}
+
+/**
+ * Live WireGuard/AmneziaWG interfaces on the server that its agent doesn't
+ * manage — brought up by wg-quick/awg-quick before the agent was installed.
+ * Best-effort like getServerMetrics: null when the agent is unreachable (or
+ * predates the endpoint), which callers treat as "unknown", no toast.
+ */
+export async function listUnmanagedInterfaces(serverId: string): Promise<UnmanagedInterface[] | null> {
+    const client = getClient();
+
+    if (client) {
+        const {data, error} = await client.listUnmanagedInterfaces(serverId);
+        if (error) {
+            console.error(`Failed to list unmanaged interfaces for server ${serverId} (bindings):`, error);
+            return null;
+        }
+        return data as unknown as UnmanagedInterface[];
+    }
+
+    const {data, error} = await get<UnmanagedInterface[]>(`/servers/${serverId}/unmanaged`);
+    if (error) {
+        console.error(`Failed to list unmanaged interfaces for server ${serverId}:`, error);
+        return null;
+    }
+    return data;
+}
+
+export interface ImportRequest {
+    interface: string;
+    peerMap: string;
+}
+
+/**
+ * Dry-run of importing a wg-quick/awg-quick interface from the server (the
+ * agent reads its conf from disk): what would be created, the translated
+ * hooks, warnings. Writes nothing. Throws the backend's message (a validation
+ * problem in the conf or peer map) so the modal can show the specific reason.
+ */
+export async function previewInterfaceImport(serverId: string, iface: string, peerMap: string): Promise<ImportPreview> {
+    const client = getClient();
+
+    if (client) {
+        const {data, error} = await client.previewImport(serverId, iface, peerMap);
+        if (error) throw new Error(String(error));
+        return data as unknown as ImportPreview;
+    }
+
+    const {data, error} = await post<ImportPreview, ImportRequest>(`/servers/${serverId}/import/preview`, {interface: iface, peerMap});
+    if (error) throw new Error(String(error));
+    return data;
+}
+
+/**
+ * Imports a wg-quick/awg-quick interface from the server into the database
+ * (interface + users + peers in one transaction) and pushes it to the agent.
+ * Throws the backend's message on failure, like previewInterfaceImport.
+ */
+export async function importInterfaceFromServer(serverId: string, iface: string, peerMap: string): Promise<Interface> {
+    const client = getClient();
+
+    if (client) {
+        const {data, error} = await client.importInterfaceFromServer(serverId, iface, peerMap);
+        if (error) throw new Error(String(error));
+        return data as unknown as Interface;
+    }
+
+    const {data, error} = await post<Interface, ImportRequest>(`/servers/${serverId}/import`, {interface: iface, peerMap});
+    if (error) throw new Error(String(error));
+    return data;
 }
 
 /**
