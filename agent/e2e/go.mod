@@ -17,7 +17,7 @@ replace github.com/ks-tool/awg-admin/agent => ../
 replace github.com/Jipok/wgctrl-go v1.2.0 => github.com/ks-tool/wgctrl-go v0.0.0-20260921051250-2994e82fed6c
 
 require (
-	github.com/ks-tool/awg-admin/agent v0.0.0-00010101000000-000000000000
+	github.com/ks-tool/awg-admin/agent v1.2.1
 	github.com/moby/moby/api v1.54.2
 	github.com/testcontainers/testcontainers-go v0.43.0
 )
