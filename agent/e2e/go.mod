@@ -14,7 +14,7 @@ replace github.com/ks-tool/awg-admin/agent => ../
 // Mirrors agent/go.mod's replace (a replace in a dependency's go.mod doesn't
 // propagate to this module): the ks-tool fork parses/writes the amneziawg-dkms
 // v3.0 netlink wire format (u32 keepalive, u64 H1–H4) — see agent/go.mod.
-replace github.com/Jipok/wgctrl-go v1.2.0 => github.com/ks-tool/wgctrl-go v0.0.0-20260810064903-89095162862d
+replace github.com/Jipok/wgctrl-go v1.2.0 => github.com/ks-tool/wgctrl-go v0.0.0-20260921051250-2994e82fed6c
 
 require (
 	github.com/ks-tool/awg-admin/agent v0.0.0-00010101000000-000000000000
