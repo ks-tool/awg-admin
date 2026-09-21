@@ -28,4 +28,4 @@ require (
 	golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446 // indirect
 )
 
-replace github.com/Jipok/wgctrl-go v1.2.0 => github.com/ks-tool/wgctrl-go v0.0.0-20260810064903-89095162862d
+replace github.com/Jipok/wgctrl-go v1.2.0 => github.com/ks-tool/wgctrl-go v0.0.0-20260921051250-2994e82fed6c
