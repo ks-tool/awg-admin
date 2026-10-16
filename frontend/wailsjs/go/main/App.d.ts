@@ -41,6 +41,8 @@ export function DeleteUser(arg1:string):Promise<void>;
 
 export function DeployAgent(arg1:string,arg2:string):Promise<void>;
 
+export function ForceReplaceInterfacePeers(arg1:string,arg2:string):Promise<void>;
+
 export function GenerateAgentTLS(arg1:string):Promise<models.Server>;
 
 export function GenerateInterfaceDefaults():Promise<models.InterfaceConfig>;

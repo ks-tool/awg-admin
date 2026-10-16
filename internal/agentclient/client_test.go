@@ -33,12 +33,16 @@ import (
 // codes closely enough to exercise the client against realistic responses,
 // without pulling in the agent module's wgctrl dependency.
 type fakeAgent struct {
-	mu    sync.Mutex
-	store map[string]agentmodels.InterfaceConfig
+	mu           sync.Mutex
+	store        map[string]agentmodels.InterfaceConfig
+	replacePeers map[string]bool
 }
 
 func newFakeAgent() *httptest.Server {
-	fa := &fakeAgent{store: make(map[string]agentmodels.InterfaceConfig)}
+	fa := &fakeAgent{
+		store:        make(map[string]agentmodels.InterfaceConfig),
+		replacePeers: make(map[string]bool),
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /interfaces", func(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +57,7 @@ func newFakeAgent() *httptest.Server {
 		}
 		fa.mu.Lock()
 		fa.store[cfg.Interface] = cfg
+		fa.replacePeers[cfg.Interface] = r.URL.Query().Get("replacePeers") == "true"
 		fa.mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
 	})
@@ -131,6 +136,7 @@ func TestClientSetGetListDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
+
 	if got.Interface != "wg0" || got.Address != "10.0.0.1/24" {
 		t.Fatalf("Get returned unexpected config: %+v", got)
 	}
@@ -176,14 +182,16 @@ func TestClientSetGetListDelete(t *testing.T) {
 // and why it's needed).
 type recordingTransport struct {
 	http.RoundTripper
-	mu     sync.Mutex
-	hadKey []bool
+	mu           sync.Mutex
+	hadKey       []bool
+	replacePeers []string
 }
 
 func (rt *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	_, ok := req.Header["Idempotency-Key"]
 	rt.mu.Lock()
 	rt.hadKey = append(rt.hadKey, ok)
+	rt.replacePeers = append(rt.replacePeers, req.URL.Query().Get("replacePeers"))
 	rt.mu.Unlock()
 	return rt.RoundTripper.RoundTrip(req)
 }
@@ -296,5 +304,27 @@ func TestClientUnmanagedAndImportSource(t *testing.T) {
 	var nf *NotFoundError
 	if _, err := c.ImportSource(ctx, "wg9"); !errors.As(err, &nf) || nf.Interface != "wg9" {
 		t.Fatalf("ImportSource(wg9) err = %v, want NotFoundError", err)
+	}
+}
+
+func TestClientSetForceReplacePeers(t *testing.T) {
+	srv := newFakeAgent()
+	defer srv.Close()
+
+	rt := &recordingTransport{RoundTripper: http.DefaultTransport}
+	httpClient := srv.Client()
+	httpClient.Transport = rt
+	c := New(httpClient, srv.URL)
+	if err := c.SetForceReplacePeers(context.Background(), agentmodels.InterfaceConfig{
+		Interface: "wg0",
+		Peers:     []agentmodels.InterfacePeer{{}},
+	}); err != nil {
+		t.Fatalf("SetForceReplacePeers: %v", err)
+	}
+
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	if len(rt.replacePeers) != 1 || rt.replacePeers[0] != "true" {
+		t.Fatalf("replacePeers query values = %v, want [true]", rt.replacePeers)
 	}
 }

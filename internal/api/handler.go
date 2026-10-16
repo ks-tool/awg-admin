@@ -139,6 +139,7 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 				gr.WithGroup("/:ifaceID", func(gr *bunrouter.Group) {
 					gr.GET("", h.interfaceGet)
 					gr.PUT("/config", h.interfaceConfigUpdate)
+					gr.POST("/force-replace-peers", h.interfaceForceReplacePeers)
 					gr.DELETE("", h.interfaceDelete)
 				})
 			})

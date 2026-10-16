@@ -94,3 +94,44 @@ func TestUnmanagedInterfacesEmptyIsNotNil(t *testing.T) {
 		t.Fatalf("unmanagedInterfaces() = %#v, want empty non-nil slice", got)
 	}
 }
+
+func TestReconcilePeersUpdatesInPlaceAndRemovesStalePeers(t *testing.T) {
+	keepKey := wgtypes.Key{1}
+	removeKey := wgtypes.Key{2}
+	addKey := wgtypes.Key{3}
+	psk := wgtypes.Key{4}
+
+	got := reconcilePeers(
+		[]wgtypes.Peer{
+			{PublicKey: keepKey, PresharedKey: psk},
+			{PublicKey: removeKey},
+		},
+		[]wgtypes.PeerConfig{
+			{PublicKey: keepKey},
+			{PublicKey: addKey},
+		},
+	)
+
+	if len(got) != 3 {
+		t.Fatalf("reconcilePeers() returned %d configs, want 3: %+v", len(got), got)
+	}
+	byKey := make(map[wgtypes.Key]wgtypes.PeerConfig, len(got))
+	for _, peer := range got {
+		byKey[peer.PublicKey] = peer
+	}
+	removed, exists := byKey[removeKey]
+	if !exists || !removed.Remove {
+		t.Fatalf("stale peer config = %+v, want removal of %v", removed, removeKey)
+	}
+	updated, exists := byKey[keepKey]
+	if !exists || updated.Remove || !updated.ReplaceAllowedIPs {
+		t.Fatalf("existing peer config = %+v, want in-place update with replaced AllowedIPs", updated)
+	}
+	if updated.PresharedKey == nil || *updated.PresharedKey != (wgtypes.Key{}) {
+		t.Fatalf("existing peer PSK = %v, want explicit clear", updated.PresharedKey)
+	}
+	added, exists := byKey[addKey]
+	if !exists || added.Remove || !added.ReplaceAllowedIPs {
+		t.Fatalf("new peer config = %+v, want in-place add with replaced AllowedIPs", added)
+	}
+}

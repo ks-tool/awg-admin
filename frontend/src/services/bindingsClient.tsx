@@ -309,6 +309,19 @@ export const bindingsClient = {
         }
     },
 
+    async forceReplaceInterfacePeers(serverId: string, interfaceId: string): Promise<ApiResponse<void>> {
+        try {
+            await AppBindings.ForceReplaceInterfacePeers(serverId, interfaceId);
+            return { data: undefined };
+        } catch (error) {
+            console.error('Bindings ForceReplaceInterfacePeers failed:', error);
+            return {
+                data: undefined,
+                error: extractErrorMessage(error),
+            };
+        }
+    },
+
     async reconcileServer(id: string): Promise<ApiResponse<service.ReconcileReport>> {
         try {
             const data = await AppBindings.ReconcileServer(id);

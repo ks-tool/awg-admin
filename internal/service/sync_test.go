@@ -38,8 +38,9 @@ import (
 // directly (no SSH tunnel). It tracks every config it was asked to Set, so
 // tests can assert pushes actually happened.
 type fakeAgentTLS struct {
-	mu    sync.Mutex
-	store map[string]agentmodels.InterfaceConfig
+	mu           sync.Mutex
+	store        map[string]agentmodels.InterfaceConfig
+	replacePeers map[string]bool
 
 	// Discovery/import inputs (see the wg-quick import tests): live devices the
 	// agent has no config for, the conf files "on disk" by interface name, and
@@ -53,9 +54,10 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 	t.Helper()
 
 	fa := &fakeAgentTLS{
-		store:   make(map[string]agentmodels.InterfaceConfig),
-		sources: make(map[string]string),
-		info:    agentmodels.HostInfo{Backend: "kernel", Version: "test", InterfaceKinds: []string{"amneziawg", "wireguard"}},
+		store:        make(map[string]agentmodels.InterfaceConfig),
+		replacePeers: make(map[string]bool),
+		sources:      make(map[string]string),
+		info:         agentmodels.HostInfo{Backend: "kernel", Version: "test", InterfaceKinds: []string{"amneziawg", "wireguard"}},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /interfaces/unmanaged", func(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +90,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 		}
 		fa.mu.Lock()
 		fa.store[cfg.Interface] = cfg
+		fa.replacePeers[cfg.Interface] = r.URL.Query().Get("replacePeers") == "true"
 		fa.mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
 	})
@@ -158,6 +161,13 @@ func (fa *fakeAgentTLS) clear() {
 	fa.mu.Lock()
 	defer fa.mu.Unlock()
 	fa.store = make(map[string]agentmodels.InterfaceConfig)
+	fa.replacePeers = make(map[string]bool)
+}
+
+func (fa *fakeAgentTLS) replacedPeers(name string) bool {
+	fa.mu.Lock()
+	defer fa.mu.Unlock()
+	return fa.replacePeers[name]
 }
 
 func newTestService(t *testing.T) *Service {
@@ -445,5 +455,44 @@ func TestPushRecordsFailureWhenAgentUnreachable(t *testing.T) {
 	}
 	if iface.LastSyncError == "" {
 		t.Fatal("expected LastSyncError to be set when push fails")
+	}
+}
+
+func TestForceReplaceInterfacePeersTargetsOnlySelectedInterface(t *testing.T) {
+	ts, tlsMaterial, fa := newFakeAgentTLS(t)
+	defer ts.Close()
+
+	svc := newTestService(t)
+	srv, err := svc.CreateServer(ServerInput{
+		Name: "srv1",
+		SSH:  models.SSHConfig{Host: "example.invalid", User: "root", Password: "x"},
+		Agent: models.Agent{
+			Address: ts.Listener.Addr().String(),
+			TLS:     tlsMaterial,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateServer: %v", err)
+	}
+	iface0, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
+	})
+	if err != nil {
+		t.Fatalf("CreateInterface(wg0): %v", err)
+	}
+	if _, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+		Interface: "wg1", Address: "10.0.1.1/24", ListenPort: 51821,
+	}); err != nil {
+		t.Fatalf("CreateInterface(wg1): %v", err)
+	}
+
+	if err := svc.ForceReplaceInterfacePeers(srv.ID.String(), iface0.ID.String()); err != nil {
+		t.Fatalf("ForceReplaceInterfacePeers: %v", err)
+	}
+	if !fa.replacedPeers("wg0") {
+		t.Fatal("selected interface was not sent with replacePeers=true")
+	}
+	if fa.replacedPeers("wg1") {
+		t.Fatal("unselected interface was sent with replacePeers=true")
 	}
 }

@@ -68,9 +68,9 @@ func (s *Service) PreviewImport(serverID, ifaceName, peerMap string) (*models.Im
 //
 // On the agent the push goes down the update path when the link is live
 // (adoption in place: the link keeps its type, no recreate, and — the conf
-// being the source of truth — the device config is applied with ReplacePeers,
-// so anything on the live device that isn't in the conf is removed), or the
-// create path when the interface was taken down first.
+// being the source of truth — peer reconciliation removes anything on the live
+// device that isn't in the conf), or the create path when the interface was
+// taken down first.
 func (s *Service) ImportInterfaceFromServer(serverID, ifaceName, peerMap string) (*models.Interface, error) {
 	debugOp("ImportInterfaceFromServer").Str("server_id", serverID).Str("interface", ifaceName).Msg("importing wg-quick interface")
 	plan, err := s.planImport(serverID, ifaceName, peerMap)

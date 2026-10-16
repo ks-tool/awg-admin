@@ -321,8 +321,8 @@ all options are offered and the deployment's own Docker pre-check serves as the 
 **Sync** re-pushes every interface recorded for a server to its agent, overwriting the agent's current state with the
 desired state from the database. It runs automatically after a deployment and after a tunnel reconnects; the manual
 action is provided for forcing the agent back into line — for example, after the agent has been reinstalled or when
-drift
-is suspected.
+drift is suspected. Normal pushes update peers in place and remove only peers no longer in the desired configuration,
+so peers whose settings are unchanged keep their active sessions.
 
 ### Reconcile (agent ↔ database)
 
@@ -374,8 +374,9 @@ Because the agent does not run wg-quick, what wg-quick did implicitly is turned 
 generated commands are idempotent (`ip route replace`, `ip route del … || true`) and are appended after the file's own
 hooks. The file's own hooks are copied verbatim (`%i` is supported) but **linted**: an `iptables -A` without a `-C`
 check, an `ip rule add` without a preceding `del`, or an `ip route add` is reported as not idempotent — this matters
-because on adoption the hooks run on top of the rules wg-quick already applied, and the agent re-runs the previous
-configuration's down-hooks plus the new up-hooks on every later update.
+because on adoption the hooks run on top of the rules wg-quick already applied. On later updates, the agent only
+re-runs hooks when an up-hook changes; then it runs the previous configuration's down-hooks followed by the new
+up-hooks. Changes limited to down-hooks are saved for a future interface teardown without disturbing live traffic.
 
 Other things the preview warns about: `DNS` in `[Interface]` changes meaning (wg-quick set the host's resolver; here it
 becomes the default client DNS for the interface's peers), `SaveConfig` is ignored, peers without `PersistentKeepalive`
@@ -387,10 +388,10 @@ unique. Conflicts with the server's existing interfaces (name, port, subnet) are
 
 The import writes the interface, the users and the peers to the database in a single transaction, then pushes the
 configuration to the agent like any other change. When the interface is up, the agent **adopts** it in place: the link
-keeps its type, nothing is recreated, and the device configuration is applied with the file's peers as the complete
-set, so anything on the live device that is not in the file is removed. When the interface is down, the agent creates
-it. A failed push is recorded on the interface's sync status and retried with **Sync** — the database record is never
-rolled back, since the interface still exists on the server either way.
+keeps its type and nothing is recreated. Peers from the file are reconciled in place, preserving sessions for unchanged
+peers; live peers absent from the file are removed. When the interface is down, the agent creates it. A failed push is
+recorded on the interface's sync status and retried with **Sync** — the database record is never rolled back, since the
+interface still exists on the server either way.
 
 Two migration paths are possible. The **seamless** one imports over the live interface (clients stay connected) and
 relies on idempotent hooks. The **clean** one runs `wg-quick down <name>` first and imports the configuration file, so
@@ -474,6 +475,10 @@ The removed peers also stop appearing in the [peer metrics](#dashboard-and-metri
 Every interface tracks an **in-sync** status: whether the last push to the agent succeeded, the error if it did not, and
 the time of the last successful synchronization.
 
+The interface card also has a **Force replace peers** action. After confirmation, it re-applies that interface with
+WireGuard's full peer-replacement flag (`ReplacePeers = true`), resetting every peer session on that interface; clients
+must establish a new handshake. Use it only when a full peer reset is intentional. It does not affect other interfaces.
+
 The agent raises only active interfaces on startup and takes every active interface down when it stops, so a stopped
 agent leaves no tunnels running. A deactivated interface is never brought up and its configuration is stored but not
 applied — which also makes deactivation a way to park an interface that the agent would otherwise fail to configure.
@@ -487,9 +492,11 @@ comes up and a warning is logged.
 ### Hook commands
 
 Each interface supports **PreUp**, **PostUp**, **PreDown**, and **PostDown** hook commands, which run on the agent when
-the interface comes up or goes down — the equivalent of wg-quick's hooks. Because the agent does not run wg-quick,
-anything such as custom routing or `iptables` rules is expressed as hook commands. In a command, `%i` expands to the
-interface name. These hooks are what the tunnel feature uses internally to set up policy routing and NAT.
+the interface comes up or goes down — the equivalent of wg-quick's hooks. On an update, the agent reruns the previous
+down-hooks and the new up-hooks only when the up-hook commands change; a change to down-hooks alone is saved for a
+future teardown and does not interrupt the live interface. Because the agent does not run wg-quick, anything such as
+custom routing or `iptables` rules is expressed as hook commands. In a command, `%i` expands to the interface name.
+These hooks are what the tunnel feature uses internally to set up policy routing and NAT.
 
 ## Users and peers
 

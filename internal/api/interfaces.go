@@ -152,3 +152,24 @@ func (h *Handler) interfaceDelete(w http.ResponseWriter, r bunrouter.Request) er
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
+
+func (h *Handler) interfaceForceReplacePeers(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	iID, err := ifaceID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+	fields["interface_id"] = iID
+	log.Debug().Fields(fields).Msg("forcing interface peer replacement")
+
+	if err := h.svc.ForceReplaceInterfacePeers(sID, iID); err != nil {
+		return handleErr(err, fields)
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}

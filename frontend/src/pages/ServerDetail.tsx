@@ -26,6 +26,7 @@ import {
     FileInput,
     Network,
     Plus,
+    RefreshCw,
     Server as ServerIcon,
     Settings,
     Trash2,
@@ -35,7 +36,7 @@ import {PageHeader} from '@/components/layout/PageHeader';
 import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {CopyButton} from '@/components/common/CopyButton';
-import {getInterfaceDefaults, updateInterfaceConfig} from '@/services/interfaces';
+import {forceReplaceInterfacePeers, getInterfaceDefaults, updateInterfaceConfig} from '@/services/interfaces';
 import {listUnmanagedInterfaces, unlockServerSSH} from '@/services/servers';
 import {SSHPassphraseRequiredError} from '@/services/sshErrors';
 import {SSHPassphraseModal} from '@/components/server/SSHPassphraseModal';
@@ -322,8 +323,8 @@ export default function ServerDetail() {
     // below (server isn't in scope yet here) so the edit form opens on the tab
     // the server actually uses.
     const [authType, setAuthType] = useState<AuthType>('key');
-    // All agent operations (deploy, sync, metrics, reconcile, profiling) live in
-    // the AgentModal now — this page just opens it.
+    // Server-level agent operations live in AgentModal; this page also exposes
+    // the interface-specific force-replace action alongside each interface.
     const [showAgentModal, setShowAgentModal] = useState(false);
     const [serverInterfaces, setServerInterfaces] = useState<any[]>([]);
     // Live interfaces on the server the agent doesn't manage (wg-quick ones),
@@ -337,11 +338,13 @@ export default function ServerDetail() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteInterfaceId, setDeleteInterfaceId] = useState<string | null>(null);
+    const [forceReplaceInterfaceId, setForceReplaceInterfaceId] = useState<string | null>(null);
     // Second-stage flag: an interface that has peers requires confirming twice
     // (the cascade deletes all of them), so this tracks that the first warning
     // was acknowledged.
     const [deleteInterfaceConfirmed, setDeleteInterfaceConfirmed] = useState(false);
     const [deleteInterfaceLoading, setDeleteInterfaceLoading] = useState(false);
+    const [forceReplacePeersLoading, setForceReplacePeersLoading] = useState(false);
     const [unlockLoading, setUnlockLoading] = useState(false);
     const [unlockError, setUnlockError] = useState<string | undefined>();
     const [interfaceModal, setInterfaceModal] = useState<{
@@ -374,6 +377,23 @@ export default function ServerDetail() {
         if (list) setServerInterfaces(list);
         setUnmanaged(unmanagedList ?? []);
     }, [selectedServerId, listInterfacesForServer]);
+
+    const handleForceReplacePeers = async () => {
+        if (!selectedServerId || !forceReplaceInterfaceId) return;
+        setForceReplacePeersLoading(true);
+        try {
+            const ok = await forceReplaceInterfacePeers(selectedServerId, forceReplaceInterfaceId);
+            if (!ok) {
+                toast.error(t('servers.interfaces.forceReplacePeersError'));
+                return;
+            }
+            toast.success(t('servers.interfaces.forceReplacePeersSuccess'));
+            await loadInterfaces();
+            setForceReplaceInterfaceId(null);
+        } finally {
+            setForceReplacePeersLoading(false);
+        }
+    };
 
     // ---- Server handlers ----------------------------------------------------
 
@@ -724,6 +744,16 @@ export default function ServerDetail() {
                                         )}
                                         {iface.id && (
                                             <div className="flex gap-2">
+                                                {!iface.disabled && (
+                                                    <button
+                                                        onClick={() => setForceReplaceInterfaceId(iface.id)}
+                                                        className="p-1 text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/10 rounded transition-colors"
+                                                        title={t('servers.interfaces.forceReplacePeers')}
+                                                        aria-label={t('servers.interfaces.forceReplacePeers')}
+                                                    >
+                                                        <RefreshCw size={16}/>
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => setInterfaceModal({
                                                         mode: 'edit',
@@ -900,6 +930,20 @@ export default function ServerDetail() {
                         onConfirm={handleDeleteInterface}
                         onCancel={closeDelete}
                         loading={deleteInterfaceLoading}
+                    />
+                );
+            })()}
+
+            {forceReplaceInterfaceId && (() => {
+                const iface = serverInterfaces.find((i) => i.id === forceReplaceInterfaceId);
+                return (
+                    <ConfirmModal
+                        title={t('servers.interfaces.forceReplacePeers')}
+                        message={t('servers.interfaces.confirmForceReplacePeers', {name: iface?.iface ?? ''})}
+                        confirmLabel={t('servers.interfaces.forceReplacePeers')}
+                        onConfirm={handleForceReplacePeers}
+                        onCancel={() => setForceReplaceInterfaceId(null)}
+                        loading={forceReplacePeersLoading}
                     />
                 );
             })()}

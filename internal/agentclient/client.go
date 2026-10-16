@@ -61,12 +61,27 @@ func New(httpClient *http.Client, baseURL string) *Client {
 // Set applies cfg to the agent's interface of the same name, creating it if
 // it doesn't already exist (PUT /interfaces).
 func (c *Client) Set(ctx context.Context, cfg agentmodels.InterfaceConfig) error {
+	return c.set(ctx, cfg, false)
+}
+
+// SetForceReplacePeers applies cfg with the agent's full peer replacement
+// behavior. Unlike Set, this intentionally tears down all live peer sessions
+// on the interface before recreating its peer set.
+func (c *Client) SetForceReplacePeers(ctx context.Context, cfg agentmodels.InterfaceConfig) error {
+	return c.set(ctx, cfg, true)
+}
+
+func (c *Client) set(ctx context.Context, cfg agentmodels.InterfaceConfig, replacePeers bool) error {
 	body, err := json.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal interface config: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/interfaces", bytes.NewReader(body))
+	url := c.baseURL + "/interfaces"
+	if replacePeers {
+		url += "?replacePeers=true"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

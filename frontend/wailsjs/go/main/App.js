@@ -78,6 +78,10 @@ export function DeployAgent(arg1, arg2) {
   return window['go']['main']['App']['DeployAgent'](arg1, arg2);
 }
 
+export function ForceReplaceInterfacePeers(arg1, arg2) {
+  return window['go']['main']['App']['ForceReplaceInterfacePeers'](arg1, arg2);
+}
+
 export function GenerateAgentTLS(arg1) {
   return window['go']['main']['App']['GenerateAgentTLS'](arg1);
 }

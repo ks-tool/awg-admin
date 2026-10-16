@@ -18,6 +18,7 @@ package service
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -91,5 +92,130 @@ func TestInterfaceCreateBringsLinkUpBeforePreUp(t *testing.T) {
 	}
 	if upIdx == -1 {
 		t.Fatalf("backend.Up was never called; ops=%v", fake.ops)
+	}
+}
+
+func TestInterfaceUpdateSkipsUnchangedHooks(t *testing.T) {
+	dir := t.TempDir()
+	fake := &recordingBackend{markerPath: filepath.Join(dir, "link-is-up")}
+	prevBackend := backend
+	SetBackend(fake)
+	t.Cleanup(func() { SetBackend(prevBackend) })
+
+	hookMarker := filepath.Join(dir, "hooks-ran")
+	hook := fmt.Sprintf("touch %q", hookMarker)
+	cfg := models.InterfaceConfig{
+		Interface: "awg1",
+		Address:   "10.0.0.1/24",
+		PreUp:     []string{hook},
+		PostUp:    []string{hook},
+		PreDown:   []string{hook},
+		PostDown:  []string{hook},
+	}
+
+	if err := InterfaceUpdate(&cfg, cfg); err != nil {
+		t.Fatalf("InterfaceUpdate: %v", err)
+	}
+	if _, err := os.Stat(hookMarker); !os.IsNotExist(err) {
+		t.Fatalf("unchanged hooks ran; stat error = %v", err)
+	}
+}
+
+func TestInterfaceUpdateReconcilesChangedHooks(t *testing.T) {
+	dir := t.TempDir()
+	fake := &recordingBackend{markerPath: filepath.Join(dir, "link-is-up")}
+	prevBackend := backend
+	SetBackend(fake)
+	t.Cleanup(func() { SetBackend(prevBackend) })
+
+	trace := filepath.Join(dir, "hook-trace")
+	record := func(name string) string {
+		return fmt.Sprintf("printf '%s\\n' >> %q", name, trace)
+	}
+	prev := models.InterfaceConfig{
+		Interface: "awg1",
+		Address:   "10.0.0.1/24",
+		PreUp:     []string{record("old-pre-up")},
+		PostUp:    []string{record("old-post-up")},
+		PreDown:   []string{record("old-pre-down")},
+		PostDown:  []string{record("old-post-down")},
+	}
+	cfg := prev
+	cfg.PreUp = []string{record("new-pre-up")}
+	cfg.PostUp = []string{record("new-post-up")}
+
+	if err := InterfaceUpdate(&prev, cfg); err != nil {
+		t.Fatalf("InterfaceUpdate: %v", err)
+	}
+	got, err := os.ReadFile(trace)
+	if err != nil {
+		t.Fatalf("read hook trace: %v", err)
+	}
+	want := "old-pre-down\nold-post-down\nnew-pre-up\nnew-post-up\n"
+	if string(got) != want {
+		t.Fatalf("hook trace = %q, want %q", got, want)
+	}
+}
+
+func TestInterfaceUpdateDoesNotRerunUpHooksForDownHookChange(t *testing.T) {
+	dir := t.TempDir()
+	fake := &recordingBackend{markerPath: filepath.Join(dir, "link-is-up")}
+	prevBackend := backend
+	SetBackend(fake)
+	t.Cleanup(func() { SetBackend(prevBackend) })
+
+	trace := filepath.Join(dir, "hook-trace")
+	record := func(name string) string {
+		return fmt.Sprintf("printf '%s\\n' >> %q", name, trace)
+	}
+	prev := models.InterfaceConfig{
+		Interface: "awg1",
+		Address:   "10.0.0.1/24",
+		PreUp:     []string{record("pre-up")},
+		PostUp:    []string{record("post-up")},
+		PreDown:   []string{record("old-pre-down")},
+		PostDown:  []string{record("post-down")},
+	}
+	cfg := prev
+	cfg.PreDown = []string{record("new-pre-down")}
+
+	if err := InterfaceUpdate(&prev, cfg); err != nil {
+		t.Fatalf("InterfaceUpdate: %v", err)
+	}
+	if _, err := os.Stat(trace); !os.IsNotExist(err) {
+		t.Fatalf("hooks ran for a down-hook-only change; stat error = %v", err)
+	}
+}
+
+func TestInterfaceUpdateRunsUpHooksWithoutPreviousConfig(t *testing.T) {
+	dir := t.TempDir()
+	fake := &recordingBackend{markerPath: filepath.Join(dir, "link-is-up")}
+	prevBackend := backend
+	SetBackend(fake)
+	t.Cleanup(func() { SetBackend(prevBackend) })
+
+	trace := filepath.Join(dir, "hook-trace")
+	record := func(name string) string {
+		return fmt.Sprintf("printf '%s\\n' >> %q", name, trace)
+	}
+	cfg := models.InterfaceConfig{
+		Interface: "awg1",
+		Address:   "10.0.0.1/24",
+		PreUp:     []string{record("pre-up")},
+		PostUp:    []string{record("post-up")},
+		PreDown:   []string{record("pre-down")},
+		PostDown:  []string{record("post-down")},
+	}
+
+	if err := InterfaceUpdate(nil, cfg); err != nil {
+		t.Fatalf("InterfaceUpdate: %v", err)
+	}
+	got, err := os.ReadFile(trace)
+	if err != nil {
+		t.Fatalf("read hook trace: %v", err)
+	}
+	want := "pre-up\npost-up\n"
+	if string(got) != want {
+		t.Fatalf("hook trace = %q, want %q", got, want)
 	}
 }
