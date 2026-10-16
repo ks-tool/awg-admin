@@ -150,8 +150,8 @@ func (awg InterfaceConfig) ToAmneziaConfig() *wgtypes.Config {
 	peers := make([]wgtypes.PeerConfig, 0, len(awg.Peers))
 	for _, peer := range awg.Peers {
 		if peer.Disabled {
-			// Deactivated peer: omit it so, with ReplacePeers, it's dropped from
-			// the live device and can't connect. The stored config keeps it
+			// Deactivated peer: omit it so reconciliation removes it from the
+			// live device and it can't connect. The stored config keeps it
 			// (desired state), so reactivating re-adds it. Mirrors the
 			// interface-level Disabled handling in service.Handler.One.
 			continue
@@ -319,7 +319,7 @@ type InterfacePeer struct {
 
 	// Disabled deactivates this peer: it's kept in the stored InterfaceConfig
 	// but omitted from the device config applied via wgctrl (ToAmneziaConfig /
-	// ToWireguardPeers), so with ReplacePeers the peer is removed from the live
+	// ToWireguardPeers), so reconciliation removes the peer from the live
 	// interface and can't connect until reactivated. Zero value (false) keeps
 	// the peer active, so configs written before this field existed stay up.
 	Disabled bool `json:"disabled,omitempty"`

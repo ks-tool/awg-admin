@@ -48,7 +48,7 @@ type Handler struct {
 }
 
 func New(hostInfo models.HostInfo, store storage.Storage, collector *metrics.Collector, mws ...mux.Middleware) http.Handler {
-	// PUT         /interfaces     		=> set
+	// PUT         /interfaces     		=> set (optional ?replacePeers=true for a forced peer reset)
 	// GET         /interfaces/ 		=> list
 	// GET         /interfaces/unmanaged	=> live devices with no stored config (wg-quick etc.)
 	// GET, DELETE /interfaces/{name}	=> get, delete
@@ -123,6 +123,18 @@ func (h *Handler) set(w http.ResponseWriter, r *http.Request) {
 
 	fields["interface"] = cfg.Interface
 	log.Debug().Fields(fields).Msg("setting interface")
+	replacePeers := false
+	switch r.URL.Query().Get("replacePeers") {
+	case "":
+	case "true":
+		replacePeers = true
+	case "false":
+	default:
+		err := errors.New("replacePeers must be true or false")
+		log.Debug().Fields(fields).Err(err).Send()
+		badRequest(w, err)
+		return
+	}
 
 	// Capture the previously-stored config before overwriting it, so the apply
 	// path can reconcile hooks (tear down the old rules, set up the new ones).
@@ -136,7 +148,11 @@ func (h *Handler) set(w http.ResponseWriter, r *http.Request) {
 	}
 
 	networkService := service.NewHandler(h.store, h.awg)
-	if err := networkService.One(old, cfg); err != nil {
+	apply := networkService.One
+	if replacePeers {
+		apply = networkService.OneReplacingPeers
+	}
+	if err := apply(old, cfg); err != nil {
 		log.Error().Fields(fields).Err(err).Msg("configure interface failed")
 		if e := h.store.Delete(cfg.Interface); e != nil {
 			log.Warn().Fields(fields).Err(e).Msg("delete interface from DB failed")
@@ -145,9 +161,9 @@ func (h *Handler) set(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Every push carries the interface's full desired peer set (ReplacePeers), so
-	// a peer dropped from it (e.g. deleted in the admin) is gone here too — evict
-	// its retained metrics now so it stops showing in the peer metrics/history
+	// Every push reconciles the interface's full desired peer set, so a peer
+	// dropped from it (e.g. deleted in the admin) is gone here too — evict its
+	// retained metrics now so it stops showing in the peer metrics/history
 	// immediately, rather than at the next collection tick. Guarded: the
 	// collector is nil when metrics collection is disabled.
 	if h.collector != nil {

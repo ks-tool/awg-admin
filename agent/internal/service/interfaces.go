@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/ks-tool/awg-admin/agent/models"
@@ -65,15 +66,18 @@ func InterfaceCreate(cfg models.InterfaceConfig) error {
 }
 
 // InterfaceUpdate reconfigures an already-existing link in place and reconciles
-// its hooks: any rules the previous config set up (prev's PreDown/PostDown) are
-// torn down first, then the new config's PreUp/PostUp set up the current ones.
-// This lets an admin edit an interface — e.g. add or remove a tunnel's routing
-// rules — and have them applied and reverted without recreating the link (which
-// would drop its peers/clients). prev is nil on agent-startup re-apply, in which
-// case only the new up-hooks run. The teardown side is best-effort so a rule
-// that's already gone doesn't block the update.
+// its up-hooks when they change: the previous config's PreDown/PostDown hooks
+// tear down old rules before the new PreUp/PostUp hooks set up current ones.
+// Changes limited to down-hooks only update the commands used by a future
+// teardown and do not disturb the live interface. prev is nil on agent-startup
+// re-apply, in which case the new up-hooks run without teardown. Teardown is
+// best-effort so a rule that's already gone doesn't block the update.
 func InterfaceUpdate(prev *models.InterfaceConfig, cfg models.InterfaceConfig) error {
-	if prev != nil {
+	upHooksChanged := prev == nil ||
+		!slices.Equal(prev.PreUp, cfg.PreUp) ||
+		!slices.Equal(prev.PostUp, cfg.PostUp)
+
+	if prev != nil && upHooksChanged {
 		if err := runHooks(cfg.Interface, "PreDown", prev.PreDown); err != nil {
 			log.Warn().Err(err).Str("interface", cfg.Interface).Msg("reconcile PreDown hook failed, continuing")
 		}
@@ -97,10 +101,13 @@ func InterfaceUpdate(prev *models.InterfaceConfig, cfg models.InterfaceConfig) e
 		return err
 	}
 
-	if err := runHooks(cfg.Interface, "PreUp", cfg.PreUp); err != nil {
-		return err
+	if upHooksChanged {
+		if err := runHooks(cfg.Interface, "PreUp", cfg.PreUp); err != nil {
+			return err
+		}
+		return runHooks(cfg.Interface, "PostUp", cfg.PostUp)
 	}
-	return runHooks(cfg.Interface, "PostUp", cfg.PostUp)
+	return nil
 }
 
 // InterfaceDelete tears cfg's interface down and removes the OS-level link

@@ -21,8 +21,8 @@ import "testing"
 // TestDisabledPeerIsOmittedFromDeviceConfig is the core of the peer-deactivation
 // feature: a Disabled InterfacePeer stays in the stored InterfaceConfig (desired
 // state) but must not appear in the device config applied via wgctrl. Combined
-// with ReplacePeers=true (see service.Handler.One), that removes it from the live
-// interface. Re-enabling it brings it back.
+// with peer reconciliation (see service.Handler.One), that removes it from the
+// live interface. Re-enabling it brings it back.
 func TestDisabledPeerIsOmittedFromDeviceConfig(t *testing.T) {
 	activeKey, err := GeneratePrivateKey()
 	if err != nil {

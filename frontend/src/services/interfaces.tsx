@@ -176,3 +176,30 @@ export async function deleteInterface(serverId: string, interfaceId: string): Pr
   }
   return true;
 }
+
+/**
+ * Force the agent to replace the complete peer set on one interface. This
+ * intentionally resets all active peer sessions on that interface.
+ */
+export async function forceReplaceInterfacePeers(serverId: string, interfaceId: string): Promise<boolean> {
+  const client = getClient();
+
+  if (client) {
+    const {error} = await client.forceReplaceInterfacePeers(serverId, interfaceId);
+    if (error) {
+      console.error(`Failed to force-replace peers on interface ${interfaceId} (bindings):`, error);
+      return false;
+    }
+    return true;
+  }
+
+  const {error} = await post<void, undefined>(
+    `/servers/${serverId}/interfaces/${interfaceId}/force-replace-peers`,
+    undefined
+  );
+  if (error) {
+    console.error(`Failed to force-replace peers on interface ${interfaceId}:`, error);
+    return false;
+  }
+  return true;
+}

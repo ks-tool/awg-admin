@@ -17,6 +17,7 @@
 package service
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/ks-tool/awg-admin/agent/models"
@@ -78,6 +79,17 @@ func (h *Handler) StopEnabled() {
 // interface (nil for a brand-new one), used by InterfaceUpdate to reconcile
 // hooks on an in-place edit.
 func (h *Handler) One(prev *models.InterfaceConfig, cfg models.InterfaceConfig) error {
+	return h.one(prev, cfg, false)
+}
+
+// OneReplacingPeers applies the config with ReplacePeers enabled. This is an
+// explicit disruptive operation for callers that need to rebuild the complete
+// live peer set rather than preserve existing peer sessions.
+func (h *Handler) OneReplacingPeers(prev *models.InterfaceConfig, cfg models.InterfaceConfig) error {
+	return h.one(prev, cfg, true)
+}
+
+func (h *Handler) one(prev *models.InterfaceConfig, cfg models.InterfaceConfig, replacePeers bool) error {
 	logger := log.With().Str("interface", cfg.Interface).Logger()
 
 	// A disabled interface must not be present in the kernel: tear its link down
@@ -106,12 +118,50 @@ func (h *Handler) One(prev *models.InterfaceConfig, cfg models.InterfaceConfig) 
 	}
 
 	// Apply the FULL device config — private key, listen port, firewall mark,
-	// AmneziaWG obfuscation params AND peers — not just the peer set.
-	// ToAmneziaConfig builds all of it; ReplacePeers makes the peers authoritative.
+	// AmneziaWG obfuscation params AND peers — while syncing peers in place so
+	// unchanged peers keep their live sessions.
 	logger.Debug().Str("action", "configure").Send()
 	awgCfg := cfg.ToAmneziaConfig()
-	awgCfg.ReplacePeers = true
+	if replacePeers {
+		awgCfg.ReplacePeers = true
+	} else {
+		device, err := h.awg.Device(cfg.Interface)
+		if err != nil {
+			return fmt.Errorf("get current device %q before applying config: %w", cfg.Interface, err)
+		}
+		awgCfg.Peers = reconcilePeers(device.Peers, awgCfg.Peers)
+	}
 	return h.awg.ConfigureDevice(cfg.Interface, *awgCfg)
+}
+
+func reconcilePeers(current []wgtypes.Peer, desired []wgtypes.PeerConfig) []wgtypes.PeerConfig {
+	desiredKeys := make(map[wgtypes.Key]struct{}, len(desired))
+	currentPeers := make(map[wgtypes.Key]wgtypes.Peer, len(current))
+	for _, peer := range current {
+		currentPeers[peer.PublicKey] = peer
+	}
+	for _, peer := range desired {
+		desiredKeys[peer.PublicKey] = struct{}{}
+	}
+
+	peers := make([]wgtypes.PeerConfig, 0, len(current)+len(desired))
+	for _, peer := range current {
+		if _, keep := desiredKeys[peer.PublicKey]; !keep {
+			peers = append(peers, wgtypes.PeerConfig{
+				PublicKey: peer.PublicKey,
+				Remove:    true,
+			})
+		}
+	}
+	for _, peer := range desired {
+		peer.ReplaceAllowedIPs = true
+		if cur, exists := currentPeers[peer.PublicKey]; exists &&
+			peer.PresharedKey == nil && cur.PresharedKey != (wgtypes.Key{}) {
+			peer.PresharedKey = new(wgtypes.Key)
+		}
+		peers = append(peers, peer)
+	}
+	return peers
 }
 
 func (h *Handler) Delete(iface string) error {

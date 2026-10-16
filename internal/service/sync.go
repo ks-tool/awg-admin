@@ -111,6 +111,41 @@ func (s *Service) SyncServer(serverID string) error {
 	return nil
 }
 
+// ForceReplaceInterfacePeers re-applies one interface with ReplacePeers
+// enabled. This intentionally drops all peer sessions on that interface.
+func (s *Service) ForceReplaceInterfacePeers(serverID, ifaceID string) error {
+	debugOp("ForceReplaceInterfacePeers").
+		Str("server_id", serverID).
+		Str("interface_id", ifaceID).
+		Msg("forcing interface peer replacement")
+	sID, err := uuid.Parse(serverID)
+	if err != nil {
+		return err
+	}
+	iID, err := uuid.Parse(ifaceID)
+	if err != nil {
+		return err
+	}
+
+	srv, err := s.store.Servers().Get(sID)
+	if err != nil {
+		return err
+	}
+	iface, err := s.store.Servers().Interfaces(sID).Get(iID)
+	if err != nil {
+		return err
+	}
+	if iface.Disabled {
+		return invalidInput("cannot force-replace peers on a disabled interface")
+	}
+
+	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		return c.SetForceReplacePeers(ctx, iface.InterfaceConfig)
+	})
+	s.recordSyncResult(sID, iface, err)
+	return err
+}
+
 // syncMonitoringState re-applies the stored monitoring on/off preference to
 // the agent. Best-effort like pushInterface: a freshly (re)deployed agent's
 // collector always starts enabled, so this only matters when monitoring was
