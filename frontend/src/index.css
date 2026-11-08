@@ -186,3 +186,80 @@ html:not(.dark) ::-webkit-scrollbar-thumb:hover {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+
+.rjsf-form .form-group {
+  margin-bottom: 0.875rem;
+}
+.rjsf-form label {
+  display: block;
+  margin-bottom: 0.375rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.rjsf-form input:not([type='checkbox']):not([type='radio']),
+.rjsf-form select,
+.rjsf-form textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input);
+  padding: 0.5rem 0.75rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+.rjsf-form input:focus,
+.rjsf-form select:focus,
+.rjsf-form textarea:focus {
+  border-color: var(--ring);
+  outline: 2px solid color-mix(in oklch, var(--ring) 20%, transparent);
+}
+.rjsf-form .field-description,
+.rjsf-form .help-block {
+  margin-top: 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.rjsf-form .text-danger,
+.rjsf-form .error-detail,
+.rjsf-form .panel-danger {
+  color: var(--destructive);
+  font-size: 0.75rem;
+}
+.rjsf-form .array-item {
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.625rem;
+}
+.rjsf-form .array-item-toolbox .btn-group {
+  display: flex;
+  gap: 0.375rem;
+}
+.rjsf-form .btn:not([type='submit']) {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--muted);
+  padding: 0.375rem 0.625rem;
+  color: var(--foreground);
+  font-size: 0.75rem;
+}
+.rjsf-form fieldset {
+  min-width: 0;
+}
+.dark .react-flow {
+  --xy-background-color: var(--background);
+  --xy-edge-stroke: var(--muted-foreground);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: var(--muted);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+}
+
+.topology-scatter > svg {
+  overflow: visible;
+  transform: var(--topology-map-transform);
+  transform-origin: 0 0;
+}

@@ -262,7 +262,7 @@ export interface InterfacePeer {
   /**
    * Disabled deactivates this peer: it's kept in the stored InterfaceConfig
    * but omitted from the device config applied via wgctrl (ToAmneziaConfig /
-   * ToWireguardPeers), so with ReplacePeers the peer is removed from the live
+   * ToWireguardPeers), so reconciliation removes the peer from the live
    * interface and can't connect until reactivated. Zero value (false) keeps
    * the peer active, so configs written before this field existed stay up.
    */

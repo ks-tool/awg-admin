@@ -37,6 +37,7 @@ const (
 	interfacesBucketName   = "interfaces"
 	authBucketName         = "auth"
 	agentSourcesBucketName = "agent_sources"
+	topologyBucketName     = "topology"
 )
 
 var (
@@ -45,6 +46,7 @@ var (
 	bktUsers        = []byte(usersBucketName)
 	bktAuth         = []byte(authBucketName)
 	bktAgentSources = []byte(agentSourcesBucketName)
+	bktTopology     = []byte(topologyBucketName)
 )
 
 // authRecordKey is the auth bucket's one and only key — there's a single
@@ -81,6 +83,9 @@ func Open(path string) (*BoltDB, error) {
 		}
 
 		if _, err = tx.CreateBucketIfNotExists(bktAgentSources); err != nil {
+			return err
+		}
+		if _, err = tx.CreateBucketIfNotExists(bktTopology); err != nil {
 			return err
 		}
 

@@ -15,6 +15,7 @@
  */
 
 import Dashboard from './Dashboard';
+import Topology from './Topology';
 import Servers from './Servers';
 import Settings from './Settings';
 import Users from './Users';
@@ -23,7 +24,7 @@ import AddUser from './AddUser';
 import AddServer from './AddServer';
 import UserDetail from './UserDetail';
 import ServerDetail from './ServerDetail';
-import { LayoutDashboard, Server, Users as UsersIcon, Settings as SettingsIcon, Waypoints } from 'lucide-react';
+import { LayoutDashboard, Server, Users as UsersIcon, Settings as SettingsIcon, Waypoints, Share2 } from 'lucide-react';
 
 // Pages visible in the sidebar navigation
 export const navPages = [
@@ -32,6 +33,12 @@ export const navPages = [
         labelKey: 'nav.dashboard',
         icon: LayoutDashboard,
         component: Dashboard,
+    },
+    {
+        id: 'topology',
+        labelKey: 'nav.topology',
+        icon: Share2,
+        component: Topology,
     },
     {
         id: 'servers',

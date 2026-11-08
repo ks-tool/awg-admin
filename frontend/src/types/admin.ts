@@ -423,6 +423,89 @@ export interface Interface extends InterfaceConfig {
 }
 
 //////////
+// source: topology.go
+
+/**
+ * Topology is the protocol-neutral desired network configuration. VPN service
+ * configs are opaque to the core and interpreted only by their plugin.
+ */
+export interface Topology {
+  servers: TopologyServer[];
+  interfaces: NetworkInterface[];
+  services: VPNService[];
+  connections: NetworkConnection[];
+}
+export interface TopologyServer {
+  id: string;
+  name: string;
+  address?: string;
+  description?: string;
+  location?: string;
+  locationError?: string;
+  legacy?: boolean;
+  latitude?: number /* float64 */;
+  longitude?: number /* float64 */;
+  coordinatesManual?: boolean;
+  x: number /* float64 */;
+  y: number /* float64 */;
+}
+export interface NetworkInterface {
+  id: string;
+  serverId: string;
+  name: string;
+  address?: string;
+  legacy?: boolean;
+  serviceId?: string;
+  x: number /* float64 */;
+  y: number /* float64 */;
+}
+export interface VPNService {
+  id: string;
+  serverId: string;
+  interfaceId?: string;
+  pluginId: string;
+  name: string;
+  config: { [key: string]: any};
+  status: string;
+  statusMessage?: string;
+  lastAppliedAt?: number /* time.Time */;
+}
+export interface NetworkConnection {
+  id: string;
+  sourceId: string;
+  targetId: string;
+}
+export interface NodePosition {
+  id: string;
+  x: number /* float64 */;
+  y: number /* float64 */;
+}
+/**
+ * PluginDescriptor describes a deployment plugin and the schemas consumed by
+ * RJSF. ConfigSchema and UserSchema are deliberately independent: one describes
+ * the application configuration, the other a single service user.
+ */
+export interface PluginDescriptor {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  configSchema: { [key: string]: any};
+  userSchema: { [key: string]: any};
+  uiSchema?: { [key: string]: any};
+  available: boolean;
+  error?: string;
+}
+export interface PluginStatus {
+  state: string;
+  message?: string;
+}
+export interface PluginUser {
+  id: string;
+  data: { [key: string]: any};
+}
+
+//////////
 // source: tunnel.go
 
 /**

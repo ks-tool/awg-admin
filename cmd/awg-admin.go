@@ -91,7 +91,7 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	srv := &http.Server{Addr: addr, Handler: api.CorsMiddleware(api.BasicAuthMiddleware(svc, sessions)(api.Serve(router)))}
+	srv := &http.Server{Addr: addr, Handler: api.ContentSecurityPolicyMiddleware(api.CorsMiddleware(api.BasicAuthMiddleware(svc, sessions)(api.Serve(router))))}
 
 	certFile := os.Getenv("AWG_ADMIN_TLS_CERT")
 	keyFile := os.Getenv("AWG_ADMIN_TLS_KEY")

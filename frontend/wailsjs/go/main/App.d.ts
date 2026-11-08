@@ -7,6 +7,8 @@ export function AddPeer(arg1:string,arg2:service.AddPeerInput):Promise<models.Us
 
 export function AppVersion():Promise<string>;
 
+export function ApplyVPNService(arg1:string):Promise<models.VPNService>;
+
 export function Backup():Promise<Array<number>>;
 
 export function BasicAuthEnabled():Promise<boolean>;
@@ -19,9 +21,19 @@ export function CreateAgentSource(arg1:string,arg2:string,arg3:string,arg4:strin
 
 export function CreateInterface(arg1:string,arg2:models.InterfaceConfig):Promise<models.Interface>;
 
+export function CreateNetworkConnection(arg1:string,arg2:string):Promise<models.NetworkConnection>;
+
+export function CreateNetworkInterface(arg1:string,arg2:service.NetworkInterfaceInput):Promise<models.Topology>;
+
 export function CreateServer(arg1:service.ServerInput):Promise<models.Server>;
 
+export function CreateTopologyServer(arg1:service.TopologyServerInput):Promise<models.Topology>;
+
 export function CreateUser(arg1:service.UserInput):Promise<models.User>;
+
+export function CreateVPNService(arg1:service.VPNServiceInput):Promise<models.VPNService>;
+
+export function CreateVPNServiceUser(arg1:string,arg2:Record<string, any>):Promise<models.PluginUser>;
 
 export function CurrentUsername():Promise<string>;
 
@@ -33,11 +45,21 @@ export function DeleteAgentSource(arg1:string):Promise<void>;
 
 export function DeleteInterface(arg1:string,arg2:string):Promise<void>;
 
+export function DeleteNetworkConnection(arg1:string):Promise<void>;
+
+export function DeleteNetworkInterface(arg1:string):Promise<void>;
+
 export function DeletePeer(arg1:string,arg2:string):Promise<models.User>;
 
 export function DeleteServer(arg1:string):Promise<void>;
 
+export function DeleteTopologyServer(arg1:string):Promise<void>;
+
 export function DeleteUser(arg1:string):Promise<void>;
+
+export function DeleteVPNService(arg1:string):Promise<void>;
+
+export function DeleteVPNServiceUser(arg1:string,arg2:string):Promise<void>;
 
 export function DeployAgent(arg1:string,arg2:string):Promise<void>;
 
@@ -67,6 +89,8 @@ export function GetServerMetricsHistory(arg1:string):Promise<models.SystemHistor
 
 export function GetServerProfile(arg1:string,arg2:string,arg3:number):Promise<service.ProfileDump>;
 
+export function GetTopology():Promise<models.Topology>;
+
 export function GetUser(arg1:string):Promise<models.User>;
 
 export function ImportInterface(arg1:string,arg2:string):Promise<models.Interface>;
@@ -89,15 +113,23 @@ export function ListUnmanagedInterfaces(arg1:string):Promise<Array<models.Unmana
 
 export function ListUsers():Promise<Array<models.User>>;
 
+export function ListVPNPlugins():Promise<Array<models.PluginDescriptor>>;
+
+export function ListVPNServiceUsers(arg1:string):Promise<Array<models.PluginUser>>;
+
 export function Login(arg1:string,arg2:string):Promise<void>;
 
 export function MigratePeer(arg1:string,arg2:string,arg3:string):Promise<models.User>;
+
+export function MoveTopologyNodes(arg1:Array<models.NodePosition>):Promise<void>;
 
 export function PreviewImport(arg1:string,arg2:string,arg3:string):Promise<models.ImportPreview>;
 
 export function ReconcileServer(arg1:string):Promise<service.ReconcileReport>;
 
 export function RefreshAgentSourceCache(arg1:string):Promise<void>;
+
+export function RefreshVPNServiceStatus(arg1:string):Promise<models.VPNService>;
 
 export function RemoveTunnel(arg1:string):Promise<void>;
 
@@ -141,8 +173,16 @@ export function UpdateAgentSource(arg1:string,arg2:string,arg3:string,arg4:strin
 
 export function UpdateInterfaceConfig(arg1:string,arg2:string,arg3:models.InterfaceConfig):Promise<models.Interface>;
 
+export function UpdateNetworkInterface(arg1:string,arg2:service.NetworkInterfaceInput):Promise<models.Topology>;
+
 export function UpdateServer(arg1:string,arg2:service.ServerInput):Promise<models.Server>;
 
+export function UpdateTopologyServer(arg1:string,arg2:service.TopologyServerInput):Promise<models.Topology>;
+
 export function UpdateUser(arg1:string,arg2:service.UserInput):Promise<models.User>;
+
+export function UpdateVPNService(arg1:string,arg2:service.VPNServiceInput):Promise<models.VPNService>;
+
+export function UpdateVPNServiceUser(arg1:string,arg2:string,arg3:Record<string, any>):Promise<models.PluginUser>;
 
 export function VerifyBasicAuth(arg1:string,arg2:string):Promise<boolean>;
