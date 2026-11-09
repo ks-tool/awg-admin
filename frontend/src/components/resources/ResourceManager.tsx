@@ -178,6 +178,17 @@ export function ResourceManager({serverId, onChanged}: {serverId: string; onChan
                     ><Plus size={14} /></button>
                 </div>
             </div>
+            {manifest && manifest.providers.length > 0 && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                    {manifest.providers.map(provider => (
+                        <div key={provider.name} className="rounded-lg border border-border bg-background px-3 py-2 text-xs dark:border-white/10 dark:bg-white/5">
+                            <span className="font-semibold">{provider.name}</span>
+                            <span className="ml-2 font-mono text-muted-foreground">{provider.version}</span>
+                            <span className="ml-2 text-muted-foreground">{provider.resources.map(resource => resource.kind).join(', ')}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
             {loading ? <div className="py-8 text-center text-sm text-muted-foreground">{t('common.loading')}</div> : resources.length === 0 ? (
                 <div className="py-4 text-center text-muted-foreground">{t('resources.empty')}</div>
             ) : (

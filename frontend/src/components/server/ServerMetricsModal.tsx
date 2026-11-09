@@ -14,7 +14,7 @@
   limitations under the License.
  */
 
-import {type MouseEvent, useEffect, useMemo, useState} from 'react';
+import {type MouseEvent, useCallback, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
     CategoryScale,
@@ -29,6 +29,7 @@ import {
 import {Line} from 'react-chartjs-2';
 import {RefreshCw} from 'lucide-react';
 import {Modal} from '@/components/common/Modal';
+import {AgentDeployment} from '@/components/server/AgentDeployment';
 import {ResourceManager} from '@/components/resources/ResourceManager';
 import ServerDetail from '@/pages/ServerDetail';
 import {TopologyServerManage} from '@/components/topology/TopologyServerManage';
@@ -213,7 +214,7 @@ function Sparkline({values, times, height = 28}: {values: number[]; times?: numb
     );
 }
 
-type ManageTab = 'metrics' | 'interfaces' | 'information';
+type ManageTab = 'metrics' | 'interfaces' | 'providers' | 'agent' | 'information';
 type MetricsTab = 'system' | 'peers';
 
 type RangeKey = '1h' | '3h' | '6h' | '24h' | 'all';
@@ -239,7 +240,9 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
     const [manageTab, setManageTab] = useState<ManageTab>('interfaces');
     const [tab, setTab] = useState<MetricsTab>('system');
     const [range, setRange] = useState<RangeKey>('all');
-    const legacyServer = servers.some(server => server.id === serverId);
+    const [deploymentBusy, setDeploymentBusy] = useState(false);
+    const legacyServer = servers.find(server => server.id === serverId);
+    const handleChanged = useCallback(() => { void onChanged?.(); }, [onChanged]);
 
     useEffect(() => {
         if (manageTab !== 'metrics') return;
@@ -452,12 +455,19 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
         scales: {...baseOptions.scales, y: {...netBounds, ticks: {font: {size: 10}, callback: (v) => formatBytes(Number(v))}}},
     };
 
-    const manageTabs: ManageTab[] = ['interfaces', 'metrics', 'information'];
+    const manageTabs: ManageTab[] = ['interfaces', 'providers', 'agent', 'metrics', 'information'];
+    const manageTabLabels: Record<ManageTab, string> = {
+        interfaces: 'servers.interfacesTab',
+        providers: 'servers.providersTab',
+        agent: 'servers.agentTab',
+        metrics: 'servers.metricsTitle',
+        information: 'servers.informationTab',
+    };
     const tabs: MetricsTab[] = ['system', 'peers'];
 
     return (
-        <Modal title={`${serverName} - ${t('servers.managePanel')}`} onClose={onClose} size="lg">
-            <div className="mb-4 flex gap-1 border-b border-border dark:border-white/10" role="tablist">
+        <Modal title={`${serverName} - ${t('servers.managePanel')}`} onClose={onClose} size="lg" loading={deploymentBusy}>
+            <div className="mb-4 flex gap-1 overflow-x-auto border-b border-border dark:border-white/10" role="tablist">
                 {manageTabs.map(item => (
                     <button
                         key={item}
@@ -465,14 +475,15 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
                         role="tab"
                         aria-selected={manageTab === item}
                         onClick={() => setManageTab(item)}
+                        disabled={!legacyServer && (item === 'providers' || item === 'agent')}
                         className={cn(
-                            '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                            '-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
                             manageTab === item
                                 ? 'border-sky-500 text-foreground dark:text-zinc-100'
                                 : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
                         )}
                     >
-                        {t(item === 'metrics' ? 'servers.metricsTitle' : item === 'interfaces' ? 'servers.interfacesTab' : 'servers.informationTab')}
+                        {t(manageTabLabels[item])}
                     </button>
                 ))}
             </div>
@@ -598,19 +609,23 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
                 </div>
             ))}
             {manageTab !== 'metrics' && (
-                legacyServer && manageTab === 'interfaces' ? (
-                    <ResourceManager serverId={serverId} onChanged={() => { void onChanged?.(); }} />
-                ) : legacyServer ? (
-                    <ServerDetail
-                        serverId={serverId}
-                        section="information"
-                        onChanged={() => { void onChanged?.(); }}
-                    />
+                legacyServer ? (
+                    manageTab === 'providers' ? (
+                        <ResourceManager serverId={serverId} onChanged={handleChanged} />
+                    ) : manageTab === 'agent' ? (
+                        <AgentDeployment server={legacyServer} onChanged={handleChanged} onBusyChange={setDeploymentBusy} />
+                    ) : (
+                        <ServerDetail
+                            serverId={serverId}
+                            section={manageTab === 'interfaces' ? 'interfaces' : 'information'}
+                            onChanged={handleChanged}
+                        />
+                    )
                 ) : topologyServer && topology && onChanged ? (
                     <TopologyServerManage
                         server={topologyServer}
                         topology={topology}
-                        section={manageTab}
+                        section={manageTab === 'interfaces' ? 'interfaces' : 'information'}
                         onChanged={onChanged}
                     />
                 ) : (
