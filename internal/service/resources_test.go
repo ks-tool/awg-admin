@@ -20,11 +20,10 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 func TestProviderResourceLifecycleAndSchemaCache(t *testing.T) {
@@ -250,7 +249,7 @@ func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
 	}
 	publicKey := peerKey.PublicKey()
 	spec, _ := json.Marshal(map[string]any{"name": "laptop", "interfaceRef": ifaceID.String(), "userRef": user.ID.String(), "publicKey": publicKey.String(), "allowedIPs": []string{"10.0.0.2/32"}})
-	item := models.Resource{ID: uuid.NewString(), ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Peer", Name: "alice-laptop", Generation: 1, Spec: spec}
+	item := models.Resource{ID: uuid.New().String(), ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Peer", Name: "alice-laptop", Generation: 1, Spec: spec}
 	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,3 @@
-//go:build linux
-
 /*
   Copyright © 2026 Alexey Shulutkov <github@shulutkov.ru>
 
@@ -16,22 +14,12 @@
   limitations under the License.
 */
 
-// Command vpn-agent is the standard agent: it manages interfaces through the
-// AmneziaWG/WireGuard kernel module (the kernel.Backend, netlink). For a
-// userspace (amneziawg-go) build see cmd/vpn-agent-userspace.
 package main
 
-import (
-	"github.com/ks-tool/vpn-admin/agent/internal/agent"
-	"github.com/ks-tool/vpn-admin/agent/internal/kernel"
-	"github.com/ks-tool/vpn-admin/agent/internal/service"
-)
+import "github.com/ks-tool/vpn-agent/internal/agent"
 
-// version is set at build time via -ldflags "-X main.version=...". See the
-// "agent" build in .goreleaser.yaml.
 var version = "dev"
 
 func main() {
-	service.SetBackend(kernel.New())
 	agent.Run(version)
 }

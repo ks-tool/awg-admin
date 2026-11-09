@@ -16,7 +16,7 @@
 
 package models
 
-import "github.com/google/uuid"
+import "uuid"
 
 // AgentSource is a named, reusable place to fetch the vpn-agent binary
 // from when deploying it to a server (see Service.DeployAgent) — shown as

@@ -18,11 +18,11 @@ package boltdb
 
 import (
 	"fmt"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
 
-	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
 )
 

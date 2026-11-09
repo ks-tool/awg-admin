@@ -23,27 +23,16 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/ks-tool/vpn-admin/agent/internal/service"
-	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-agent/models"
 )
 
-// gatherHostInfo discovers, once at startup, what the host the agent runs on
-// supports: the active backend's creatable interface kinds and kernel-module
-// availability (service.ActiveBackendInfo — so this is backend-agnostic here),
-// whether Docker is usable, and whether the agent itself runs inside a
-// container. The result is served unchanged over GET /info for the process's
-// lifetime, since none of it changes under a running agent. version is the
-// build-stamped version string. SetBackend must have been called first.
-func gatherHostInfo(version string) models.HostInfo {
-	be := service.ActiveBackendInfo()
+func GatherHostInfo(version string) models.HostInfo {
 	return models.HostInfo{
-		Backend:        be.Kind,
-		Version:        version,
-		Docker:         dockerAvailable(),
-		InDocker:       inDocker(),
-		KernelModule:   be.KernelModule,
-		InterfaceKinds: be.InterfaceKinds,
-		Arch:           runtime.GOARCH,
+		Backend:  "external",
+		Version:  version,
+		Docker:   dockerAvailable(),
+		InDocker: inDocker(),
+		Arch:     runtime.GOARCH,
 	}
 }
 

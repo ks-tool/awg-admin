@@ -24,10 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ks-tool/vpn-admin/agent/internal/resource"
-	"github.com/ks-tool/vpn-admin/agent/models"
-	"github.com/ks-tool/vpn-admin/agent/storage"
-	"github.com/ks-tool/vpn-admin/agent/storage/fs"
+	"github.com/ks-tool/vpn-agent/internal/resource"
+	"github.com/ks-tool/vpn-agent/models"
+	"github.com/ks-tool/vpn-agent/storage"
+	"github.com/ks-tool/vpn-agent/storage/fs"
 )
 
 type fakeNetwork struct {

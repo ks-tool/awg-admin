@@ -29,9 +29,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ks-tool/vpn-admin/agent/internal/resource"
-	"github.com/ks-tool/vpn-admin/agent/models"
-	"github.com/ks-tool/vpn-admin/agent/storage"
+	"github.com/ks-tool/vpn-agent/internal/resource"
+	"github.com/ks-tool/vpn-agent/models"
+	"github.com/ks-tool/vpn-agent/storage"
 
 	"github.com/horchestra/pack/sdk/packschema"
 	packschemavalidator "github.com/horchestra/pack/sdk/schema"

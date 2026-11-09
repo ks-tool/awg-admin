@@ -19,11 +19,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/deploy"
 	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 

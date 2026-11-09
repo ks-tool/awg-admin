@@ -17,9 +17,9 @@
 package storage
 
 import (
-	"github.com/ks-tool/vpn-admin/models"
+	"uuid"
 
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 type Resources interface {

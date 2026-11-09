@@ -21,13 +21,12 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/internal/plugin"
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage/boltdb"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 type topologyGeocoderFunc func(context.Context, string) (float64, float64, error)

@@ -27,10 +27,10 @@ import (
 	"strings"
 	"time"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/internal/plugin"
 	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 type Plugin struct{}

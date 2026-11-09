@@ -22,15 +22,13 @@ import (
 )
 
 type Config struct {
-	BinaryURL  string            `json:"binaryURL" jsonschema:"required,format=uri"`
-	Env        map[string]string `json:"env,omitempty"`
-	Definition map[string]any    `json:"definition"`
-	Registry   map[string]any    `json:"registry,omitempty"`
+	Artifact   string         `json:"artifact" jsonschema:"required,format=uri"`
+	Definition map[string]any `json:"definition"`
+	Registry   map[string]any `json:"registry"`
 }
 
 func (c *Config) SetDefaults() {
-	c.BinaryURL = "https://github.com/ks-tool/vpn-admin/releases/download/agent/v2.0.0/example-provider_2.0.0_linux_amd64"
-	c.Env = map[string]string{"VPN_PROVIDER_DB": "/var/lib/example-provider", "VPN_PROVIDER_ADDR": "127.0.0.1:9090"}
+	c.Artifact = "oci://ghcr.io/ks-tool/vpn-providers/example:v0.1.0"
 	c.Definition = map[string]any{
 		"name": "example", "version": "0.1.0",
 		"resources": []any{map[string]any{
@@ -50,7 +48,14 @@ func (c *Config) SetDefaults() {
 	}
 	c.Registry = map[string]any{
 		"protocolVersion": "v1",
-		"providers":       []any{map[string]any{"address": "http://127.0.0.1:9090", "provider": c.Definition}},
+		"providers": []any{map[string]any{
+			"address": "http://127.0.0.1:9090",
+			"command": "/usr/local/bin/example-provider",
+			"env": map[string]any{
+				"VPN_PROVIDER_DB": "/var/lib/example-provider", "VPN_PROVIDER_ADDR": "127.0.0.1:9090",
+			},
+			"provider": c.Definition,
+		}},
 	}
 }
 
@@ -65,14 +70,12 @@ func (*Config) PackRoot() packschema.Root {
 		Readiness: &packschema.Readiness{HTTP: "provider/v1/manifest"},
 		Packages: map[string]packschema.OSPackages{
 			"debian": {
-				Prepare: []string{"ca-certificates", "curl"},
+				Prepare: []string{"ca-certificates"},
 				Content: []packschema.File{
-					{Path: "/usr/local/bin/example-provider", URL: "{{ .binaryURL }}", Mode: "0755"},
-					{Path: "/etc/systemd/system/example-provider.service", Template: "example-provider.service", Mode: "0644"},
-					{Path: "/etc/example-provider/example-provider.env", Values: "env", Format: "env", Mode: "0600"},
+					{Path: "/usr/local/bin/example-provider", URL: "{{ .artifact }}", Mode: "0755"},
 					{Path: "/var/lib/vpn-agent/providers.d/example.conf", Values: "registry", Format: "json", Mode: "0600"},
 				},
-				Services: []string{"example-provider"},
+				Services: []string{"vpn-agent"},
 			},
 		},
 	}

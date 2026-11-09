@@ -20,12 +20,11 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 // ReconcileReport is the result of comparing a server's agent's actual

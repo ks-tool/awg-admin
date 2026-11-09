@@ -1,9 +1,8 @@
 # GoReleaser config for the vpn-admin RELEASE — the root module's admin app.
 # Triggered by a `v*` tag (see .github/workflows/release.yml).
 #
-# This is a MONOREPO: the per-server agent is released separately, on `agent/v*`
-# tags, by .goreleaser.agent.yaml + .github/workflows/release-agent.yml. This
-# config therefore builds ONLY the admin and its migration tool:
+# The agent and providers live in github.com/ks-tool/vpn-agent and publish OCI
+# artifacts independently. This config builds ONLY the admin and migration tool:
 #   - vpn-admin: the standalone web server (cmd/vpn-admin.go), embeds the built
 #     frontend (see the "before.hooks") — linux/darwin/windows, amd64/arm64.
 #   - awg-migrate: the backup/restore and v1-to-v2 migration CLI (cmd/migrate),
@@ -14,7 +13,7 @@
 #     lowercased GHCR image name); arm64 is built under buildx+QEMU.
 #
 # Deliberately NOT handled here:
-#   - vpn-agent / vpn-agent-userspace: released on `agent/v*` (see above).
+#   - vpn-agent and VPN providers: released from their own repository (see above).
 #   - The Wails desktop app (Windows/macOS/Linux): needs the `wails` CLI and to
 #     run on each target OS's own runner — separate jobs in release.yml that
 #     upload their artifacts to the same GitHub release this config creates

@@ -9,9 +9,6 @@ on:
 permissions:
   contents: read
 
-env:
-  GOEXPERIMENT: jsonv2
-
 jobs:
   golangci-lint:
     runs-on: ubuntu-latest
@@ -36,20 +33,14 @@ jobs:
       #    normally. Target: every module package except third-party Go sources
       #    vendored under frontend/node_modules.
       #
-      #  - agent: agent/cmd/ holds several `package main` files — vpn-agent.go,
-      #    vpn-agent-userspace.go and dump.go — so the directory never compiles
-      #    as a single package (each binary is built from its own file, see
-      #    agent/Makefile). Lint every package except cmd.
       - name: Prepare lint targets
         id: prep
         working-directory: ${{ matrix.module }}
         run: |
-          if [ "${{ matrix.module }}" = "agent" ]; then
-            targets=$(go list ./... | sed "s|^$(go list -m)|.|" | grep -v '^\./cmd$' | paste -sd' ' -)
-          else
+          if [ "${{ matrix.module }}" != "agent" ]; then
             mkdir -p cmd/dist && printf '<!doctype html>\n' > cmd/dist/index.html
-            targets=$(go list ./... | grep -v /node_modules/ | sed "s|^$(go list -m)|.|" | paste -sd' ' -)
           fi
+          targets=$(go list ./... | grep -v /node_modules/ | sed "s|^$(go list -m)|.|" | paste -sd' ' -)
           echo "targets=$targets" >> "$GITHUB_OUTPUT"
 
       - uses: golangci/golangci-lint-action@v7

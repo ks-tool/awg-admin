@@ -25,11 +25,11 @@ import (
 	"sort"
 	"strconv"
 	"time"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 
-	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -259,7 +259,7 @@ func migrateLegacyRecords(tx *bolt.Tx) error {
 		})
 		for index := 0; index+1 < len(members); index++ {
 			source, target := members[index], members[index+1]
-			linkID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(tunnelID.String()+":"+strconv.Itoa(index)))
+			linkID := models.NewDeterministicUUID(tunnelID.String() + ":" + strconv.Itoa(index))
 			if index == 0 {
 				linkID = tunnelID
 			}
@@ -335,7 +335,7 @@ func migratePeer(user models.User, peer models.Peer, iface models.Interface, ser
 			break
 		}
 	}
-	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte(user.ID.String()+":"+peer.InterfaceId.String()+":"+publicKeyValue))
+	id := models.NewDeterministicUUID(user.ID.String() + ":" + peer.InterfaceId.String() + ":" + publicKeyValue)
 	spec, err := json.Marshal(map[string]any{
 		"name": peer.Name, "interfaceRef": peer.InterfaceId.String(), "userRef": user.ID.String(), "publicKey": publicKeyValue,
 		"allowedIPs": allowedIPs, "dns": peer.DNS, "disabled": peer.Disabled || user.Disabled,

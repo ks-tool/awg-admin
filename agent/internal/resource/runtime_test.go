@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ks-tool/vpn-admin/agent/models"
-	"github.com/ks-tool/vpn-admin/agent/storage"
+	"github.com/ks-tool/vpn-agent/models"
+	"github.com/ks-tool/vpn-agent/storage"
 )
 
 type testProvider struct {
@@ -247,7 +247,7 @@ func TestRuntimeFailedDeleteRemainsVisibleAndCanBeRetried(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := &testProvider{failDelete: 1}
-	runtime := NewRuntime(store, "agent", time.Millisecond, time.Hour)
+	runtime := NewRuntime(store, "agent", time.Hour, time.Hour)
 	if err := runtime.Register(provider); err != nil {
 		t.Fatal(err)
 	}

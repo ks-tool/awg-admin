@@ -23,11 +23,10 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
 )
 
 type schemaCacheKey struct {
@@ -441,7 +440,7 @@ func (s *Service) migrateProviderResourceSecret(serverID string, definition *mod
 			continue
 		}
 		arguments := map[string]string{"privateKey": peer.PrivateKey.String()}
-		if peer.InterfaceId != uuid.Nil {
+		if peer.InterfaceId != uuid.Nil() {
 			iface, _, err := s.getInterfaceByID(peer.InterfaceId)
 			if err != nil {
 				return err

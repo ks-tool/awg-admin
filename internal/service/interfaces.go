@@ -20,11 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 // ValidationError marks an error as caused by bad user input (a malformed field
@@ -65,7 +64,7 @@ func validateInterfaceConfig(cfg agentmodels.InterfaceConfig) error {
 // can't share a name or bind the same UDP port, and overlapping subnets break
 // routing. Listen port 0 is exempt (it means "no fixed port" — an exit-node
 // interface dials out, so several can legitimately have it). excludeID is the
-// interface being updated, skipped in the scan; pass uuid.Nil on create.
+// interface being updated, skipped in the scan; pass uuid.Nil() on create.
 func (s *Service) validateInterfaceUnique(sID uuid.UUID, cfg agentmodels.InterfaceConfig, excludeID uuid.UUID, old *models.Interface) error {
 	existing, err := s.store.Servers().Interfaces(sID).List()
 	if err != nil {
@@ -170,7 +169,7 @@ func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfi
 			return nil, err
 		}
 	}
-	if err := s.validateInterfaceUnique(sID, in, uuid.Nil, nil); err != nil {
+	if err := s.validateInterfaceUnique(sID, in, uuid.Nil(), nil); err != nil {
 		return nil, err
 	}
 	if err := s.rejectUnmanagedName(sID, in.Interface); err != nil {

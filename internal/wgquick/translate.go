@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 // Translation is the agent-side config derived from a wg-quick conf, with the

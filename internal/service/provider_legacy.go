@@ -20,12 +20,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 func legacyInterfaceSpec(iface *models.Interface) (json.RawMessage, error) {
@@ -110,7 +109,7 @@ func (s *Service) pushProviderInterface(serverID uuid.UUID, iface *models.Interf
 			}
 			publicKey := peerPublicKey(peer)
 			expected[publicKey] = struct{}{}
-			name := fmt.Sprintf("%s-%s-%s", user.Name, peer.Name, uuid.NewSHA1(uuid.NameSpaceOID, []byte(user.ID.String()+":"+iface.ID.String()+":"+publicKey)).String()[:8])
+			name := fmt.Sprintf("%s-%s-%s", user.Name, peer.Name, models.NewDeterministicUUID(user.ID.String() + ":" + iface.ID.String() + ":" + publicKey).String()[:8])
 			existing := s.findProviderPeer(serverID, iface.ID, publicKey)
 			if _, err := s.PutProviderResource(serverID.String(), "awg", "Peer", name, spec); err != nil {
 				return true, err

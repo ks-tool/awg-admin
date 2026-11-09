@@ -22,10 +22,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
 )
 
 // TestFetchCached covers the one part of internal/deploy that doesn't need

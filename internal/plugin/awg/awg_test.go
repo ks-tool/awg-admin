@@ -23,9 +23,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/internal/plugin"
 	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 func TestPluginApplyAndUserLifecycle(t *testing.T) {

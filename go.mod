@@ -3,11 +3,12 @@ module github.com/ks-tool/vpn-admin
 go 1.27.1
 
 require (
-	github.com/google/uuid v1.6.0
 	github.com/horchestra/pack/sdk v1.0.0
-	github.com/ks-tool/vpn-admin/agent v1.3.0
+	github.com/ks-tool/app-config/go v1.0.0
+	github.com/ks-tool/vpn-agent v1.3.0
 	github.com/rs/zerolog v1.35.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	github.com/spf13/pflag v1.0.10
 	github.com/uptrace/bunrouter v1.0.23
 	github.com/wailsapp/wails/v2 v2.16.0
 	go.etcd.io/bbolt v1.5.0
@@ -36,6 +37,7 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
+	github.com/caarlos0/env/v11 v11.4.1 // indirect
 	github.com/charmbracelet/glamour v0.8.0 // indirect
 	github.com/charmbracelet/lipgloss v0.12.1 // indirect
 	github.com/charmbracelet/x/ansi v0.1.4 // indirect
@@ -54,6 +56,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.4 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
@@ -99,7 +102,6 @@ require (
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tc-hib/winres v0.3.1 // indirect
 	github.com/tidwall/gjson v1.14.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
@@ -143,4 +145,4 @@ tool (
 	github.com/wailsapp/wails/v2/cmd/wails
 )
 
-replace github.com/ks-tool/vpn-admin/agent => ./agent
+replace github.com/ks-tool/vpn-agent => ./agent

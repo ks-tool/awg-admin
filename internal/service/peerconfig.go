@@ -22,10 +22,10 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 
-	"github.com/google/uuid"
 	"github.com/skip2/go-qrcode"
 )
 

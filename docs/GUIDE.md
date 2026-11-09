@@ -130,53 +130,46 @@ used:
 Inside the official Docker image, `$HOME` is mapped to `/data`. This directory is intended to be mounted as a persistent
 Docker volume.
 
-### The agent
+### The agent and providers
 
-The agent is a separate Linux executable responsible for managing WireGuard and AmneziaWG interfaces on the target host.
-In most deployments, the administrative application installs and configures the agent automatically over SSH (see
-[Deploying the agent](#deploying-the-agent)). Manual startup is also supported:
+The provider-neutral `vpn-agent` runs on the target host and exposes the management API. It starts each registered VPN
+provider as a child process, supervises and restarts it, and stops it during agent shutdown. Systemd runs only the agent,
+not individual providers. Installation is performed through `pack`; see [Pack deployment](../pack/README.md).
 
 ```sh
 VPN_AGENT_ADDR=127.0.0.1:8080 VPN_AGENT_DB=/var/lib/vpn-agent ./vpn-agent
 ```
 
-After startup, the agent exposes its management API and waits for connections from the administrative application. By
-default, the API is bound to the loopback interface (`127.0.0.1`) and is expected to be accessed through an SSH tunnel.
-Direct mTLS connections are supported when SSH tunneling is not available or not desired.
+By default, the API is bound to loopback (`127.0.0.1`) and is expected to be accessed through an SSH tunnel. Direct mTLS
+connections are also supported.
 
-#### Obtaining the agent
+#### Obtaining the agent and AWG provider
 
-The agent is released independently of the desktop/standalone application: its releases are tagged `agent/v*` (the
-application itself uses `v*` tags), and both appear on the project's [Releases](../../../releases) page. Every agent
-release provides prebuilt Linux binaries for `amd64` and `arm64`:
+Agent and provider sources live in `github.com/ks-tool/vpn-agent`. Each component tag builds only that component and
+publishes a multi-architecture (`linux/amd64` and `linux/arm64`) OCI artifact through `oci-packer`:
 
-- `vpn-agent_<version>_linux_<arch>` — the **kernel** backend (`vpn-agent`), which drives the AmneziaWG kernel module.
-- `vpn-agent-userspace_<version>_linux_<arch>` — the **userspace** backend (`vpn-agent-userspace`), which needs no
-  kernel module.
+- `agent/v1.2.3` → `ghcr.io/ks-tool/vpn-agent:v1.2.3`;
+- `providers/awg/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/awg:v1.2.3`.
 
-These assets are plain executables, not archives, so no extraction is required. The userspace agent is additionally
-published as a multi-arch Docker image:
-
-```
-ghcr.io/<owner>/vpn-agent-userspace:latest
-```
-
-In most cases the agent is not downloaded by hand: point an [agent source](#agent-sources-deploy-presets) at the
-binary's release URL (or at the image) and let **Deploy agent** fetch and install it over SSH. In the desktop
-application a binary already on disk can also be selected directly through a file picker. See
-[Deploying the agent](#deploying-the-agent) for which artifact matches which backend and deployment method.
+The unified `vpn-provider-awg` automatically selects the kernel backend when `modinfo amneziawg` or `modinfo wireguard`
+succeeds, and otherwise uses `amneziawg-go`. Use its `--userspace` flag or `VPN_PROVIDER_AWG_USERSPACE=true` to force
+userspace mode.
 
 ### Agent configuration
 
-| Variable                                                               | Description                                                                  |
-|------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| `VPN_AGENT_ADDR`                                                       | HTTP listen address. Defaults to `127.0.0.1:8080`.                           |
-| `VPN_AGENT_DB`                                                         | Directory used to store the local interface configuration.                   |
-| `VPN_AGENT_TLS_CERT` / `VPN_AGENT_TLS_KEY` / `VPN_AGENT_TLS_CLIENT_CA` | Enables mutual TLS authentication when all three variables are provided.     |
-| `VPN_AGENT_METRICS_INTERVAL`                                           | Interval between system and WireGuard metrics collection. Defaults to `45s`. |
-| `VPN_AGENT_LOG_LEVEL`                                                  | Logging level. Defaults to `info`.                                           |
+Every non-admin binary uses `github.com/ks-tool/app-config`: environment variables provide defaults and same-named command
+line flags override them. Run the binary with `--help` for its complete flag list.
 
-The agent is available for Linux only and is distributed for both `amd64` and `arm64` architectures.
+| Variable                                                               | Description                                                              |
+|------------------------------------------------------------------------|--------------------------------------------------------------------------|
+| `VPN_AGENT_ADDR`                                                       | HTTP listen address. Defaults to `127.0.0.1:8080`.                       |
+| `VPN_AGENT_DB`                                                         | Agent state and provider registry directory.                             |
+| `VPN_AGENT_TLS_CERT` / `VPN_AGENT_TLS_KEY` / `VPN_AGENT_TLS_CLIENT_CA` | Enables mutual TLS authentication when all three variables are provided. |
+| `VPN_AGENT_LEGACY_PROXY`                                               | Optional AWG provider URL for the legacy interface and metrics API.      |
+| `VPN_AGENT_LOG_LEVEL`                                                  | Logging level. Defaults to `info`.                                       |
+
+AWG provider settings use the `VPN_PROVIDER_AWG_` prefix, for example `VPN_PROVIDER_AWG_DB`,
+`VPN_PROVIDER_AWG_ADDR` and `VPN_PROVIDER_AWG_METRICS_INTERVAL`.
 
 ## How it fits together
 
@@ -264,42 +257,17 @@ relying on a downloaded one.
 
 #### Server prerequisites
 
-Two choices are independent: the agent **backend** (kernel or userspace — how the interface link is created) and the
-**deployment method** (systemd or Docker, determined by the [agent source](#agent-sources-deploy-presets) kind — a
-**URL** or **local file** source installs a binary as a **systemd** service, while an **image** source runs a
-**container**). The server requirements depend on the combination used:
+Install the agent and each required provider through `pack` with an OCI-capable target. The agent needs no VPN-specific
+kernel module. For the AWG provider:
 
-- **`vpn-agent` — kernel backend (systemd).** Drives the AmneziaWG kernel module directly and therefore requires it to
-  be installed on the server:
-    - the **AmneziaWG kernel module** for AmneziaWG interfaces — install `amneziawg-dkms` as described in the
-      [amneziawg-linux-kernel-module README](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module/blob/master/README.md)
-      and load it (`modprobe amneziawg`). The deployment checks for this in advance and fails with a clear message if
-      the
-      module is missing;
-    - **WireGuard** itself, if plain (non-Amnezia) interfaces are also created — see
-      [wireguard.com/install](https://www.wireguard.com/install/).
-- **`vpn-agent-userspace` — userspace backend (systemd or Docker).** An in-process userspace WireGuard implementation
-  (the amneziawg-go library is compiled in) that requires no kernel module, intended for hosts where one cannot or
-  should
-  not be installed. It can be deployed in either of two ways:
-    - **as a binary through systemd** — using a **URL** or **local file** agent source that points to the
-      `vpn-agent-userspace` binary with its **Userspace agent (no kernel module)** option enabled. It is installed as a
-      systemd service exactly like the kernel agent and requires only `/dev/net/tun` (standard on Linux); Docker is not
-      involved. The option instructs the deployment to skip the kernel-module pre-check that otherwise applies to the
-      kernel agent.
-    - **as a container** — using an **image** agent source. The deployment runs the container with `/dev/net/tun` and
-      `NET_ADMIN` and checks `docker info` in advance. Only **Docker** is required — see
-      [docs.docker.com/engine/install](https://docs.docker.com/engine/install/).
+- **Automatic kernel mode** uses `amneziawg` or `wireguard` when the corresponding module is available. Install
+  `amneziawg-dkms` for AmneziaWG obfuscation; plain WireGuard interfaces can use the mainline WireGuard module.
+- **Userspace mode** needs `/dev/net/tun` and `CAP_NET_ADMIN`, but no WireGuard kernel module. It is selected automatically
+  when no suitable module is found, or forced with `--userspace`.
 
-Both builds expose an identical API; only the method of creating the interface link differs. Versions must match: an
-AmneziaWG 1.0 kernel module rejects 2.0-style obfuscation parameters (`H1–H4` ranges, `I1–I5`). In that case, upgrade
-the
-module to 2.0, or deactivate the interface (see [Interfaces](#interfaces)) to keep its configuration without applying
-it.
-
-Once running, the agent detects what its host actually supports — Docker, the AmneziaWG kernel module, the interface
-kinds it can create, and whether it is running in a container — and reports this back; the
-[Dashboard](#dashboard-and-metrics) **agent type** column surfaces it.
+Versions must match: an AmneziaWG 1.0 kernel module rejects 2.0-style obfuscation parameters (`H1–H4` ranges, `I1–I5`).
+Upgrade the module to 2.0, use userspace mode, or deactivate the interface to keep its configuration without applying it.
+The provider reports its selected backend and supported interface kinds through `/info`.
 
 ### Agent sources (deploy presets)
 
@@ -603,7 +571,7 @@ best-effort: the last known values are shown while the agent is briefly unreacha
 read.
 
 Metrics are produced by the agent, which samples the host and every peer's rx/tx/handshake on an interval (default 45s,
-configurable via `VPN_AGENT_METRICS_INTERVAL`) into in-memory ring buffers, retaining up to 48 hours of history. The
+configurable via `VPN_PROVIDER_AWG_METRICS_INTERVAL`) into in-memory ring buffers, retaining up to 48 hours of history. The
 history is checkpointed to disk on the agent, so charts survive an agent restart. Metrics are best-effort: a server
 whose
 agent is briefly unreachable shows the last known values, and reachability is signalled separately by the agent-status
@@ -691,9 +659,9 @@ A file saved by the in-application **Backup** is a valid `awg-migrate` dump. To 
   users, peers, interface configurations, and the standalone admin account. This is the one item that must be backed up.
 - **Autocert cache** (standalone HTTPS) — `~/.vpn-admin/acme`.
 - **Agent-binary cache** (deploy presets) — `~/.vpn-admin/cache`.
-- **Agent, per server** — stores only the interface configurations pushed to it (`VPN_AGENT_DB`, default
-  `/var/lib/vpn-agent`) together with its metrics-history checkpoint. It holds no administrative secrets beyond the
-  interface and peer keys required to run WireGuard.
+- **Agent, per server** — stores desired provider state and registrations under `VPN_AGENT_DB` (default
+  `/var/lib/vpn-agent`). Each provider keeps its runtime state separately; AWG uses `VPN_PROVIDER_AWG_DB` for interface
+  keys, peers and metrics history.
 
 In the standalone Docker image, `$HOME` is mapped to `/data`, so mounting that volume persists all of the above.
 

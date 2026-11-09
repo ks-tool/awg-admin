@@ -16,7 +16,7 @@
 
 package models
 
-import agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+import agentmodels "github.com/ks-tool/vpn-agent/models"
 
 const ProtocolVersion = agentmodels.ProtocolVersion
 

@@ -50,8 +50,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ks-tool/vpn-admin/agent/models"
-	"github.com/ks-tool/vpn-admin/agent/storage"
+	"github.com/ks-tool/vpn-agent/models"
+	"github.com/ks-tool/vpn-agent/storage"
 
 	"github.com/Jipok/wgctrl-go"
 	atomicfile "github.com/natefinch/atomic"

@@ -19,8 +19,8 @@ package service
 import (
 	"testing"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 func newTestServerWithAgent(t *testing.T) (*Service, *models.Server, *fakeAgentTLS) {

@@ -25,9 +25,9 @@ desktop:
 agent:
 	@make -C agent build
 
-.PHONY: agent-userspace
-agent-userspace:
-	@make -C agent build-userspace
+.PHONY: provider-awg
+provider-awg:
+	@make -C agent build-provider-awg
 
 .PHONY: migrate
 migrate:
@@ -41,7 +41,7 @@ frontend:
 
 # Unit tests for both Go modules. `go test ./...` at the root only covers the
 # root module (agent is a separate module — its own go.mod, pulled in as the
-# published github.com/ks-tool/vpn-admin/agent), so the agent module is tested
+# published github.com/ks-tool/vpn-agent), so the agent module is tested
 # via its own Makefile; node_modules holds a stray vendored Go package that
 # isn't ours, so it's filtered out. The Docker-based e2e tunnel test is
 # separate and opt-in — run `make -C agent test-e2e` (needs Docker).

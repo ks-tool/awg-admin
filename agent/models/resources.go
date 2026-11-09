@@ -91,6 +91,10 @@ type ProviderDefinition struct {
 
 type ProviderRegistration struct {
 	Address  string             `json:"address"`
+	Discover bool               `json:"discover,omitempty"`
+	Command  string             `json:"command,omitempty"`
+	Args     []string           `json:"args,omitempty"`
+	Env      map[string]string  `json:"env,omitempty"`
 	Provider ProviderDefinition `json:"provider"`
 }
 

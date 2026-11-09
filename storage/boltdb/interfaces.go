@@ -20,8 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
 	bolt "go.etcd.io/bbolt"

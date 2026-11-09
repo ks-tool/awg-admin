@@ -20,11 +20,11 @@ import (
 	"context"
 	"errors"
 	"time"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 

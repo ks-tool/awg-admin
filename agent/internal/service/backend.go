@@ -16,24 +16,14 @@
 
 package service
 
-// Backend abstracts the OS-level lifecycle of a WireGuard/AmneziaWG interface —
-// the one part of the agent that differs between the two builds:
+// Backend abstracts the OS-level lifecycle of a WireGuard/AmneziaWG interface.
+// The AWG provider selects the kernel implementation when a suitable module is
+// available and the amneziawg-go userspace implementation otherwise. Userspace
+// can also be forced with --userspace.
 //
-//   - kernel (agent/internal/kernel): the AmneziaWG kernel module, driven over
-//     netlink (vishvananda/netlink). Wired in by cmd/vpn-agent.
-//   - userspace (agent/internal/userspace): an in-process amneziawg-go TUN,
-//     with address/up/mtu done via the `ip` command (no netlink dependency, the
-//     way jwg / awg-quick's userspace path do it). Wired in by
-//     cmd/vpn-agent-userspace.
-//
-// Keeping this an interface (rather than either build importing the other) is
-// what lets the userspace agent avoid pulling in vishvananda/netlink at all.
-// Everything else the agent does is backend-agnostic:
-//
-//   - pushing the device config and reading peer stats via wgctrl, which speaks
-//     both the kernel genl family and the userspace UAPI socket;
-//   - running PreUp/PostUp/PreDown/PostDown hooks (plain `sh -c`);
-//   - storing interface configs (agent/storage).
+// Device configuration and peer statistics use wgctrl over either the kernel
+// genl family or the userspace UAPI socket. Lifecycle hooks and interface
+// storage are identical for both backends.
 type Backend interface {
 	// Add brings the interface's OS link into existence. amnezia selects the
 	// interface type: true creates an AmneziaWG link (obfuscation-capable),
@@ -61,16 +51,14 @@ type Backend interface {
 	// Info reports what this backend can create on the current host — its kind,
 	// the interface variants it can bring up, and (kernel only) whether the
 	// AmneziaWG kernel module is present. Probed on each call (it shells out to
-	// modinfo for the kernel backend), so the agent calls it once at startup and
-	// caches the result (see agent.Run → models.HostInfo).
+	// modinfo for the kernel backend), so the provider calls it once at startup
+	// and caches the result in models.HostInfo.
 	Info() BackendInfo
 }
 
 // BackendInfo describes what the active link backend can create on the current
-// host. Gathered once at startup (Backend.Info) and folded into the agent's
-// GET /info response (models.HostInfo). Host-level facts that don't depend on
-// the backend — whether Docker is usable, whether the agent runs in a container
-// — are discovered separately by the agent package, not here.
+// host. Gathered once at startup and folded into the provider's GET /info
+// response.
 type BackendInfo struct {
 	// Kind identifies the backend: "kernel" or "userspace".
 	Kind string
@@ -82,11 +70,9 @@ type BackendInfo struct {
 	InterfaceKinds []string
 }
 
-// backend is the active link backend for this process. There is no default: a
-// process serves exactly one backend, and its main MUST select it via
-// SetBackend before loading interfaces (cmd/vpn-agent → kernel,
-// cmd/vpn-agent-userspace → userspace). Kept out of this package so `service`
-// itself stays free of any particular backend's dependencies (notably netlink).
+// backend is the active link backend for this process. The AWG provider selects
+// it before loading interfaces. Kept out of this package so service itself stays
+// free of either backend's dependencies.
 var backend Backend
 
 // SetBackend selects the link backend for this process. Call it once, early in

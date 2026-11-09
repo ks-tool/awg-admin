@@ -22,14 +22,13 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/internal/wgquick"
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 // importPlan is everything PreviewImport reports and ImportInterfaceFromServer
@@ -146,7 +145,7 @@ func (s *Service) planImport(serverID, ifaceName, peerMap string) (*importPlan, 
 	if err := validateInterfaceConfig(cfg); err != nil {
 		return nil, err
 	}
-	if err := s.validateInterfaceUnique(sID, cfg, uuid.Nil, nil); err != nil {
+	if err := s.validateInterfaceUnique(sID, cfg, uuid.Nil(), nil); err != nil {
 		return nil, err
 	}
 	if err := validateImportedPeerIPs(cfg); err != nil {

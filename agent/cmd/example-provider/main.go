@@ -26,30 +26,35 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ks-tool/vpn-admin/agent/internal/api"
-	"github.com/ks-tool/vpn-admin/agent/internal/provider/example"
-	"github.com/ks-tool/vpn-admin/agent/internal/resource"
-	"github.com/ks-tool/vpn-admin/agent/mux/middleware"
+	"github.com/ks-tool/vpn-agent/internal/api"
+	agentconfig "github.com/ks-tool/vpn-agent/internal/config"
+	"github.com/ks-tool/vpn-agent/internal/provider/example"
+	"github.com/ks-tool/vpn-agent/internal/resource"
+	"github.com/ks-tool/vpn-agent/mux/middleware"
 
 	"github.com/rs/zerolog/log"
 )
 
 var version = "dev"
 
+type config struct {
+	Addr string `env:"ADDR" envDefault:"127.0.0.1:9090" flag:"addr" help:"HTTP listen address"`
+	DB   string `env:"DB" flag:"db" help:"provider state directory"`
+}
+
 func main() {
-	addr := os.Getenv("VPN_PROVIDER_ADDR")
-	if addr == "" {
-		addr = "127.0.0.1:9090"
+	var cfg config
+	if err := agentconfig.Load(&cfg, "VPN_PROVIDER_", os.Args[1:]); err != nil {
+		log.Fatal().Err(err).Msg("failed to load configuration")
 	}
-	db := os.Getenv("VPN_PROVIDER_DB")
-	if db == "" {
+	if cfg.DB == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			log.Fatal().Err(err).Send()
 		}
-		db = filepath.Join(home, ".vpn-example-provider")
+		cfg.DB = filepath.Join(home, ".vpn-example-provider")
 	}
-	store, err := resource.NewFileStore(db)
+	store, err := resource.NewFileStore(cfg.DB)
 	if err != nil {
 		log.Fatal().Err(err).Send()
 	}
@@ -67,9 +72,9 @@ func main() {
 	}
 	runtime.Start(context.Background())
 	defer runtime.Close()
-	server := &http.Server{Addr: addr, Handler: api.NewResourceHandler(runtime, middleware.RequestID, middleware.Logging)}
+	server := &http.Server{Addr: cfg.Addr, Handler: api.NewResourceHandler(runtime, middleware.RequestID, middleware.Logging)}
 	go func() {
-		log.Info().Str("addr", addr).Str("version", version).Msg("starting example provider")
+		log.Info().Str("addr", cfg.Addr).Str("version", version).Msg("starting example provider")
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal().Err(err).Send()
 		}

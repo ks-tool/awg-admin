@@ -21,11 +21,11 @@ import (
 	"net"
 	"strings"
 	"time"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -383,11 +383,11 @@ func (s *Service) MigratePeer(userID, publicKey, targetIfaceID string) (*models.
 func (s *Service) getInterfaceByID(ifaceID uuid.UUID) (*models.Interface, uuid.UUID, error) {
 	srv, err := s.findServerByInterface(ifaceID)
 	if err != nil {
-		return nil, uuid.Nil, err
+		return nil, uuid.Nil(), err
 	}
 	iface, err := s.store.Servers().Interfaces(srv.ID).Get(ifaceID)
 	if err != nil {
-		return nil, uuid.Nil, err
+		return nil, uuid.Nil(), err
 	}
 	return iface, srv.ID, nil
 }

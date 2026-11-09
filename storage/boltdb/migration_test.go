@@ -24,11 +24,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 
-	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
 )
 

@@ -1,0 +1,36 @@
+name: release-agent
+
+on:
+  push:
+    tags:
+      - "agent/v*"
+      - "providers/*/v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  oci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install oci-packer
+        run: go install github.com/arenadata/oci-packer/cmd/oci-packer@v1.0.0
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish the tagged component
+        run: build/oci-release.sh "${{ github.ref_name }}"
+        env:
+          OCI_LOGIN: ${{ github.actor }}
+          OCI_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

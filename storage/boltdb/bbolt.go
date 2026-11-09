@@ -20,11 +20,11 @@ import (
 	"encoding/json"
 	"io"
 	"time"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/storage"
 	"github.com/ks-tool/vpn-admin/storage/boltdb/dump"
 
-	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
 )
 

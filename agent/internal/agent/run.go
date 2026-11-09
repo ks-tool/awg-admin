@@ -14,19 +14,10 @@
   limitations under the License.
 */
 
-// Package agent holds the vpn-agent daemon's startup/run logic, shared by every
-// agent binary regardless of which service.Backend it drives. The kernel build
-// (cmd/vpn-agent) uses the default netlink/amneziawg-dkms backend; a userspace
-// build (cmd/vpn-agent-userspace) calls service.SetBackend before Run to swap in
-// an amneziawg-go backend. Everything below the backend — config, storage, the
-// HTTP API, metrics, the storage watcher and graceful shutdown — is identical,
-// so it lives here once instead of being duplicated per main.
 package agent
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,86 +28,49 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ks-tool/vpn-admin/agent/internal/api"
-	"github.com/ks-tool/vpn-admin/agent/internal/metrics"
-	awgprovider "github.com/ks-tool/vpn-admin/agent/internal/provider/awg"
-	providerremote "github.com/ks-tool/vpn-admin/agent/internal/provider/remote"
-	"github.com/ks-tool/vpn-admin/agent/internal/resource"
-	"github.com/ks-tool/vpn-admin/agent/internal/service"
-	"github.com/ks-tool/vpn-admin/agent/mux/middleware"
-	"github.com/ks-tool/vpn-admin/agent/storage"
-	"github.com/ks-tool/vpn-admin/agent/storage/fs"
+	"github.com/ks-tool/vpn-agent/internal/api"
+	agentconfig "github.com/ks-tool/vpn-agent/internal/config"
+	providerremote "github.com/ks-tool/vpn-agent/internal/provider/remote"
+	"github.com/ks-tool/vpn-agent/internal/resource"
+	"github.com/ks-tool/vpn-agent/mux/middleware"
 
-	"github.com/Jipok/wgctrl-go"
-	"github.com/caarlos0/env/v11"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 type config struct {
-	LogLevel zerolog.Level `env:"LOG_LEVEL" envDefault:"info"`
-	Addr     string        `env:"ADDR" envDefault:"127.0.0.1:8080"`
-	DB       string        `env:"DB"`
+	LogLevel zerolog.Level `env:"LOG_LEVEL" envDefault:"info" flag:"log-level" help:"logging level"`
+	Addr     string        `env:"ADDR" envDefault:"127.0.0.1:8080" flag:"addr" help:"HTTP listen address"`
+	DB       string        `env:"DB" flag:"db" help:"agent state directory"`
 
-	// TLS, when all three are set, makes the agent listen with mTLS instead
-	// of plain HTTP — required when binding to a public ("white") IP instead
-	// of going through an SSH tunnel. TLSClientCA is the CA that signed the
-	// vpn-admin client certificate; any request without a valid client cert
-	// signed by it is rejected at the TLS handshake.
-	TLSCert     string `env:"TLS_CERT"`
-	TLSKey      string `env:"TLS_KEY"`
-	TLSClientCA string `env:"TLS_CLIENT_CA"`
+	TLSCert     string `env:"TLS_CERT" flag:"tls-cert" help:"TLS certificate file"`
+	TLSKey      string `env:"TLS_KEY" flag:"tls-key" help:"TLS private key file"`
+	TLSClientCA string `env:"TLS_CLIENT_CA" flag:"tls-client-ca" help:"client CA certificate file"`
 
-	// MetricsInterval controls how often CPU/RAM/load/network/peer stats are
-	// sampled into the local metrics store (see internal/metrics), exposed
-	// over GET /metrics.
-	MetricsInterval time.Duration `env:"METRICS_INTERVAL" envDefault:"45s"`
+	LegacyProxy string `env:"LEGACY_PROXY" flag:"legacy-proxy" help:"optional AWG provider URL for the legacy interface and metrics API"`
 }
 
-// Run parses the agent's configuration from the environment and runs the daemon
-// until it receives SIGINT/SIGTERM, then shuts down gracefully. version is the
-// build-stamped version string (see each main's -ldflags). The link backend
-// must already be selected (service.SetBackend) before calling Run; the default
-// is the kernel/amneziawg-dkms backend.
 func Run(version string) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
 
 	var cfg config
-	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: agentEnvironmentPrefix()}); err != nil {
-		log.Fatal().Err(err).Send()
+	if err := agentconfig.Load(&cfg, agentEnvironmentPrefix(), os.Args[1:]); err != nil {
+		log.Fatal().Err(err).Msg("failed to load configuration")
 	}
 	zerolog.SetGlobalLevel(cfg.LogLevel)
 	fmt.Printf("log level set to '%s'\n", cfg.LogLevel)
-
 	log.Info().Str("version", version).Msg("starting vpn-agent")
 
-	// Discover what this host supports once, up front (backend/interface kinds,
-	// Docker, in-container, kernel module), log it as a startup diagnostic and
-	// serve it unchanged over GET /info. The backend is already selected by main
-	// (service.SetBackend) before Run is called.
-	hostInfo := gatherHostInfo(version)
-	log.Info().
-		Str("backend", hostInfo.Backend).
-		Bool("docker", hostInfo.Docker).
-		Bool("inDocker", hostInfo.InDocker).
-		Bool("kernelModule", hostInfo.KernelModule).
-		Strs("interfaceKinds", hostInfo.InterfaceKinds).
-		Msg("host capabilities")
-
-	if len(cfg.DB) == 0 {
+	if cfg.DB == "" {
 		home, err := os.UserHomeDir()
 		if err == nil {
 			cfg.DB = defaultAgentDBPath(home)
 		}
-		if len(cfg.DB) == 0 {
-			log.Fatal().Msg("environment variable 'VPN_AGENT_DB' should not be empty")
+		if cfg.DB == "" {
+			log.Fatal().Msg("VPN_AGENT_DB or --db should not be empty")
 		}
 	}
 
-	store, err := fs.New(cfg.DB)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to initialize storage")
-	}
 	resourceStore, err := resource.NewFileStore(filepath.Join(cfg.DB, "resources"))
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize resource storage")
@@ -128,34 +82,19 @@ func Run(version string) {
 	resourceRuntime := resource.NewRuntime(resourceStore, agentID, time.Second, 30*time.Second)
 	defer resourceRuntime.Close()
 
-	log.Info().Msg("Loading Wireguard interfaces")
-	if err := loadInterfaces(store); err != nil {
-		log.Fatal().Err(err).Msg("failed to load interfaces")
-	}
-
-	watchCtx, stopWatch := context.WithCancel(context.Background())
-	defer stopWatch()
-	// Best-effort: if the watch can't start (e.g. inotify limits hit), the
-	// agent still works — it just won't react to an interface's config
-	// file being removed by hand until the next restart (see
-	// DetectOrphans, called above via loadInterfaces).
-	if err := service.WatchStorage(watchCtx, cfg.DB); err != nil {
-		log.Warn().Err(err).Msg("failed to start storage watcher")
-	}
-
-	metricsAwg, err := wgctrl.New()
+	providerDir := filepath.Join(cfg.DB, "providers.d")
+	providerConfig := filepath.Join(cfg.DB, "providers.conf")
+	registrations, err := providerremote.RegistrationsDir(providerDir, providerConfig)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to open wgctrl client for metrics")
+		log.Fatal().Err(err).Msg("failed to read provider registry")
 	}
-	defer func() { _ = metricsAwg.Close() }()
-	awgProvider, err := awgprovider.New(store, filepath.Join(cfg.DB, "resources", "secrets"), service.NewHandler(store, metricsAwg), version, resourceStore)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to initialize AWG provider")
+	supervisor := providerremote.NewSupervisor(registrations)
+	if err := supervisor.Start(context.Background()); err != nil {
+		log.Fatal().Err(err).Msg("failed to start providers")
 	}
-	if err := resourceRuntime.Register(awgProvider); err != nil {
-		log.Fatal().Err(err).Msg("failed to register AWG provider")
-	}
-	remoteProviders, err := providerremote.LoadDir(filepath.Join(cfg.DB, "providers.d"), filepath.Join(cfg.DB, "providers.conf"), nil)
+	defer supervisor.Close()
+
+	remoteProviders, err := providerremote.LoadDir(providerDir, providerConfig, nil)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load external providers")
 	}
@@ -166,33 +105,20 @@ func Run(version string) {
 	}
 	resourceRuntime.Start(context.Background())
 
-	collector := metrics.NewCollector(metricsAwg, store, cfg.MetricsInterval)
-	// Persist metrics history under the agent's data dir so charts survive a
-	// restart (the file has no .json extension, so the interface-config storage
-	// and its watcher ignore it — see metrics.HistoryFilename).
-	collector.SetPersistence(filepath.Join(cfg.DB, metrics.HistoryFilename))
-	if err := collector.LoadHistory(); err != nil {
-		log.Warn().Err(err).Msg("failed to load persisted metrics history")
+	hostInfo := GatherHostInfo(version)
+	handler, err := api.NewAgent(hostInfo, resourceRuntime, cfg.LegacyProxy, middleware.RequestID, middleware.Logging)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to configure legacy provider proxy")
 	}
-	metricsCtx, stopMetrics := context.WithCancel(context.Background())
-	defer stopMetrics()
-	metricsDone := make(chan struct{})
-	go func() {
-		collector.Run(metricsCtx)
-		close(metricsDone)
-	}()
-
-	srv := &http.Server{Addr: cfg.Addr, Handler: api.NewWithResources(hostInfo, store, collector, resourceRuntime, middleware.RequestID, middleware.Logging)}
-
-	tlsConfig, err := buildTLSConfig(cfg)
+	srv := &http.Server{Addr: cfg.Addr, Handler: handler}
+	srv.TLSConfig, err = agentconfig.TLS(cfg.TLSCert, cfg.TLSKey, cfg.TLSClientCA)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to configure TLS")
 	}
-	srv.TLSConfig = tlsConfig
 
 	go func() {
 		var err error
-		if tlsConfig != nil {
+		if srv.TLSConfig != nil {
 			log.Info().Msgf("Starting server on %s (mTLS)", cfg.Addr)
 			err = srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
 		} else {
@@ -208,82 +134,11 @@ func Run(version string) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	<-sig
 
-	// Stop sampling and let Run flush the final metrics-history checkpoint to
-	// disk before tearing the server down. Bounded so a stuck filesystem can't
-	// hang shutdown.
-	stopMetrics()
-	select {
-	case <-metricsDone:
-	case <-time.After(5 * time.Second):
-		log.Warn().Msg("timed out waiting for metrics history to flush")
-	}
-
-	// Bring every active interface down so no tunnel keeps running (and its
-	// PreDown/PostDown rules stay applied) while the agent is stopped. The
-	// stored configs are untouched, so the next start re-raises the enabled ones.
-	log.Info().Msg("stopping active interfaces")
-	service.NewHandler(store, metricsAwg).StopEnabled()
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatal().Err(err).Msg("failed to shutdown server")
 	}
-}
-
-// buildTLSConfig returns nil when TLS is not configured (plain HTTP, the
-// default — meant to be reached through an SSH tunnel to the agent's
-// loopback address). When TLSCert/TLSKey/TLSClientCA are all set, it builds
-// a server TLS config that requires and verifies a client certificate
-// signed by TLSClientCA, for direct mTLS access on a public IP.
-func buildTLSConfig(cfg config) (*tls.Config, error) {
-	if len(cfg.TLSCert) == 0 && len(cfg.TLSKey) == 0 && len(cfg.TLSClientCA) == 0 {
-		return nil, nil
-	}
-	if len(cfg.TLSCert) == 0 || len(cfg.TLSKey) == 0 || len(cfg.TLSClientCA) == 0 {
-		return nil, errors.New("TLS_CERT, TLS_KEY and TLS_CLIENT_CA must all be set together")
-	}
-
-	caPEM, err := os.ReadFile(cfg.TLSClientCA)
-	if err != nil {
-		return nil, fmt.Errorf("read client CA: %w", err)
-	}
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(caPEM) {
-		return nil, errors.New("client CA file contains no valid certificates")
-	}
-
-	return &tls.Config{
-		ClientAuth: tls.RequireAndVerifyClientCert,
-		ClientCAs:  pool,
-		MinVersion: tls.VersionTLS12,
-	}, nil
-}
-
-func loadInterfaces(store storage.Storage) error {
-	awg, err := wgctrl.New()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = awg.Close() }()
-
-	h := service.NewHandler(store, awg)
-	if err := h.All(); err != nil {
-		return err
-	}
-
-	// Best-effort: a failure here shouldn't stop the agent from starting,
-	// it's only a diagnostic. See Handler.DetectOrphans for why this only
-	// logs rather than acting on what it finds.
-	if orphans, err := h.DetectOrphans(); err != nil {
-		log.Warn().Err(err).Msg("failed to check for orphaned WireGuard interfaces")
-	} else if len(orphans) > 0 {
-		log.Warn().Strs("interfaces", orphans).Msg(
-			"found WireGuard interface(s) on this host with no corresponding stored config — " +
-				"either left over from before a fix to interface deletion, or created outside vpn-admin")
-	}
-
-	return nil
 }
 
 func agentEnvironmentPrefix() string {

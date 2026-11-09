@@ -21,12 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-
-	"github.com/google/uuid"
 )
 
 type resolvedEndpoint struct {
@@ -61,7 +60,7 @@ func (s *Service) CreateProviderLink(sourceID, targetID string) (*models.Link, e
 		return nil, invalidInput("link would create a cycle")
 	}
 	link := &models.Link{
-		ID: uuid.NewString(), Kind: kind, Generation: 1,
+		ID: uuid.New().String(), Kind: kind, Generation: 1,
 		Source: source.endpoint, Target: target.endpoint, Spec: json.RawMessage(`{}`),
 		Status: models.LinkStatus{Phase: models.LinkPreparing},
 	}

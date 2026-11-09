@@ -23,11 +23,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/config"
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
 )
 
 // cacheDir returns the directory vpn-admin caches downloaded agent

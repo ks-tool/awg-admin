@@ -18,8 +18,7 @@ package models
 
 import (
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // Topology is the protocol-neutral desired network configuration. VPN service

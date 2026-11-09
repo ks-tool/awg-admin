@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/deploy"
 	"github.com/ks-tool/vpn-admin/internal/pki"
@@ -28,7 +29,6 @@ import (
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 

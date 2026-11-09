@@ -19,10 +19,10 @@ package sshclient
 import (
 	"fmt"
 	"sync"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"golang.org/x/sync/singleflight"
 )
 

@@ -38,7 +38,7 @@ type SystemSnapshot struct {
 	Load15        float64   `json:"load15"`
 	// NetRxBytes/NetTxBytes are bytes transferred *during this one
 	// collection interval* (e.g. the last 45s, see
-	// VPN_AGENT_METRICS_INTERVAL), not the host's cumulative since-boot
+	// VPN_PROVIDER_AWG_METRICS_INTERVAL), not the host's cumulative since-boot
 	// counters from /proc/net/dev — those only ever climb and aren't
 	// useful for "how much traffic is this server actually moving" (see
 	// agent/internal/metrics/collector.go's collectSystem).

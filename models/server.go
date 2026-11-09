@@ -19,9 +19,9 @@ package models
 import (
 	"fmt"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 type Server struct {

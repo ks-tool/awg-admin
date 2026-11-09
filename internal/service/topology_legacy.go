@@ -17,11 +17,11 @@
 package service
 
 import (
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	"uuid"
+
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 // loadTopology projects the existing AWG inventory into the neutral graph.

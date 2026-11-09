@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/testcontainers/testcontainers-go"
@@ -35,10 +35,10 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// TestUserspaceTunnel brings up two vpn-agent-userspace containers, configures
-// each as the other's AmneziaWG peer through the agent HTTP API (with a shared,
+// TestUserspaceTunnel brings up two userspace AWG provider containers, configures
+// each as the other's AmneziaWG peer through the provider HTTP API (with a shared,
 // generated set of obfuscation params), and asserts traffic flows across the
-// resulting tunnel — an end-to-end check that the userspace agent (amneziawg-go
+// resulting tunnel — an end-to-end check that the userspace provider (amneziawg-go
 // compiled in, no external process) builds a working, obfuscated WireGuard
 // tunnel: TUN creation, wgctrl/UAPI configuration, obfuscation params and the
 // data plane.
@@ -83,8 +83,8 @@ func TestUserspaceTunnel(t *testing.T) {
 	cfgA := ifaceConfig("awg0", "10.10.0.1/24", port, aPriv, bPriv.PublicKey(), "10.10.0.2/32", fmt.Sprintf("%s:%d", ipB, port), amz)
 	cfgB := ifaceConfig("awg0", "10.10.0.2/24", port, bPriv, aPriv.PublicKey(), "10.10.0.1/32", fmt.Sprintf("%s:%d", ipA, port), amz)
 
-	putInterface(ctx, t, apiA, cfgA)
-	putInterface(ctx, t, apiB, cfgB)
+	putInterface(ctx, t, a, apiA, cfgA)
+	putInterface(ctx, t, b, apiB, cfgB)
 
 	// The real assertion: the data plane works — ping B's tunnel address from A.
 	if out, ok := pingWithin(ctx, t, a, "10.10.0.2", 45*time.Second); !ok {
@@ -94,7 +94,7 @@ func TestUserspaceTunnel(t *testing.T) {
 	}
 }
 
-// startAgent builds (once, cached) and starts an vpn-agent-userspace container
+// startAgent builds (once, cached) and starts an vpn-provider-awg container
 // on netName with the given alias, returning it, the base URL of its
 // /interfaces API (host-mapped) and its IP on the network.
 func startAgent(ctx context.Context, t *testing.T, netName, alias string) (testcontainers.Container, string, string) {
@@ -103,7 +103,7 @@ func startAgent(ctx context.Context, t *testing.T, netName, alias string) (testc
 		FromDockerfile: testcontainers.FromDockerfile{
 			Context:    "..", // the agent module root
 			Dockerfile: "e2e/Dockerfile",
-			Repo:       "vpn-agent-userspace-e2e",
+			Repo:       "vpn-provider-awg-e2e",
 			Tag:        "latest",
 			KeepImage:  true,
 		},
@@ -172,10 +172,8 @@ func ifaceConfig(name, addr string, listen uint16, priv, peerPub agentmodels.Key
 	return cfg
 }
 
-// putInterface applies cfg to an agent via PUT /interfaces, failing the test if
-// the agent doesn't accept it (e.g. an obfuscation param the userspace library
-// rejects would surface here).
-func putInterface(ctx context.Context, t *testing.T, apiURL string, cfg agentmodels.InterfaceConfig) {
+// putInterface applies cfg to a provider via PUT /interfaces.
+func putInterface(ctx context.Context, t *testing.T, c testcontainers.Container, apiURL string, cfg agentmodels.InterfaceConfig) {
 	t.Helper()
 	body, err := json.Marshal(cfg)
 	if err != nil {
@@ -193,6 +191,7 @@ func putInterface(ctx context.Context, t *testing.T, apiURL string, cfg agentmod
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		b, _ := io.ReadAll(resp.Body)
+		dumpAgentLogs(ctx, t, c, "put-interface")
 		t.Fatalf("PUT %s: status %d: %s", apiURL, resp.StatusCode, bytes.TrimSpace(b))
 	}
 }

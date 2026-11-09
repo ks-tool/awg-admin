@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ks-tool/vpn-admin/agent/internal/resource"
-	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-agent/internal/resource"
+	"github.com/ks-tool/vpn-agent/models"
 )
 
 type resourceAPIProvider struct{}

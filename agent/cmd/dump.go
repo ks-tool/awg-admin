@@ -22,10 +22,22 @@ import (
 
 	"github.com/Jipok/wgctrl-go"
 	"github.com/Jipok/wgctrl-go/wgtypes"
+	agentconfig "github.com/ks-tool/vpn-agent/internal/config"
 )
 
+type config struct {
+	Interface string `env:"INTERFACE" flag:"interface" short:"i" help:"WireGuard interface name"`
+}
+
 func main() {
-	iface := os.Args[1]
+	var cfg config
+	if err := agentconfig.Load(&cfg, "AWG_DUMP_", os.Args[1:]); err != nil {
+		panic(err)
+	}
+	if cfg.Interface == "" {
+		panic("--interface or AWG_DUMP_INTERFACE is required")
+	}
+	iface := cfg.Interface
 	awg, err := wgctrl.New()
 	if err != nil {
 		panic(err)

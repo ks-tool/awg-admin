@@ -18,10 +18,9 @@ package service
 
 import (
 	"fmt"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
 )
 
 func (s *Service) ListUsers() ([]models.User, error) {

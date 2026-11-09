@@ -22,8 +22,8 @@ package models
 // interface kinds can be created, whether Docker is available — without having
 // to SSH in and probe by hand.
 type HostInfo struct {
-	// Backend identifies which link backend this agent build drives: "kernel"
-	// (amneziawg-dkms over netlink) or "userspace" (in-process amneziawg-go).
+	// Backend identifies the link backend reported by a provider: "kernel",
+	// "userspace", or "external" for the provider-neutral agent.
 	Backend string `json:"backend"`
 	// Version is the agent build version (see each main's -ldflags).
 	Version string `json:"version"`

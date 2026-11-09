@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-agent/models"
 
 	"github.com/horchestra/pack/sdk/packschema"
 	packschemavalidator "github.com/horchestra/pack/sdk/schema"

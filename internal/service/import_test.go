@@ -21,8 +21,8 @@ import (
 	"strings"
 	"testing"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 func genKey(t *testing.T) agentmodels.Key {

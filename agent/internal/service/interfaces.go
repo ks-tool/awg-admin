@@ -25,7 +25,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-agent/models"
 
 	"github.com/rs/zerolog/log"
 )

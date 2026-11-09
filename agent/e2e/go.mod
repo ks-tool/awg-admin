@@ -5,11 +5,11 @@
 // module), e.g.:
 //
 //	cd agent/e2e && GOWORK=off AWG_E2E=1 go test -run TestUserspaceTunnel -v .
-module github.com/ks-tool/vpn-admin/agent/e2e
+module github.com/ks-tool/vpn-agent/e2e
 
 go 1.27.1
 
-replace github.com/ks-tool/vpn-admin/agent => ../
+replace github.com/ks-tool/vpn-agent => ../
 
 // Mirrors agent/go.mod's replace (a replace in a dependency's go.mod doesn't
 // propagate to this module): the ks-tool fork parses/writes the amneziawg-dkms
@@ -17,7 +17,7 @@ replace github.com/ks-tool/vpn-admin/agent => ../
 replace github.com/Jipok/wgctrl-go v1.2.0 => github.com/ks-tool/wgctrl-go v0.0.0-20260921051250-2994e82fed6c
 
 require (
-	github.com/ks-tool/vpn-admin/agent v1.2.1
+	github.com/ks-tool/vpn-agent v1.2.1
 	github.com/moby/moby/api v1.54.2
 	github.com/testcontainers/testcontainers-go v0.43.0
 )
@@ -34,7 +34,6 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -57,11 +56,10 @@ require (
 	github.com/moby/term v0.5.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.5 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
+	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
@@ -70,7 +68,7 @@ require (
 	go.opentelemetry.io/otel v1.41.0 // indirect
 	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/trace v1.41.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

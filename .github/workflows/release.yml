@@ -3,9 +3,7 @@ name: release
 # Releases the ADMIN app. Triggered by pushing an admin version tag, e.g.:
 #   git tag v1.2.3 && git push origin v1.2.3
 #
-# This is a monorepo: the per-server agent is released separately on `agent/v*`
-# tags (see release-agent.yml). The `v*` and `agent/v*` globs are disjoint —
-# GitHub Actions' `*` doesn't cross `/`, so `v*` never matches `agent/v1.2.3`.
+# Agent and provider OCI artifacts are released from github.com/ks-tool/vpn-agent.
 #
 # Produces, all attached to the same GitHub Release for the tag:
 #   - vpn-admin (standalone web server) and awg-migrate: linux/darwin/windows,
@@ -22,9 +20,6 @@ on:
 permissions:
   contents: write # create the release / upload assets
   packages: write # push to ghcr.io
-
-env:
-  GOEXPERIMENT: jsonv2
 
 jobs:
   # ---------------------------------------------------------------------

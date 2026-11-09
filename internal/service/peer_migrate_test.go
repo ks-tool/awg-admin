@@ -19,11 +19,10 @@ package service
 import (
 	"net"
 	"testing"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 // hostPeerIPs returns the /32 (host) AllowedIPs of an interface's peers — the

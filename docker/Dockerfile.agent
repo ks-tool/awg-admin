@@ -1,37 +1,16 @@
 # syntax=docker/dockerfile:1
-#
-# GoReleaser (dockers_v2) image for the userspace agent (vpn-agent-userspace):
-# it drives each interface through an in-process userspace WireGuard device — the
-# amneziawg-go library is compiled into the binary — for hosts without a
-# (matching) AmneziaWG kernel module. The binary is self-contained, so this is a
-# runtime-only image (no build stage).
-#
-# GoReleaser lays the prebuilt binary out in the build context per platform
-# (`<ctx>/linux/amd64/…`, `<ctx>/linux/arm64/…`), selected below via
-# `$TARGETPLATFORM`; buildx sets it from `docker build --platform`.
-#
-# Run with the privileges a userspace WireGuard needs, e.g.:
-#   docker run -d --cap-add NET_ADMIN --cap-add NET_RAW \
-#     --device /dev/net/tun --sysctl net.ipv4.ip_forward=1 \
-#     -p 127.0.0.1:8080:8080 -p 51820:51820/udp \
-#     -v vpn-agent-data:/data ghcr.io/<owner>/vpn-agent-userspace:latest
-# (the "Deploy agent" flow with a Docker-image source builds this command for
-# you — see internal/deploy/docker.go.)
 FROM alpine:3.23
 
-# iproute2/iptables: the agent runs interface PreUp/PostUp/PreDown/PostDown hooks
-# via `sh -c` (policy routing, NAT); ca-certificates for outbound TLS. The host
-# must also provide /dev/net/tun and CAP_NET_ADMIN at runtime for the TUN.
 RUN apk add --no-cache ca-certificates iproute2 iptables
 
 ARG TARGETPLATFORM
-COPY $TARGETPLATFORM/vpn-agent-userspace /usr/local/bin/vpn-agent
+COPY $TARGETPLATFORM/vpn-provider-awg /usr/local/bin/vpn-provider-awg
 
-ENV VPN_AGENT_DB=/data \
-    VPN_AGENT_ADDR=0.0.0.0:8080 \
+ENV VPN_PROVIDER_AWG_DB=/data \
+    VPN_PROVIDER_AWG_ADDR=0.0.0.0:8080 \
     HOME=/data
 WORKDIR /data
 VOLUME ["/data"]
 
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/vpn-agent"]
+ENTRYPOINT ["/usr/local/bin/vpn-provider-awg", "--userspace"]

@@ -27,8 +27,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ks-tool/vpn-admin/agent/models"
-	"github.com/ks-tool/vpn-admin/agent/storage"
+	"github.com/ks-tool/vpn-agent/models"
+	"github.com/ks-tool/vpn-agent/storage"
 
 	"github.com/natefinch/atomic"
 )

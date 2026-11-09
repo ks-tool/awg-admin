@@ -22,13 +22,13 @@ import (
 	"os"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/config"
 	"github.com/ks-tool/vpn-admin/internal/plugin"
 	"github.com/ks-tool/vpn-admin/internal/plugin/awg"
 	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -125,7 +125,7 @@ func vpnServiceIndex(topology *models.Topology, id uuid.UUID) int {
 func parseTopologyID(value, field string) (uuid.UUID, error) {
 	id, err := uuid.Parse(value)
 	if err != nil {
-		return uuid.Nil, invalidInput("invalid %s", field)
+		return uuid.Nil(), invalidInput("invalid %s", field)
 	}
 	return id, nil
 }

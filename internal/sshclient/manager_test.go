@@ -23,10 +23,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 )
 

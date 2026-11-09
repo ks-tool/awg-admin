@@ -19,11 +19,10 @@ package service
 import (
 	"encoding/json"
 	"testing"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 func TestDistributedLinkCoordinationAndRecovery(t *testing.T) {
@@ -116,7 +115,7 @@ func newLinkTestServer(t *testing.T, svc *Service, name string) (*models.Server,
 func newLinkTestResource(t *testing.T, svc *Service, server *models.Server) models.Resource {
 	t.Helper()
 	resource := models.Resource{
-		ID: uuid.NewString(), ServerID: server.ID.String(), APIVersion: "test/v1", Kind: "Service", Name: "resource-" + uuid.NewString()[:8], Generation: 1,
+		ID: uuid.New().String(), ServerID: server.ID.String(), APIVersion: "test/v1", Kind: "Service", Name: "resource-" + uuid.New().String()[:8], Generation: 1,
 		Spec: json.RawMessage(`{}`), Status: models.ResourceStatus{ObservedGeneration: 1, Phase: models.ResourceReady},
 	}
 	if err := svc.saveProviderResource(server.ID.String(), resource); err != nil {

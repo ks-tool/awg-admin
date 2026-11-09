@@ -18,10 +18,9 @@ package service
 
 import (
 	"sync"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
-
-	"github.com/google/uuid"
 )
 
 // deployStatusStore is an in-memory map of the most recent

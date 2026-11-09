@@ -30,9 +30,9 @@ import (
 )
 
 const (
-	// agentReleasesRepo is the GitHub repo whose "agent/v*" releases publish the
-	// vpn-agent binaries (see .goreleaser.agent.yaml). The admin app itself
-	// releases under plain "v*" tags on the same repo, which are filtered out.
+	// agentReleasesRepo keeps the historical GitHub binary releases available to
+	// legacy deployment presets. New agents and providers are published as OCI
+	// artifacts from ks-tool/vpn-agent and installed through pack.
 	agentReleasesRepo = "ks-tool/vpn-admin"
 	// agentReleasesTagPrefix marks the agent releases apart from the admin ones.
 	agentReleasesTagPrefix = "agent/v"

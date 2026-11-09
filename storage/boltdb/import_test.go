@@ -20,12 +20,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-
-	"github.com/google/uuid"
+	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 func openTestDB(t *testing.T) *BoltDB {

@@ -26,10 +26,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ks-tool/vpn-admin/agent/internal/api"
-	"github.com/ks-tool/vpn-admin/agent/internal/provider/example"
-	"github.com/ks-tool/vpn-admin/agent/internal/resource"
-	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-agent/internal/api"
+	"github.com/ks-tool/vpn-agent/internal/provider/example"
+	"github.com/ks-tool/vpn-agent/internal/resource"
+	"github.com/ks-tool/vpn-agent/models"
 )
 
 func TestExternalProviderLifecycleCrashAndRestart(t *testing.T) {
@@ -185,5 +185,34 @@ func TestLoadProviderRegistryDirectory(t *testing.T) {
 	providers, err := LoadDir(dir, legacy, nil)
 	if err != nil || len(providers) != 3 {
 		t.Fatalf("LoadDir returned %d providers, %v", len(providers), err)
+	}
+}
+
+func TestLoadProviderRegistryDiscoversManifest(t *testing.T) {
+	definition := models.ProviderDefinition{
+		Name: "awg", Version: "1.2.3",
+		Resources: []models.ResourceDefinition{{APIVersion: "awg/v1alpha1", Kind: "Interface", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash"}},
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/manifest" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion, Providers: []models.ProviderDefinition{definition}})
+	}))
+	defer server.Close()
+
+	config := Config{ProtocolVersion: models.ProtocolVersion, Providers: []models.ProviderRegistration{{Address: server.URL, Discover: true, Provider: models.ProviderDefinition{Name: "awg"}}}}
+	data, _ := json.Marshal(config)
+	path := filepath.Join(t.TempDir(), "awg.conf")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	providers, err := Load(path, server.Client())
+	if err != nil || len(providers) != 1 {
+		t.Fatalf("Load: %+v, %v", providers, err)
+	}
+	if providers[0].Version() != definition.Version || len(providers[0].Definitions()) != 1 {
+		t.Fatalf("discovered definition = %s %+v", providers[0].Version(), providers[0].Definitions())
 	}
 }

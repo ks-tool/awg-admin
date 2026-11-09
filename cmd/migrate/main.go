@@ -17,14 +17,15 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	appconfig "github.com/ks-tool/app-config/go"
 	"github.com/ks-tool/vpn-admin/storage/boltdb"
 	"github.com/ks-tool/vpn-admin/storage/boltdb/dump"
+	"github.com/spf13/pflag"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -91,58 +92,69 @@ Flags:
 `)
 }
 
+type commandConfig struct {
+	DB    string `env:"DB" flag:"db" help:"path to the BoltDB file"`
+	Out   string `env:"OUT" flag:"out" help:"path to the output file"`
+	In    string `env:"IN" flag:"in" help:"path to the input JSON dump"`
+	Force bool   `env:"FORCE" flag:"force" help:"overwrite existing destination data"`
+}
+
 func runV2Cmd(args []string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
 	}
-	fs := flag.NewFlagSet("v2", flag.ExitOnError)
-	source := fs.String("db", filepath.Join(home, ".awg-admin"), "path to the v1 source database")
-	destination := fs.String("out", filepath.Join(home, ".vpn-admin", "db"), "path to the new v2 database")
-	force := fs.Bool("force", false, "atomically replace the destination database")
-	_ = fs.Parse(args)
-	if err := boltdb.MigrateV2(*source, *destination, *force); err != nil {
+	cfg := commandConfig{DB: filepath.Join(home, ".awg-admin"), Out: filepath.Join(home, ".vpn-admin", "db")}
+	parseCommandConfig("v2", &cfg, args)
+	if err := boltdb.MigrateV2(cfg.DB, cfg.Out, cfg.Force); err != nil {
 		fmt.Fprintln(os.Stderr, "v2 migration failed:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("migrated v1 %s -> v2 %s; source was not modified\n", *source, *destination)
+	fmt.Printf("migrated v1 %s -> v2 %s; source was not modified\n", cfg.DB, cfg.Out)
 }
 
 func runExportCmd(args []string) {
-	fs := flag.NewFlagSet("export", flag.ExitOnError)
-	dbPath := fs.String("db", "", "path to the source boltdb file")
-	outPath := fs.String("out", "", "path to write the JSON dump to")
-	_ = fs.Parse(args)
-
-	if *dbPath == "" || *outPath == "" {
-		fs.Usage()
+	var cfg commandConfig
+	flags := parseCommandConfig("export", &cfg, args)
+	if cfg.DB == "" || cfg.Out == "" {
+		flags.Usage()
 		os.Exit(2)
 	}
 
-	if err := exportDB(*dbPath, *outPath); err != nil {
+	if err := exportDB(cfg.DB, cfg.Out); err != nil {
 		fmt.Fprintln(os.Stderr, "export failed:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("exported %s -> %s\n", *dbPath, *outPath)
+	fmt.Printf("exported %s -> %s\n", cfg.DB, cfg.Out)
 }
 
 func runImportCmd(args []string) {
-	fs := flag.NewFlagSet("import", flag.ExitOnError)
-	dbPath := fs.String("db", "", "path to the destination boltdb file")
-	inPath := fs.String("in", "", "path to read the JSON dump from")
-	force := fs.Bool("force", false, "overwrite keys that already exist instead of aborting")
-	_ = fs.Parse(args)
-
-	if *dbPath == "" || *inPath == "" {
-		fs.Usage()
+	var cfg commandConfig
+	flags := parseCommandConfig("import", &cfg, args)
+	if cfg.DB == "" || cfg.In == "" {
+		flags.Usage()
 		os.Exit(2)
 	}
 
-	if err := importDB(*dbPath, *inPath, *force); err != nil {
+	if err := importDB(cfg.DB, cfg.In, cfg.Force); err != nil {
 		fmt.Fprintln(os.Stderr, "import failed:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("imported %s -> %s\n", *inPath, *dbPath)
+	fmt.Printf("imported %s -> %s\n", cfg.In, cfg.DB)
+}
+
+func parseCommandConfig(name string, cfg *commandConfig, args []string) *pflag.FlagSet {
+	if err := appconfig.Load(cfg,
+		appconfig.Env(),
+		appconfig.Options(appconfig.EnvOptions{Prefix: "AWG_MIGRATE_"}),
+	); err != nil {
+		fmt.Fprintln(os.Stderr, name+" configuration failed:", err)
+		os.Exit(2)
+	}
+	flags := pflag.NewFlagSet(name, pflag.ExitOnError)
+	appconfig.BindFlags(flags, "AWG_MIGRATE_", cfg)
+	_ = flags.Parse(args)
+	return flags
 }
 
 // The dump JSON shape and the copy logic live in storage/boltdb/dump, shared
