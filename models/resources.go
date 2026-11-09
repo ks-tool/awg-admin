@@ -55,6 +55,7 @@ type ActionRequest = agentmodels.ActionRequest
 type ActionResult = agentmodels.ActionResult
 type Link = agentmodels.Link
 type LinkEndpoint = agentmodels.LinkEndpoint
+type LinkRequest = agentmodels.LinkRequest
 type LinkStatus = agentmodels.LinkStatus
 type LinkPhase = agentmodels.LinkPhase
 type LinkOffer = agentmodels.LinkOffer

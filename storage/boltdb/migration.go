@@ -136,7 +136,7 @@ func (db *BoltDB) SchemaVersion() (int, error) {
 
 func migrateLegacyRecords(tx *bolt.Tx) error {
 	interfaces := make(map[uuid.UUID]models.Interface)
-	interfaceServers := make(map[uuid.UUID]uuid.UUID)
+	interfaceServers := make(map[uuid.UUID]models.Server)
 	tunnelMembers := make(map[uuid.UUID][]models.Interface)
 	if err := tx.Bucket(bktServers).ForEach(func(_, value []byte) error {
 		var server models.Server
@@ -149,7 +149,7 @@ func migrateLegacyRecords(tx *bolt.Tx) error {
 				return err
 			}
 			interfaces[iface.ID] = iface
-			interfaceServers[iface.ID] = server.ID
+			interfaceServers[iface.ID] = server
 			if iface.Tunnel != nil {
 				tunnelMembers[*iface.Tunnel] = append(tunnelMembers[*iface.Tunnel], iface)
 			}
@@ -176,7 +176,7 @@ func migrateLegacyRecords(tx *bolt.Tx) error {
 			if !ok {
 				continue
 			}
-			resource, err := migratePeer(user, peer, iface, interfaceServers[iface.ID])
+			resource, err := migratePeer(user, peer, iface, interfaceServers[iface.ID].ID)
 			if err != nil {
 				return err
 			}
@@ -294,7 +294,7 @@ func migratePeer(user models.User, peer models.Peer, iface models.Interface, ser
 	}, nil
 }
 
-func migrateLink(id uuid.UUID, source, target models.Interface, servers map[uuid.UUID]uuid.UUID, spec json.RawMessage) models.Link {
+func migrateLink(id uuid.UUID, source, target models.Interface, servers map[uuid.UUID]models.Server, spec json.RawMessage) models.Link {
 	status := migrationStatus(source)
 	targetStatus := migrationStatus(target)
 	if status.Phase != models.ResourceDegraded && targetStatus.Phase == models.ResourceDegraded {
@@ -310,10 +310,10 @@ func migrateLink(id uuid.UUID, source, target models.Interface, servers map[uuid
 	}
 }
 
-func migrateEndpoint(iface models.Interface, serverID uuid.UUID) models.LinkEndpoint {
+func migrateEndpoint(iface models.Interface, server models.Server) models.LinkEndpoint {
 	return models.LinkEndpoint{
-		ServerID: serverID.String(), ResourceID: iface.ID.String(), APIVersion: "awg/v1alpha1",
-		Kind: "Interface", Name: iface.Interface, Port: "tunnel",
+		ServerID: server.ID.String(), ResourceID: iface.ID.String(), APIVersion: "awg/v1alpha1",
+		Kind: "Interface", Name: iface.Interface, Port: "tunnel", Address: server.SSH.Host,
 	}
 }
 

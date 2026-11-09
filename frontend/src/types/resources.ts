@@ -74,3 +74,30 @@ export interface ActionResult {
     mediaType?: string;
     taskId?: string;
 }
+
+export interface ProviderLink {
+    id: string;
+    name?: string;
+    kind: string;
+    generation: number;
+    source: LinkEndpoint;
+    target: LinkEndpoint;
+    spec?: Record<string, unknown>;
+    status: LinkStatus;
+}
+
+export interface LinkEndpoint {
+    serverId: string;
+    resourceId: string;
+    apiVersion: string;
+    kind: string;
+    name: string;
+    port: string;
+    address?: string;
+}
+
+export interface LinkStatus {
+    observedGeneration: number;
+    phase: 'Pending' | 'Preparing' | 'Ready' | 'Degraded';
+    conditions?: ResourceCondition[];
+}

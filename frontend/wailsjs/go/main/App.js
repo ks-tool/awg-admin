@@ -10,6 +10,10 @@ export function AppVersion() {
   return window['go']['main']['App']['AppVersion']();
 }
 
+export function ApplyProviderLink(arg1) {
+  return window['go']['main']['App']['ApplyProviderLink'](arg1);
+}
+
 export function ApplyVPNService(arg1) {
   return window['go']['main']['App']['ApplyVPNService'](arg1);
 }
@@ -44,6 +48,10 @@ export function CreateNetworkConnection(arg1, arg2) {
 
 export function CreateNetworkInterface(arg1, arg2) {
   return window['go']['main']['App']['CreateNetworkInterface'](arg1, arg2);
+}
+
+export function CreateProviderLink(arg1, arg2) {
+  return window['go']['main']['App']['CreateProviderLink'](arg1, arg2);
 }
 
 export function CreateServer(arg1) {
@@ -96,6 +104,10 @@ export function DeleteNetworkInterface(arg1) {
 
 export function DeletePeer(arg1, arg2) {
   return window['go']['main']['App']['DeletePeer'](arg1, arg2);
+}
+
+export function DeleteProviderLink(arg1) {
+  return window['go']['main']['App']['DeleteProviderLink'](arg1);
 }
 
 export function DeleteProviderResource(arg1, arg2, arg3, arg4) {
@@ -220,6 +232,10 @@ export function ListInterfaces(arg1) {
 
 export function ListPeers(arg1) {
   return window['go']['main']['App']['ListPeers'](arg1);
+}
+
+export function ListProviderLinks() {
+  return window['go']['main']['App']['ListProviderLinks']();
 }
 
 export function ListProviderResources(arg1, arg2) {

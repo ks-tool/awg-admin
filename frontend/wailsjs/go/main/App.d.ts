@@ -8,6 +8,8 @@ export function AddPeer(arg1:string,arg2:service.AddPeerInput):Promise<models.Us
 
 export function AppVersion():Promise<string>;
 
+export function ApplyProviderLink(arg1:string):Promise<models.Link>;
+
 export function ApplyVPNService(arg1:string):Promise<models.VPNService>;
 
 export function Backup():Promise<Array<number>>;
@@ -25,6 +27,8 @@ export function CreateInterface(arg1:string,arg2:models.InterfaceConfig):Promise
 export function CreateNetworkConnection(arg1:string,arg2:string):Promise<models.NetworkConnection>;
 
 export function CreateNetworkInterface(arg1:string,arg2:service.NetworkInterfaceInput):Promise<models.Topology>;
+
+export function CreateProviderLink(arg1:string,arg2:string):Promise<models.Link>;
 
 export function CreateServer(arg1:service.ServerInput):Promise<models.Server>;
 
@@ -51,6 +55,8 @@ export function DeleteNetworkConnection(arg1:string):Promise<void>;
 export function DeleteNetworkInterface(arg1:string):Promise<void>;
 
 export function DeletePeer(arg1:string,arg2:string):Promise<models.User>;
+
+export function DeleteProviderLink(arg1:string):Promise<void>;
 
 export function DeleteProviderResource(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
@@ -113,6 +119,8 @@ export function ListAgentSources():Promise<Array<models.AgentSource>>;
 export function ListInterfaces(arg1:string):Promise<Array<models.Interface>>;
 
 export function ListPeers(arg1:string):Promise<Array<models.Peer>>;
+
+export function ListProviderLinks():Promise<Array<models.Link>>;
 
 export function ListProviderResources(arg1:string,arg2:string):Promise<Array<models.Resource>>;
 

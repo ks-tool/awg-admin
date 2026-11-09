@@ -16,23 +16,23 @@
 
 import {useId, useMemo} from 'react';
 import {projectMercator} from '@zenith-visuals/maps';
-import type {NetworkConnection, NetworkInterface, TopologyServer, Tunnel} from '@/types';
-import {mergeTopologyConnections} from './connections';
+import type {NetworkConnection, NetworkInterface, ProviderLink, TopologyServer} from '@/types';
+import {mergeProviderLinks} from './connections';
 
 interface TopologyTunnelsProps {
     servers: TopologyServer[];
     interfaces: NetworkInterface[];
     connections: NetworkConnection[];
-    tunnels: Tunnel[];
+    links: ProviderLink[];
     width: number;
     height: number;
     transform: string;
     zoom: number;
 }
 
-export function TopologyTunnels({servers, interfaces, connections, tunnels, width, height, transform, zoom}: TopologyTunnelsProps) {
+export function TopologyTunnels({servers, interfaces, connections, links, width, height, transform, zoom}: TopologyTunnelsProps) {
     const markerID = useId().replaceAll(':', '');
-    const allConnections = useMemo(() => mergeTopologyConnections(connections, tunnels), [connections, tunnels]);
+    const allConnections = useMemo(() => mergeProviderLinks(connections, links), [connections, links]);
     const paths = useMemo(() => {
         if (width === 0) return [];
         const interfaceByID = new Map(interfaces.map(iface => [iface.id, iface]));

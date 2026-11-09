@@ -17,7 +17,7 @@
 import * as AppBindings from '../../wailsjs/go/main/App';
 import {get, post, put, remove} from './api';
 import {getCurrentApiMode} from './apiMode';
-import type {ActionResult, ProviderDefinition, ProviderManifest, ProviderResource, ResourceStatus} from '@/types';
+import type {ActionResult, ProviderDefinition, ProviderLink, ProviderManifest, ProviderResource, ResourceStatus} from '@/types';
 
 function unwrap<T>(response: {data: T; error?: string}): T {
     if (response.error) throw new Error(response.error);
@@ -77,4 +77,28 @@ export async function runProviderResourceAction(serverId: string, provider: stri
     return isDesktop()
         ? binding(() => AppBindings.RunProviderResourceAction(serverId, provider, kind, name, action, args as never))
         : unwrap(await post<ActionResult, {arguments: Record<string, unknown>}>(`${resourcePath(serverId, provider, kind, name)}/actions/${encodeURIComponent(action)}`, {arguments: args}));
+}
+
+export async function listProviderLinks(): Promise<ProviderLink[]> {
+    const result = isDesktop()
+        ? await binding<ProviderLink[]>(() => AppBindings.ListProviderLinks())
+        : unwrap(await get<ProviderLink[]>('/links'));
+    return result ?? [];
+}
+
+export async function createProviderLink(sourceId: string, targetId: string): Promise<ProviderLink> {
+    return isDesktop()
+        ? binding(() => AppBindings.CreateProviderLink(sourceId, targetId))
+        : unwrap(await post<ProviderLink, {sourceId: string; targetId: string}>('/links', {sourceId, targetId}));
+}
+
+export async function applyProviderLink(id: string): Promise<ProviderLink> {
+    return isDesktop()
+        ? binding(() => AppBindings.ApplyProviderLink(id))
+        : unwrap(await post<ProviderLink, unknown>(`/links/${encodeURIComponent(id)}/apply`, {}));
+}
+
+export async function deleteProviderLink(id: string): Promise<void> {
+    if (isDesktop()) return binding(() => AppBindings.DeleteProviderLink(id));
+    unwrap(await remove<void>(`/links/${encodeURIComponent(id)}`));
 }

@@ -36,6 +36,12 @@ type ActionProvider interface {
 	Action(context.Context, models.Resource, string, json.RawMessage) (models.ActionResult, error)
 }
 
+type LinkProvider interface {
+	PrepareLink(context.Context, models.Link, models.LinkEndpoint) (models.LinkOffer, error)
+	CommitLink(context.Context, models.Link, models.LinkEndpoint, models.LinkOffer) error
+	DeleteLink(context.Context, models.Link, models.LinkEndpoint, *models.LinkOffer) error
+}
+
 type Event struct {
 	Type       string                `json:"type"`
 	Provider   string                `json:"provider"`

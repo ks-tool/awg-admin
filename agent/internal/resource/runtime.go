@@ -285,6 +285,44 @@ func (r *Runtime) Action(ctx context.Context, providerName, kind, name, actionNa
 	return result, err
 }
 
+func (r *Runtime) PrepareLink(ctx context.Context, providerName string, link models.Link, endpoint models.LinkEndpoint) (models.LinkOffer, error) {
+	provider, err := r.linkProvider(providerName)
+	if err != nil {
+		return models.LinkOffer{}, err
+	}
+	return provider.PrepareLink(ctx, link, endpoint)
+}
+
+func (r *Runtime) CommitLink(ctx context.Context, providerName string, link models.Link, endpoint models.LinkEndpoint, remote models.LinkOffer) error {
+	provider, err := r.linkProvider(providerName)
+	if err != nil {
+		return err
+	}
+	return provider.CommitLink(ctx, link, endpoint, remote)
+}
+
+func (r *Runtime) DeleteLink(ctx context.Context, providerName string, link models.Link, endpoint models.LinkEndpoint, remote *models.LinkOffer) error {
+	provider, err := r.linkProvider(providerName)
+	if err != nil {
+		return err
+	}
+	return provider.DeleteLink(ctx, link, endpoint, remote)
+}
+
+func (r *Runtime) linkProvider(name string) (LinkProvider, error) {
+	r.mu.RLock()
+	provider := r.providers[name]
+	r.mu.RUnlock()
+	if provider == nil {
+		return nil, fmt.Errorf("%w: %s", ErrUnknownProvider, name)
+	}
+	links, ok := provider.(LinkProvider)
+	if !ok {
+		return nil, errors.New("provider does not support links")
+	}
+	return links, nil
+}
+
 func (r *Runtime) Resync() {
 	items, err := r.store.List()
 	if err != nil {

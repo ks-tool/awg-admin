@@ -124,3 +124,22 @@ func (c *Client) resourceRequest(ctx context.Context, method, path string, input
 	}
 	return nil
 }
+
+func (c *Client) PrepareLink(ctx context.Context, provider string, request models.LinkRequest) (*models.LinkOffer, error) {
+	var offer models.LinkOffer
+	path := "/v1/providers/" + url.PathEscape(provider) + "/links/prepare"
+	if err := c.resourceRequest(ctx, http.MethodPost, path, request, &offer); err != nil {
+		return nil, err
+	}
+	return &offer, nil
+}
+
+func (c *Client) CommitLink(ctx context.Context, provider string, request models.LinkRequest) error {
+	path := "/v1/providers/" + url.PathEscape(provider) + "/links/commit"
+	return c.resourceRequest(ctx, http.MethodPost, path, request, nil)
+}
+
+func (c *Client) DeleteLink(ctx context.Context, provider string, request models.LinkRequest) error {
+	path := "/v1/providers/" + url.PathEscape(provider) + "/links/delete"
+	return c.resourceRequest(ctx, http.MethodPost, path, request, nil)
+}

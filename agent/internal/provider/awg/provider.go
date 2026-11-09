@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -48,6 +49,7 @@ type Provider struct {
 	store          storage.Storage
 	resources      resource.Store
 	secrets        *secretStore
+	links          *linkStore
 	network        Network
 	definition     models.ResourceDefinition
 	validator      *packschemavalidator.Compiled
@@ -57,6 +59,10 @@ type Provider struct {
 
 func New(store storage.Storage, secretsRoot string, network Network, version string, inventory ...resource.Store) (*Provider, error) {
 	secrets, err := newSecretStore(secretsRoot)
+	if err != nil {
+		return nil, err
+	}
+	links, err := newLinkStore(filepath.Join(filepath.Dir(secretsRoot), "links"))
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +93,7 @@ func New(store storage.Storage, secretsRoot string, network Network, version str
 		resources = inventory[0]
 	}
 	return &Provider{
-		version: version, store: store, resources: resources, secrets: secrets, network: network, validator: validator,
+		version: version, store: store, resources: resources, secrets: secrets, links: links, network: network, validator: validator,
 		peerDefinition: peerDefinition, peerValidator: peerValidator,
 		definition: models.ResourceDefinition{
 			APIVersion: APIVersion, Kind: "Interface", SpecSchema: raw, UISchema: uiSchema,

@@ -44,6 +44,9 @@ type fakeAgentTLS struct {
 	resources    map[string]models.Resource
 	schemaCalls  int
 	actionCalls  int
+	commitCalls  int
+	deleteCalls  int
+	failCommit   bool
 
 	// Discovery/import inputs (see the wg-quick import tests): live devices the
 	// agent has no config for, the conf files "on disk" by interface name, and
@@ -128,7 +131,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 		}
 		_ = json.NewEncoder(w).Encode(cfg)
 	})
-	definition := models.ResourceDefinition{APIVersion: "test/v1", Kind: "Service", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash", Actions: []models.ActionDefinition{{Name: "importSecret", Title: "Import", ResultType: models.ActionResultJSON, Mutating: true}}}
+	definition := models.ResourceDefinition{APIVersion: "test/v1", Kind: "Service", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash", Actions: []models.ActionDefinition{{Name: "importSecret", Title: "Import", ResultType: models.ActionResultJSON, Mutating: true}}, Ports: []models.PortDefinition{{Name: "tunnel", LinkKinds: []string{"test-link"}, RemotePorts: []string{"tunnel"}}}}
 	mux.HandleFunc("GET /v1/manifest", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion, AgentID: "agent", Providers: []models.ProviderDefinition{{Name: "test", Version: "1", Resources: []models.ResourceDefinition{definition}}}})
 	})
@@ -184,6 +187,31 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 	mux.HandleFunc("DELETE /v1/providers/test/resources/{kind}/{name}", func(w http.ResponseWriter, r *http.Request) {
 		fa.mu.Lock()
 		delete(fa.resources, r.PathValue("kind")+"/"+r.PathValue("name"))
+		fa.mu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+	})
+	mux.HandleFunc("POST /v1/providers/test/links/prepare", func(w http.ResponseWriter, r *http.Request) {
+		var request models.LinkRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(models.LinkOffer{LinkID: request.Link.ID, Endpoint: request.Endpoint, Data: json.RawMessage(`{"publicKey":"test-public-key"}`)})
+	})
+	mux.HandleFunc("POST /v1/providers/test/links/commit", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		defer fa.mu.Unlock()
+		if fa.failCommit {
+			fa.failCommit = false
+			http.Error(w, "temporary commit failure", http.StatusInternalServerError)
+			return
+		}
+		fa.commitCalls++
+		w.WriteHeader(http.StatusAccepted)
+	})
+	mux.HandleFunc("POST /v1/providers/test/links/delete", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		fa.deleteCalls++
 		fa.mu.Unlock()
 		w.WriteHeader(http.StatusAccepted)
 	})

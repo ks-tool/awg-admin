@@ -1,0 +1,176 @@
+/*
+  Copyright © 2026 Alexey Shulutkov <github@shulutkov.ru>
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  	http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+package awg
+
+import (
+	"context"
+	"encoding/json"
+	"path/filepath"
+	"testing"
+
+	"github.com/ks-tool/awg-admin/agent/internal/resource"
+	"github.com/ks-tool/awg-admin/agent/models"
+	"github.com/ks-tool/awg-admin/agent/storage/fs"
+)
+
+type linkSide struct {
+	provider *Provider
+	store    *fs.Dir
+	network  *fakeNetwork
+	endpoint models.LinkEndpoint
+	key      models.Key
+}
+
+func TestDistributedLinkPrepareCommitRetryAndDelete(t *testing.T) {
+	source := newLinkSide(t, "source-server", "source-resource", "192.0.2.1", true)
+	target := newLinkSide(t, "target-server", "target-resource", "192.0.2.2", false)
+	link := models.Link{ID: "link-id", Kind: "awg", Generation: 1, Source: source.endpoint, Target: target.endpoint}
+	sourceOffer, err := source.provider.PrepareLink(context.Background(), link, source.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetOffer, err := target.provider.PrepareLink(context.Background(), link, target.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sourceOffer.Endpoint.Address != "192.0.2.1" || targetOffer.Endpoint.Address != "192.0.2.2" {
+		t.Fatalf("endpoint addresses were not preserved: %+v %+v", sourceOffer, targetOffer)
+	}
+	if err := source.provider.CommitLink(context.Background(), link, source.endpoint, targetOffer); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.provider.CommitLink(context.Background(), link, target.endpoint, sourceOffer); err != nil {
+		t.Fatal(err)
+	}
+
+	sourceConfig, _ := source.store.Get("awg0")
+	targetConfig, _ := target.store.Get("awg0")
+	if sourceConfig.Table == 0 || targetConfig.Table != 0 {
+		t.Fatalf("link roles were not applied: source table=%d target table=%d", sourceConfig.Table, targetConfig.Table)
+	}
+	if len(sourceConfig.Peers) != 2 || len(targetConfig.Peers) != 1 {
+		t.Fatalf("unexpected peers after commit: source=%d target=%d", len(sourceConfig.Peers), len(targetConfig.Peers))
+	}
+	if sourceConfig.Peers[1].Endpoint != "192.0.2.2:51820" || targetConfig.Peers[0].Endpoint != "192.0.2.1:51820" {
+		t.Fatalf("unexpected endpoints: %q %q", sourceConfig.Peers[1].Endpoint, targetConfig.Peers[0].Endpoint)
+	}
+	if *targetConfig.Jc != *sourceConfig.Jc {
+		t.Fatal("source obfuscation was not applied to target")
+	}
+	if sourceConfig.Peers[0].AllowedIPs[0] != "10.0.0.10/32" {
+		t.Fatal("user peer was not preserved")
+	}
+	if err := source.provider.CommitLink(context.Background(), link, source.endpoint, targetOffer); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.provider.CommitLink(context.Background(), link, target.endpoint, sourceOffer); err != nil {
+		t.Fatal(err)
+	}
+	sourceConfig, _ = source.store.Get("awg0")
+	targetConfig, _ = target.store.Get("awg0")
+	if len(sourceConfig.Peers) != 2 || len(targetConfig.Peers) != 1 || len(sourceConfig.PreUp) != 3 || len(targetConfig.PreUp) != 3 {
+		t.Fatalf("repeated commit duplicated artifacts: source peers=%d target peers=%d source hooks=%v target hooks=%v", len(sourceConfig.Peers), len(targetConfig.Peers), sourceConfig.PreUp, targetConfig.PreUp)
+	}
+
+	if err := source.provider.DeleteLink(context.Background(), link, source.endpoint, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.provider.DeleteLink(context.Background(), link, target.endpoint, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.provider.DeleteLink(context.Background(), link, source.endpoint, nil); err != nil {
+		t.Fatalf("idempotent delete: %v", err)
+	}
+	sourceConfig, _ = source.store.Get("awg0")
+	targetConfig, _ = target.store.Get("awg0")
+	if len(sourceConfig.Peers) != 1 || sourceConfig.Peers[0].AllowedIPs[0] != "10.0.0.10/32" {
+		t.Fatalf("user peer was lost on link delete: %+v", sourceConfig.Peers)
+	}
+	if len(targetConfig.Peers) != 0 || len(sourceConfig.PreUp) != 0 || len(targetConfig.PreUp) != 0 {
+		t.Fatalf("link artifacts survived delete: source=%+v target=%+v", sourceConfig, targetConfig)
+	}
+}
+
+func newLinkSide(t *testing.T, serverID, resourceID, address string, obfuscation bool) linkSide {
+	t.Helper()
+	store, err := fs.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateKey := mustPeerKey(t)
+	userKey := mustPeerKey(t)
+	jc := 3
+	legacy := models.InterfaceConfig{Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, PrivateKey: privateKey, Peers: []models.InterfacePeer{}}
+	if obfuscation {
+		legacy.Jc = &jc
+		legacy.Peers = append(legacy.Peers, models.InterfacePeer{Key: userKey.PublicKey(), AllowedIPs: []string{"10.0.0.10/32"}})
+	}
+	if err := store.Set(&legacy); err != nil {
+		t.Fatal(err)
+	}
+	inventory, err := resource.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := InterfaceSpec{Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, Jc: legacy.Jc}
+	rawSpec, _ := json.Marshal(spec)
+	item := models.Resource{ID: resourceID, ServerID: serverID, APIVersion: APIVersion, Kind: "Interface", Name: "office", Generation: 1, Spec: rawSpec}
+	if err := inventory.Put(resource.StoredResource{Provider: "awg", Resource: item}); err != nil {
+		t.Fatal(err)
+	}
+	network := &fakeNetwork{}
+	provider, err := New(store, filepath.Join(t.TempDir(), "agent", "secrets"), network, "test", inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return linkSide{
+		provider: provider, store: store, network: network, key: privateKey,
+		endpoint: models.LinkEndpoint{ServerID: serverID, ResourceID: resourceID, APIVersion: APIVersion, Kind: "Interface", Name: "office", Port: "tunnel", Address: address},
+	}
+}
+
+func TestDeleteMigratedLegacyLinkWithoutState(t *testing.T) {
+	source := newLinkSide(t, "source-server", "source-resource", "192.0.2.1", true)
+	target := newLinkSide(t, "target-server", "target-resource", "192.0.2.2", false)
+	link := models.Link{ID: "legacy-link", Kind: "awg", Generation: 1, Source: source.endpoint, Target: target.endpoint}
+	legacy, _ := source.store.Get("awg0")
+	legacy.Table = 100
+	legacy.PreUp = []string{
+		"sysctl -w net.ipv4.ip_forward=1",
+		"ip rule del iif %i table 100 priority 100 2>/dev/null; ip rule add iif %i table 100 priority 100",
+		"ip route replace default dev %i table 100",
+	}
+	legacy.PostDown = []string{"ip route del default dev %i table 100 2>/dev/null || true"}
+	legacy.Peers = append(legacy.Peers, models.InterfacePeer{Key: target.key.PublicKey(), AllowedIPs: []string{"0.0.0.0/0"}})
+	if err := source.store.Set(legacy); err != nil {
+		t.Fatal(err)
+	}
+	targetOffer, err := target.provider.PrepareLink(context.Background(), link, target.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := source.provider.DeleteLink(context.Background(), link, source.endpoint, &targetOffer); err != nil {
+		t.Fatal(err)
+	}
+	updated, _ := source.store.Get("awg0")
+	if len(updated.Peers) != 1 || updated.Peers[0].AllowedIPs[0] != "10.0.0.10/32" {
+		t.Fatalf("legacy delete removed the wrong peers: %+v", updated.Peers)
+	}
+	if updated.Table != 0 || len(updated.PreUp) != 0 || len(updated.PostDown) != 0 {
+		t.Fatalf("legacy artifacts survived delete: %+v", updated)
+	}
+}

@@ -124,6 +124,13 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 		gr.DELETE("/:tunnelID", h.tunnelDelete)
 	})
 
+	protected.WithGroup("/links", func(gr *bunrouter.Group) {
+		gr.GET("", h.providerLinkList)
+		gr.POST("", h.providerLinkCreate)
+		gr.POST("/:linkID/apply", h.providerLinkApply)
+		gr.DELETE("/:linkID", h.providerLinkDelete)
+	})
+
 	// Server-independent: generated defaults for a new interface form.
 	protected.GET("/interfaces/defaults", h.interfaceDefaults)
 

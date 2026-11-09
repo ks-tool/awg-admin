@@ -45,7 +45,7 @@ import {AddServerModal} from '@/components/topology/TopologyModals';
 import {TopologyInspector, type TopologySelection} from '@/components/topology/TopologyInspector';
 import {TopologyMap} from '@/components/topology/TopologyMap';
 import {TopologyInterfaceNode, type InterfaceFlowNode} from '@/components/topology/TopologyNodes';
-import {canCreateTopologyConnection, mergeTopologyConnections} from '@/components/topology/connections';
+import {canCreateTopologyConnection, mergeProviderLinks} from '@/components/topology/connections';
 import {
     createNetworkConnection,
     deleteNetworkConnection,
@@ -53,11 +53,11 @@ import {
     listVPNPlugins,
     moveTopologyNodes,
 } from '@/services/topology';
-import {listTunnels} from '@/services/tunnels';
+import {createProviderLink, deleteProviderLink, listProviderLinks} from '@/services/resources';
 import {getServerAgentStatus, type AgentStatus} from '@/services/servers';
 import {useAppStore} from '@/store';
 import {useAutoRefresh} from '@/hooks/useAutoRefresh';
-import type {PluginDescriptor, Topology as TopologyData, Tunnel} from '@/types';
+import type {PluginDescriptor, ProviderLink, Topology as TopologyData} from '@/types';
 
 const emptyTopology: TopologyData = {servers: [], interfaces: [], services: [], connections: []};
 const nodeTypes: NodeTypes = {interface: TopologyInterfaceNode};
@@ -72,7 +72,7 @@ export default function Topology() {
     useAutoRefresh(refreshData);
     const [topology, setTopology] = useState<TopologyData>(emptyTopology);
     const [plugins, setPlugins] = useState<PluginDescriptor[]>([]);
-    const [tunnels, setTunnels] = useState<Tunnel[]>([]);
+    const [links, setLinks] = useState<ProviderLink[]>([]);
     const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus | null>>({});
     const [loading, setLoading] = useState(true);
     const [selection, setSelection] = useState<TopologySelection | null>(null);
@@ -112,16 +112,17 @@ export default function Topology() {
         setAgentStatuses(previous => ({...previous, ...Object.fromEntries(entries)}));
     }, []);
     const refresh = useCallback(async () => {
-        const data = await getTopology();
+        const [data, providerLinks] = await Promise.all([getTopology(), listProviderLinks()]);
         setTopology(data);
+        setLinks(providerLinks);
         void refreshAgentStatuses(data.servers);
     }, [refreshAgentStatuses]);
 
     useEffect(() => {
-        void Promise.all([getTopology(), listVPNPlugins(), listTunnels()]).then(([topologyData, pluginData, tunnelData]) => {
+        void Promise.all([getTopology(), listVPNPlugins(), listProviderLinks()]).then(([topologyData, pluginData, providerLinks]) => {
             setTopology(topologyData);
             setPlugins(pluginData);
-            setTunnels(tunnelData ?? []);
+            setLinks(providerLinks ?? []);
             void refreshAgentStatuses(topologyData.servers);
         }).catch(error => {
             toast.error(error instanceof Error ? error.message : t('topology.loadError'));
@@ -142,7 +143,7 @@ export default function Topology() {
     })), [topology]);
 
     useEffect(() => setNodes(graphNodes), [graphNodes, setNodes]);
-    const graphConnections = useMemo(() => mergeTopologyConnections(topology.connections, tunnels), [topology.connections, tunnels]);
+    const graphConnections = useMemo(() => mergeProviderLinks(topology.connections, links), [topology.connections, links]);
     useEffect(() => {
         setEdges(graphConnections.map(connection => ({
             id: connection.id,
@@ -174,7 +175,13 @@ export default function Topology() {
                 setConnectionToCreate(null);
                 return;
             }
-            await createNetworkConnection(connectionToCreate.source, connectionToCreate.target);
+            const source = topology.interfaces.find(item => item.id === connectionToCreate.source);
+            const target = topology.interfaces.find(item => item.id === connectionToCreate.target);
+            if (source?.legacy && target?.legacy) {
+                await createProviderLink(source.id, target.id);
+            } else {
+                await createNetworkConnection(connectionToCreate.source, connectionToCreate.target);
+            }
             await refresh();
             setConnectionToCreate(null);
             toast.success(t('topology.connectionCreated'));
@@ -183,7 +190,7 @@ export default function Topology() {
         } finally {
             setCreatingConnection(false);
         }
-    }, [canConnect, connectionToCreate, refresh, t]);
+    }, [canConnect, connectionToCreate, refresh, t, topology.interfaces]);
     const connectionLabel = useCallback((id: string) => {
         const iface = topology.interfaces.find(item => item.id === id);
         const server = topology.servers.find(item => item.id === iface?.serverId);
@@ -207,7 +214,11 @@ export default function Topology() {
         if (!connectionToDelete) return;
         setDeletingConnection(true);
         try {
-            await deleteNetworkConnection(connectionToDelete.id);
+            if (connectionToDelete.id.startsWith('link:')) {
+                await deleteProviderLink(connectionToDelete.id.slice(5));
+            } else {
+                await deleteNetworkConnection(connectionToDelete.id);
+            }
             await refresh();
             setConnectionToDelete(null);
             toast.success(t('topology.deleted'));
@@ -290,7 +301,7 @@ export default function Topology() {
                             interfaces={topology.interfaces}
                             services={topology.services}
                             connections={topology.connections}
-                            tunnels={tunnels}
+                            links={links}
                             agentStatuses={agentStatuses}
                             totalUsers={users.length}
                             onSelect={setMetricsModalServerId}

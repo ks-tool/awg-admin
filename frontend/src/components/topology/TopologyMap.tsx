@@ -18,7 +18,7 @@ import {useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEv
 import {useTranslation} from 'react-i18next';
 import {GeoScatter, type GeoPoint} from '@zenith-visuals/maps';
 import {MapPin, MapPinned, RotateCcw, ZoomIn, ZoomOut} from 'lucide-react';
-import type {NetworkConnection, NetworkInterface, TopologyServer, Tunnel, VPNService} from '@/types';
+import type {NetworkConnection, NetworkInterface, ProviderLink, TopologyServer, VPNService} from '@/types';
 import type {AgentStatus} from '@/services/servers';
 import {centeredMapPan, clampMapPan, fitMapViewport} from './mapViewport';
 import {clusterTopologyServers, expandedClusterCoordinates} from './mapClusters';
@@ -62,13 +62,13 @@ interface TopologyMapProps {
     interfaces: NetworkInterface[];
     services: VPNService[];
     connections: NetworkConnection[];
-    tunnels: Tunnel[];
+    links: ProviderLink[];
     agentStatuses: Record<string, AgentStatus | null>;
     totalUsers: number;
     onSelect: (id: string) => void;
 }
 
-export function TopologyMap({servers, interfaces, services, connections, tunnels, agentStatuses, totalUsers, onSelect}: TopologyMapProps) {
+export function TopologyMap({servers, interfaces, services, connections, links, agentStatuses, totalUsers, onSelect}: TopologyMapProps) {
     const {t} = useTranslation();
     const containerRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({width: 0, height: 560});
@@ -203,7 +203,7 @@ export function TopologyMap({servers, interfaces, services, connections, tunnels
                 }}
             >
                 <WorldLand width={size.width} height={size.height} transform={transform} />
-                <TopologyTunnels servers={displayServers} interfaces={interfaces} connections={connections} tunnels={tunnels} width={size.width} height={size.height} transform={transform} zoom={zoom} />
+                <TopologyTunnels servers={displayServers} interfaces={interfaces} connections={connections} links={links} width={size.width} height={size.height} transform={transform} zoom={zoom} />
                 <GeoScatter
                     className="topology-scatter"
                     data={points}

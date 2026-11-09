@@ -779,6 +779,110 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class LinkStatus {
+	    observedGeneration: number;
+	    phase: string;
+	    conditions?: Condition[];
+
+	    static createFrom(source: any = {}) {
+	        return new LinkStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.observedGeneration = source["observedGeneration"];
+	        this.phase = source["phase"];
+	        this.conditions = this.convertValues(source["conditions"], Condition);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class LinkEndpoint {
+	    serverId: string;
+	    resourceId: string;
+	    apiVersion: string;
+	    kind: string;
+	    name: string;
+	    port: string;
+	    address?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new LinkEndpoint(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.serverId = source["serverId"];
+	        this.resourceId = source["resourceId"];
+	        this.apiVersion = source["apiVersion"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.port = source["port"];
+	        this.address = source["address"];
+	    }
+	}
+	export class Link {
+	    id: string;
+	    name?: string;
+	    kind: string;
+	    generation: number;
+	    source: LinkEndpoint;
+	    target: LinkEndpoint;
+	    spec?: number[];
+	    status: LinkStatus;
+
+	    static createFrom(source: any = {}) {
+	        return new Link(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.generation = source["generation"];
+	        this.source = this.convertValues(source["source"], LinkEndpoint);
+	        this.target = this.convertValues(source["target"], LinkEndpoint);
+	        this.spec = source["spec"];
+	        this.status = this.convertValues(source["status"], LinkStatus);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+
 	export class PortDefinition {
 	    name: string;
 	    title?: string;

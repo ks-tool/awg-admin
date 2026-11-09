@@ -45,6 +45,9 @@ func NewResourceHandler(runtime *resource.Runtime, mws ...mux.Middleware) http.H
 	router.DELETE("/v1/providers/{provider}/resources/{kind}/{name}", h.delete)
 	router.GET("/v1/providers/{provider}/resources/{kind}/{name}/status", h.status)
 	router.POST("/v1/providers/{provider}/resources/{kind}/{name}/actions/{action}", h.action)
+	router.POST("/v1/providers/{provider}/links/prepare", h.prepareLink)
+	router.POST("/v1/providers/{provider}/links/commit", h.commitLink)
+	router.POST("/v1/providers/{provider}/links/delete", h.deleteLink)
 	router.GET("/v1/events", h.events)
 	return router
 }
@@ -155,4 +158,48 @@ func resourceError(w http.ResponseWriter, err error) {
 		status = http.StatusNotFound
 	}
 	http.Error(w, err.Error(), status)
+}
+
+func (h *resourceHandler) prepareLink(w http.ResponseWriter, r *http.Request) {
+	var request models.LinkRequest
+	if err := decode(r, &request); err != nil {
+		badRequest(w, err)
+		return
+	}
+	offer, err := h.runtime.PrepareLink(r.Context(), r.PathValue("provider"), request.Link, request.Endpoint)
+	if err != nil {
+		resourceError(w, err)
+		return
+	}
+	encode(w, offer)
+}
+
+func (h *resourceHandler) commitLink(w http.ResponseWriter, r *http.Request) {
+	var request models.LinkRequest
+	if err := decode(r, &request); err != nil {
+		badRequest(w, err)
+		return
+	}
+	if request.RemoteOffer == nil {
+		badRequest(w, errors.New("remote offer is required"))
+		return
+	}
+	if err := h.runtime.CommitLink(r.Context(), r.PathValue("provider"), request.Link, request.Endpoint, *request.RemoteOffer); err != nil {
+		resourceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *resourceHandler) deleteLink(w http.ResponseWriter, r *http.Request) {
+	var request models.LinkRequest
+	if err := decode(r, &request); err != nil {
+		badRequest(w, err)
+		return
+	}
+	if err := h.runtime.DeleteLink(r.Context(), r.PathValue("provider"), request.Link, request.Endpoint, request.RemoteOffer); err != nil {
+		resourceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
 }

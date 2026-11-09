@@ -14,16 +14,12 @@
   limitations under the License.
 */
 
-import type {NetworkConnection, Tunnel} from '@/types';
+import type {NetworkConnection, ProviderLink} from '@/types';
 
-export function mergeTopologyConnections(connections: NetworkConnection[], tunnels: Tunnel[]): NetworkConnection[] {
-    const tunnelConnections = tunnels.flatMap(tunnel => tunnel.members.slice(1).map((member, index) => ({
-        id: `tunnel:${tunnel.id}:${index}`,
-        sourceId: tunnel.members[index].ifaceId,
-        targetId: member.ifaceId,
-    })));
+export function mergeProviderLinks(connections: NetworkConnection[], links: ProviderLink[]): NetworkConnection[] {
+    const providerConnections = links.map(link => ({id: `link:${link.id}`, sourceId: link.source.resourceId, targetId: link.target.resourceId}));
     const seen = new Set<string>();
-    return [...connections, ...tunnelConnections].filter(connection => {
+    return [...connections, ...providerConnections].filter(connection => {
         const key = `${connection.sourceId}:${connection.targetId}`;
         if (seen.has(key)) return false;
         seen.add(key);

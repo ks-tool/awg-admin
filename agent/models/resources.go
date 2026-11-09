@@ -147,6 +147,13 @@ type LinkEndpoint struct {
 	Kind       string `json:"kind"`
 	Name       string `json:"name"`
 	Port       string `json:"port"`
+	Address    string `json:"address,omitempty"`
+}
+
+type LinkRequest struct {
+	Link        Link         `json:"link"`
+	Endpoint    LinkEndpoint `json:"endpoint"`
+	RemoteOffer *LinkOffer   `json:"remoteOffer,omitempty"`
 }
 
 type LinkStatus struct {
