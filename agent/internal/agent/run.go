@@ -38,6 +38,7 @@ import (
 
 	"github.com/ks-tool/awg-admin/agent/internal/api"
 	"github.com/ks-tool/awg-admin/agent/internal/metrics"
+	awgprovider "github.com/ks-tool/awg-admin/agent/internal/provider/awg"
 	"github.com/ks-tool/awg-admin/agent/internal/resource"
 	"github.com/ks-tool/awg-admin/agent/internal/service"
 	"github.com/ks-tool/awg-admin/agent/mux/middleware"
@@ -123,7 +124,6 @@ func Run(version string) {
 		log.Fatal().Err(err).Msg("failed to initialize agent identity")
 	}
 	resourceRuntime := resource.NewRuntime(resourceStore, agentID, time.Second, 30*time.Second)
-	resourceRuntime.Start(context.Background())
 	defer resourceRuntime.Close()
 
 	log.Info().Msg("Loading Wireguard interfaces")
@@ -146,6 +146,14 @@ func Run(version string) {
 		log.Fatal().Err(err).Msg("failed to open wgctrl client for metrics")
 	}
 	defer func() { _ = metricsAwg.Close() }()
+	awgProvider, err := awgprovider.New(store, filepath.Join(cfg.DB, "resources", "secrets"), service.NewHandler(store, metricsAwg), version)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize AWG provider")
+	}
+	if err := resourceRuntime.Register(awgProvider); err != nil {
+		log.Fatal().Err(err).Msg("failed to register AWG provider")
+	}
+	resourceRuntime.Start(context.Background())
 
 	collector := metrics.NewCollector(metricsAwg, store, cfg.MetricsInterval)
 	// Persist metrics history under the agent's data dir so charts survive a
