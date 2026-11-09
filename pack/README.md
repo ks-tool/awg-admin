@@ -14,11 +14,12 @@ Publish the generated bundles with the pack OCI tooling, then use the normal
 `pack init` / `pack plan` / `pack apply` workflow with the `ansible` target. Do not
 copy provider binaries or systemd units through vpn-admin's legacy deployment UI.
 
-`example-provider` also writes `/var/lib/vpn-agent/providers.conf`. The registry
-contains the protocol version, the provider address and the definitions consumed by
-RJSF. On a real provider, generate `definition` from its `GET /v1/manifest` response
-instead of editing schemas in vpn-admin. Restart the agent service after changing
-the registry. External providers listen on loopback by default; direct remote
+`example-provider` writes `/var/lib/vpn-agent/providers.d/example.conf`. Each provider
+uses a separate registry file, and the agent also reads the legacy `providers.conf`.
+The registry contains the protocol version, provider address and definitions consumed
+by RJSF. On a real provider, generate `definition` from its `GET /v1/manifest` response
+instead of editing schemas in vpn-admin. The provider unit restarts an active agent
+after registration. External providers listen on loopback by default; direct remote
 registries must use mTLS.
 
 The agent loads external providers without rebuilding agent-core. Provider crashes

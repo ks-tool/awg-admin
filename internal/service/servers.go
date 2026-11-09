@@ -73,24 +73,20 @@ func (s *Service) GetServer(id string) (*models.Server, error) {
 	return s.store.Servers().Get(sID)
 }
 
-// ServerAgentStatus reports a tri-state health for id's agent, for the
-// dashboard (see models.AgentStatus). It combines transport liveness (the SSH
-// tunnel, or the direct mTLS path) with an actual probe of the agent's HTTP API
-// (a lightweight List /interfaces/ via callAgent, which self-heals a dead SSH
-// tunnel by reopening it):
+// ServerAgentStatus first completes any pending v1 inventory migration through
+// the agent's AWG provider, then combines transport liveness with an HTTP probe:
 //
+//   - AgentStatusUnmanaged (amber): the v2 agent or AWG provider is not ready to
+//     adopt migrated resources.
 //   - AgentStatusOK       (green):  the agent is reachable and answering — which
 //     for an SSH server also means its tunnel is up.
 //   - AgentStatusDown     (red):    the SSH tunnel could not be brought up, or an
-//     mTLS agent is unreachable — the connection is
-//     simply down.
+//     mTLS agent is unreachable.
 //   - AgentStatusDegraded (amber):  the SSH tunnel is up but the agent behind it
 //     isn't answering, or the state is indeterminate.
 //
-// Any non-OK state is logged at error level (with server_id) so problems are
-// visible in the logs. This is a passive check: reconnect/passphrase failures
-// collapse into the status rather than surfacing as an error (or a passphrase
-// prompt) to the caller.
+// Connectivity failures are logged and collapsed into a status rather than
+// surfacing as an error or passphrase prompt to the caller.
 func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	sID, err := uuid.Parse(id)
 	if err != nil {
@@ -100,7 +96,12 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	if err != nil {
 		return "", err
 	}
-
+	if srv.Unmanaged {
+		if err := s.completeServerMigration(srv); err != nil {
+			log.Warn().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
+			return models.AgentStatusUnmanaged, nil
+		}
+	}
 	mtls := !srv.Agent.TLS.IsZero()
 
 	// For SSH servers the tunnel must be up before the agent can be reached at
@@ -133,6 +134,22 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 		return models.AgentStatusDegraded, nil
 	}
 
+	resources, err := s.localProviderResources(id)
+	if err != nil {
+		return "", err
+	}
+	if len(resources) > 0 {
+		resources, err = s.ListProviderResources(id, "awg")
+		if err != nil {
+			log.Warn().Err(err).Str("server_id", id).Msg("failed to read provider resource health")
+			return models.AgentStatusDegraded, nil
+		}
+		for _, resource := range resources {
+			if resource.Status.Phase != models.ResourceReady || resource.Status.ObservedGeneration < resource.Generation {
+				return models.AgentStatusDegraded, nil
+			}
+		}
+	}
 	return models.AgentStatusOK, nil
 }
 
@@ -402,6 +419,28 @@ func (s *Service) DeleteServer(id string) error {
 	sID, err := uuid.Parse(id)
 	if err != nil {
 		return err
+	}
+	links, err := s.store.Links().List()
+	if err != nil {
+		return err
+	}
+	for _, link := range links {
+		if link.Source.ServerID == id || link.Target.ServerID == id {
+			return invalidInput("remove provider links attached to server %q first", id)
+		}
+	}
+	resources, err := s.localProviderResources(id)
+	if err != nil {
+		return err
+	}
+	for _, kind := range []string{"Peer", "Interface"} {
+		for _, item := range resources {
+			if item.Kind == kind {
+				if err := s.DeleteProviderResource(id, "awg", item.Kind, item.Name); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	// Refuse if any of the server's interfaces is part of a tunnel — the
 	// tunnel's other end lives on a different server, so it must be removed

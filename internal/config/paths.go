@@ -43,7 +43,7 @@ func AdminDatabasePath(home string) string {
 }
 
 func AdminAutocertPath(home string) string {
-	return existingPath(home, filepath.Join(".vpn-admin", "pki"), ".awg-admin-autocert")
+	return existingPath(home, filepath.Join(".vpn-admin", "acme"), ".awg-admin-autocert")
 }
 
 func AdminPluginsPath(home string) string {

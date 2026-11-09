@@ -57,33 +57,33 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings ListUsers failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
     },
 
-    async createUser(input: any): Promise<ApiResponse<models.User>> {
+    async createUser(input: unknown): Promise<ApiResponse<models.User>> {
         try {
-            const data = await AppBindings.CreateUser(input);
+            const data = await AppBindings.CreateUser(input as never);
             return { data };
         } catch (error) {
             console.error('Bindings CreateUser failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
     },
 
-    async updateUser(id: string, input: any): Promise<ApiResponse<models.User>> {
+    async updateUser(id: string, input: unknown): Promise<ApiResponse<models.User>> {
         try {
-            const data = await AppBindings.UpdateUser(id, input);
+            const data = await AppBindings.UpdateUser(id, input as never);
             return { data };
         } catch (error) {
             console.error('Bindings UpdateUser failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -109,20 +109,20 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings ListServers failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
     },
 
-    async updateServer(id: string, input: any): Promise<ApiResponse<models.Server>> {
+    async updateServer(id: string, input: unknown): Promise<ApiResponse<models.Server>> {
         try {
-            const data = await AppBindings.UpdateServer(id, input);
+            const data = await AppBindings.UpdateServer(id, input as never);
             return { data };
         } catch (error) {
             console.error('Bindings UpdateServer failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -135,7 +135,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings GenerateAgentTLS failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -161,7 +161,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings ListUnmanagedInterfaces failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -174,7 +174,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings PreviewImport failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -187,7 +187,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings ImportInterfaceFromServer failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -226,7 +226,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings GetServerMetricsHistory failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -239,7 +239,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings ListInterfaces failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -251,7 +251,7 @@ export const bindingsClient = {
             return { data: data || [] };
         } catch (error) {
             console.error('Bindings ListTunnels failed:', error);
-            return { data: null as any, error: extractErrorMessage(error) };
+            return { data: null as never, error: extractErrorMessage(error) };
         }
     },
 
@@ -262,20 +262,20 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings GetInterface failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
     },
 
-    async createInterface(serverId: string, config: any): Promise<ApiResponse<models.Interface>> {
+    async createInterface(serverId: string, config: unknown): Promise<ApiResponse<models.Interface>> {
         try {
-            const data = await AppBindings.CreateInterface(serverId, config);
+            const data = await AppBindings.CreateInterface(serverId, config as never);
             return { data };
         } catch (error) {
             console.error('Bindings CreateInterface failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -288,20 +288,20 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings GenerateInterfaceDefaults failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
     },
 
-    async updateInterfaceConfig(serverId: string, interfaceId: string, config: any): Promise<ApiResponse<models.Interface>> {
+    async updateInterfaceConfig(serverId: string, interfaceId: string, config: unknown): Promise<ApiResponse<models.Interface>> {
         try {
-            const data = await AppBindings.UpdateInterfaceConfig(serverId, interfaceId, config);
+            const data = await AppBindings.UpdateInterfaceConfig(serverId, interfaceId, config as never);
             return { data };
         } catch (error) {
             console.error('Bindings UpdateInterfaceConfig failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -320,14 +320,14 @@ export const bindingsClient = {
         }
     },
 
-    async addPeer(userId: string, input: any): Promise<ApiResponse<models.User>> {
+    async addPeer(userId: string, input: unknown): Promise<ApiResponse<models.User>> {
         try {
-            const data = await AppBindings.AddPeer(userId, input);
+            const data = await AppBindings.AddPeer(userId, input as never);
             return { data };
         } catch (error) {
             console.error('Bindings AddPeer failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -340,7 +340,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings GetPeerConfig failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -353,7 +353,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings GetPeerQRCode failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -485,7 +485,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings DeletePeer failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -498,7 +498,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings MigratePeer failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }
@@ -511,7 +511,7 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings SetPeerDisabled failed:', error);
             return {
-                data: null as any,
+                data: null as never,
                 error: extractErrorMessage(error),
             };
         }

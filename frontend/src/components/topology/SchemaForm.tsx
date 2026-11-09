@@ -17,7 +17,7 @@
 import Form, {type IChangeEvent} from '@rjsf/core';
 import validator from '@rjsf/validator-ajv8';
 import type {RJSFSchema, UiSchema} from '@rjsf/utils';
-import {buttons} from '@/components/common/Modal';
+import {buttons} from '@/components/common/controls';
 
 interface SchemaFormProps {
     schema: Record<string, unknown>;

@@ -36,6 +36,11 @@ const pushTimeout = 15 * time.Second
 // rejected config, ...) is recorded but never returned to the caller, so
 // editing interfaces/peers keeps working while the agent is offline.
 func (s *Service) pushInterface(serverID uuid.UUID, iface *models.Interface) {
+	if handled, err := s.pushProviderInterface(serverID, iface); handled {
+		s.recordSyncResult(serverID, iface, err)
+		return
+	}
+
 	srv, err := s.store.Servers().Get(serverID)
 	if err != nil {
 		log.Error().Err(err).Str("server_id", serverID.String()).Msg("push interface: failed to load server")

@@ -17,6 +17,7 @@
 package boltdb
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -40,25 +41,38 @@ type legacyFixture struct {
 	user    uuid.UUID
 }
 
-func TestLegacyMigrationPreservesDataAndIsIdempotent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.db")
-	fixture := createLegacyFixture(t, path, false)
-	db, err := Open(path)
+func TestManualMigrationPreservesSourceAndMarksServersUnmanaged(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "legacy.db")
+	destination := filepath.Join(root, ".vpn-admin", "db")
+	fixture := createLegacyFixture(t, source, false)
+	before, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateV2(source, destination, false); err != nil {
+		t.Fatalf("MigrateV2: %v", err)
+	}
+	after, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("v1 source database was modified")
+	}
+
+	db, err := Open(destination)
 	if err != nil {
 		t.Fatalf("Open migrated database: %v", err)
 	}
 	if version, err := db.SchemaVersion(); err != nil || version != currentSchemaVersion {
 		t.Fatalf("SchemaVersion = %d, %v", version, err)
 	}
-	if _, err := os.Stat(path + ".v1.backup"); err != nil {
-		t.Fatalf("migration backup: %v", err)
-	}
-
 	server, err := db.Servers().Get(fixture.serverA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if server.Info.Location != "Moscow" || server.SSH.KeyData != "private-ssh-key" || server.Agent.Address != "127.0.0.1:8080" {
+	if !server.Unmanaged || server.Info.Location != "Moscow" || server.SSH.KeyData != "private-ssh-key" || server.Agent.Address != "127.0.0.1:8080" {
 		t.Fatalf("server settings changed: %+v", server)
 	}
 	topology, err := db.Topology().Get()
@@ -99,6 +113,9 @@ func TestLegacyMigrationPreservesDataAndIsIdempotent(t *testing.T) {
 	if interfaceResource.ID != fixture.ifaceA.String() || interfaceResource.ServerID != fixture.serverA.String() {
 		t.Fatalf("interface identity changed: %+v", interfaceResource)
 	}
+	if interfaceResource.Status.Phase != models.ResourcePending || !hasUnmanagedCondition(interfaceResource.Status.Conditions) {
+		t.Fatalf("interface was not marked unmanaged: %+v", interfaceResource.Status)
+	}
 	if strings.Contains(string(interfaceResource.Spec), "private-awg-key") || strings.Contains(string(interfaceResource.Spec), `"pk"`) || strings.Contains(string(interfaceResource.Spec), `"peers"`) {
 		t.Fatalf("private key or peers leaked into interface spec: %s", interfaceResource.Spec)
 	}
@@ -116,66 +133,113 @@ func TestLegacyMigrationPreservesDataAndIsIdempotent(t *testing.T) {
 	if err != nil || len(links) != 1 {
 		t.Fatalf("migrated links: %+v, %v", links, err)
 	}
-	if links[0].ID != fixture.tunnel.String() || links[0].Source.ResourceID == links[0].Target.ResourceID {
+	if links[0].ID != fixture.tunnel.String() || links[0].Source.ResourceID == links[0].Target.ResourceID || links[0].Status.Phase != models.LinkPending {
 		t.Fatalf("unexpected migrated link: %+v", links[0])
 	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	db, err = Open(path)
+	db, err = Open(destination)
 	if err != nil {
 		t.Fatalf("second Open: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	resourcesA, _ = db.Resources(fixture.serverA).List()
 	resourcesB, _ = db.Resources(fixture.serverB).List()
 	links, _ = db.Links().List()
 	if len(resourcesA) != 2 || len(resourcesB) != 1 || len(links) != 1 {
-		t.Fatalf("second migration duplicated data: A=%d B=%d links=%d", len(resourcesA), len(resourcesB), len(links))
+		t.Fatalf("reopening duplicated data: A=%d B=%d links=%d", len(resourcesA), len(resourcesB), len(links))
 	}
 }
 
-func TestLegacyMigrationRollsBackCorruptedConversion(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "corrupt.db")
-	createLegacyFixture(t, path, true)
-	if _, err := Open(path); err == nil {
-		t.Fatal("corrupted database migrated without an error")
-	}
-	if _, err := os.Stat(path + ".v1.backup"); err != nil {
-		t.Fatalf("backup was not retained after rollback: %v", err)
-	}
-	raw, err := bolt.Open(path, 0600, nil)
+func TestV1DatabaseRequiresManualMigration(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "legacy.db")
+	createLegacyFixture(t, source, false)
+	before, err := os.ReadFile(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer raw.Close()
-	if err := raw.View(func(tx *bolt.Tx) error {
-		if tx.Bucket(bktResources) != nil || tx.Bucket(bktMeta) != nil {
-			t.Fatal("new buckets survived rolled back migration")
-		}
-		if tx.Bucket(bktServers) == nil {
-			t.Fatal("legacy servers were removed")
-		}
-		return nil
-	}); err != nil {
+	if _, err := Open(source); err == nil {
+		t.Fatal("v1 database was opened without manual migration")
+	}
+	after, err := os.ReadFile(source)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("opening v1 database modified it")
 	}
 }
 
-func TestNewDatabaseStartsAtCurrentSchemaWithoutBackup(t *testing.T) {
+func TestFailedMigrationLeavesSourceAndDestinationUntouched(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "corrupt.db")
+	destination := filepath.Join(root, "v2.db")
+	createLegacyFixture(t, source, true)
+	before, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateV2(source, destination, false); err == nil {
+		t.Fatal("corrupted database migrated without an error")
+	}
+	if _, err := os.Stat(destination); !os.IsNotExist(err) {
+		t.Fatalf("partial destination survived failed migration: %v", err)
+	}
+	after, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("failed migration modified v1 source")
+	}
+}
+
+func TestMigrationDoesNotReplaceDestinationWithoutForce(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "legacy.db")
+	destination := filepath.Join(root, "v2.db")
+	createLegacyFixture(t, source, false)
+	if err := os.WriteFile(destination, []byte("existing"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateV2(source, destination, false); err == nil {
+		t.Fatal("existing destination was replaced without force")
+	}
+	content, err := os.ReadFile(destination)
+	if err != nil || string(content) != "existing" {
+		t.Fatalf("destination changed: %q, %v", content, err)
+	}
+	if err := MigrateV2(source, destination, true); err != nil {
+		t.Fatalf("forced migration: %v", err)
+	}
+	db, err := Open(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+}
+
+func TestNewDatabaseStartsAtCurrentSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "new.db")
 	db, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if version, err := db.SchemaVersion(); err != nil || version != currentSchemaVersion {
 		t.Fatalf("SchemaVersion = %d, %v", version, err)
 	}
-	if _, err := os.Stat(path + ".v1.backup"); !os.IsNotExist(err) {
-		t.Fatalf("new database unexpectedly has a migration backup: %v", err)
+}
+
+func hasUnmanagedCondition(conditions []models.Condition) bool {
+	for _, condition := range conditions {
+		if condition.Type == "Managed" && condition.Status == models.ConditionFalse && condition.Reason == "Unmanaged" {
+			return true
+		}
 	}
+	return false
 }
 
 func createLegacyFixture(t *testing.T, path string, corruptUsers bool) legacyFixture {
@@ -223,7 +287,7 @@ func createLegacyFixture(t *testing.T, path string, corruptUsers bool) legacyFix
 		topology := models.Topology{Servers: []models.TopologyServer{{ID: fixture.serverA, Location: "Moscow", Latitude: &latitude}}, Connections: []models.NetworkConnection{{ID: uuid.New(), SourceID: fixture.ifaceA, TargetID: fixture.ifaceB}}}
 		return put(tx.Bucket(bktTopology), topologyRecordKey, topology)
 	}); err != nil {
-		raw.Close()
+		_ = raw.Close()
 		t.Fatal(err)
 	}
 	if err := raw.Close(); err != nil {

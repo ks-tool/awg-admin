@@ -27,7 +27,8 @@ import {CopyButton} from '@/components/common/CopyButton';
 import {StatusBadge} from '@/components/common/StatusBadge';
 import {Container} from '@/components/common/Container';
 import {FormField} from '@/components/common/FormField';
-import {buttons, inputs, Modal} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {CollapsibleSection} from '@/components/common/CollapsibleSection';
 import {cn} from '@/lib/utils';
@@ -73,13 +74,19 @@ function PeerQRModal({userId, publicKey, peerName, onClose}: {
         return () => {
             cancelled = true;
         };
-    }, [userId, publicKey]);
+    }, [userId, publicKey, t]);
 
     // Strip only characters that are actually illegal in filenames (keep
     // Unicode letters, e.g. Cyrillic peer names, intact), then trim stray
     // separators so the result is never empty.
     const safeName = (peerName || 'peer')
-        .replace(/[/\\:*?"<>|\x00-\x1f]+/g, '_')
+        .replace(/[/\\:*?"<>|]+/g, '_')
+        .split('')
+        .filter(character => {
+            const code = character.charCodeAt(0);
+            return code > 31 && code !== 127;
+        })
+        .join('')
         .replace(/^[.\s]+|[.\s]+$/g, '') || 'peer';
 
     // Save the (already-rendered, server-produced) PNG to a file. The browser
@@ -183,11 +190,13 @@ function AddPeerModal({
     const [interfaces, setInterfaces] = useState<Array<{ id: string; name: string; addr: string }>>([]);
 
     useEffect(() => {
-        if (!form.serverId) {
-            setInterfaces([]);
-            return;
-        }
         let cancelled = false;
+        if (!form.serverId) {
+            void Promise.resolve().then(() => {
+                if (!cancelled) setInterfaces([]);
+            });
+            return () => {cancelled = true;};
+        }
         (async () => {
             const list = await listInterfaces(form.serverId);
             if (!cancelled) {
@@ -406,13 +415,15 @@ export default function UserDetail() {
     /* ---- Effects ---------------------------------------------------------- */
 
     useEffect(() => {
-        if (user) {
+        if (!user) return;
+        const timeout = window.setTimeout(() => {
             setFormData({
                 name: user.name || '',
                 description: user.description || '',
                 disabled: user.disabled || false,
             });
-        }
+        }, 0);
+        return () => window.clearTimeout(timeout);
     }, [user]);
 
     /* ---- Handlers --------------------------------------------------------- */

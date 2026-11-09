@@ -18,7 +18,7 @@ import {type FormEvent, useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Pencil, Play, Plus, RefreshCw, Trash2, X} from 'lucide-react';
 import {toast} from 'sonner';
-import {buttons, inputs} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {FormField} from '@/components/common/FormField';
 import {SchemaForm} from './SchemaForm';

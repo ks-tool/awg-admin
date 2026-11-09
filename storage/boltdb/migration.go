@@ -21,13 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
 
 	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
-	"github.com/ks-tool/vpn-admin/storage/boltdb/dump"
 
 	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
@@ -45,9 +45,23 @@ var (
 )
 
 func (db *BoltDB) initialize(path string) error {
-	legacy := false
+	version, legacy, err := readSchemaVersion(db.db)
+	if err != nil {
+		return err
+	}
+	if version > currentSchemaVersion {
+		return fmt.Errorf("database schema version %d is newer than supported version %d", version, currentSchemaVersion)
+	}
+	if legacy {
+		return fmt.Errorf("database %s uses schema v1; run awg-migrate v2 before starting vpn-admin", path)
+	}
+	return db.db.Update(initializeSchema)
+}
+
+func readSchemaVersion(db *bolt.DB) (int, bool, error) {
 	version := 0
-	if err := db.db.View(func(tx *bolt.Tx) error {
+	legacy := false
+	err := db.View(func(tx *bolt.Tx) error {
 		meta := tx.Bucket(bktMeta)
 		if meta != nil && meta.Get(schemaVersionKey) != nil {
 			parsed, err := strconv.Atoi(string(meta.Get(schemaVersionKey)))
@@ -58,66 +72,108 @@ func (db *BoltDB) initialize(path string) error {
 		}
 		legacy = version == 0 && tx.Bucket(bktServers) != nil
 		return nil
-	}); err != nil {
-		return err
-	}
-	if version > currentSchemaVersion {
-		return fmt.Errorf("database schema version %d is newer than supported version %d", version, currentSchemaVersion)
-	}
-	if legacy {
-		if err := backupBeforeMigration(db.db, path); err != nil {
-			return fmt.Errorf("backup before migration: %w", err)
-		}
-	}
-
-	return db.db.Update(func(tx *bolt.Tx) error {
-		for _, bucket := range [][]byte{bktServers, bktInterfaces, bktUsers, bktAgentSources, bktTopology, bktAuth, bktResources, bktLinks, bktProviders, bktMeta} {
-			if _, err := tx.CreateBucketIfNotExists(bucket); err != nil {
-				return err
-			}
-		}
-		if legacy {
-			if err := migrateLegacyRecords(tx); err != nil {
-				return err
-			}
-		}
-		authBucket := tx.Bucket(bktAuth)
-		if authBucket.Get(authRecordKey) == nil {
-			hash, err := bcrypt.GenerateFromPassword([]byte(defaultAdminPassword), bcrypt.DefaultCost)
-			if err != nil {
-				return err
-			}
-			if err := put(authBucket, authRecordKey, &models.AuthCredentials{Username: defaultAdminUsername, PasswordHash: string(hash)}); err != nil {
-				return err
-			}
-		}
-		return tx.Bucket(bktMeta).Put(schemaVersionKey, []byte(strconv.Itoa(currentSchemaVersion)))
 	})
+	return version, legacy, err
 }
 
-func backupBeforeMigration(db *bolt.DB, path string) error {
-	file, err := os.OpenFile(path+".v1.backup", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+func initializeSchema(tx *bolt.Tx) error {
+	for _, bucket := range [][]byte{bktServers, bktInterfaces, bktUsers, bktAgentSources, bktTopology, bktAuth, bktResources, bktLinks, bktProviders, bktMeta} {
+		if _, err := tx.CreateBucketIfNotExists(bucket); err != nil {
+			return err
+		}
+	}
+	authBucket := tx.Bucket(bktAuth)
+	if authBucket.Get(authRecordKey) == nil {
+		hash, err := bcrypt.GenerateFromPassword([]byte(defaultAdminPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		if err := put(authBucket, authRecordKey, &models.AuthCredentials{Username: defaultAdminUsername, PasswordHash: string(hash)}); err != nil {
+			return err
+		}
+	}
+	return tx.Bucket(bktMeta).Put(schemaVersionKey, []byte(strconv.Itoa(currentSchemaVersion)))
+}
+
+func MigrateV2(sourcePath, destinationPath string, force bool) error {
+	sourceAbs, err := filepath.Abs(sourcePath)
 	if err != nil {
 		return err
 	}
-	complete := false
-	defer func() {
-		_ = file.Close()
-		if !complete {
-			_ = os.Remove(file.Name())
-		}
-	}()
-	if err := dump.Export(db, file); err != nil {
+	destinationAbs, err := filepath.Abs(destinationPath)
+	if err != nil {
 		return err
 	}
-	if err := file.Sync(); err != nil {
+	if sourceAbs == destinationAbs {
+		return errors.New("source and destination must be different files")
+	}
+	if _, err := os.Stat(destinationAbs); err == nil && !force {
+		return fmt.Errorf("destination %s already exists (use -force to replace it)", destinationAbs)
+	} else if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := file.Close(); err != nil {
+
+	source, err := bolt.Open(sourceAbs, 0600, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
+	if err != nil {
+		return fmt.Errorf("open v1 source: %w", err)
+	}
+	defer func() { _ = source.Close() }()
+	version, legacy, err := readSchemaVersion(source)
+	if err != nil {
 		return err
 	}
-	complete = true
-	return nil
+	if !legacy {
+		return fmt.Errorf("source schema version %d is not a v1 database", version)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(destinationAbs), 0700); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(destinationAbs), ".v2-migration-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	if err := temporary.Close(); err != nil {
+		_ = os.Remove(temporaryPath)
+		return err
+	}
+	defer func() { _ = os.Remove(temporaryPath) }()
+
+	destination, err := bolt.Open(temporaryPath, 0600, nil)
+	if err != nil {
+		return err
+	}
+	err = source.View(func(sourceTx *bolt.Tx) error {
+		return destination.Update(func(destinationTx *bolt.Tx) error {
+			if err := sourceTx.ForEach(func(name []byte, sourceBucket *bolt.Bucket) error {
+				destinationBucket, err := destinationTx.CreateBucketIfNotExists(name)
+				if err != nil {
+					return err
+				}
+				return sourceBucket.ForEach(func(key, value []byte) error {
+					if value == nil {
+						return nil
+					}
+					return destinationBucket.Put(key, value)
+				})
+			}); err != nil {
+				return err
+			}
+			if err := initializeSchema(destinationTx); err != nil {
+				return err
+			}
+			return migrateLegacyRecords(destinationTx)
+		})
+	})
+	if err != nil {
+		_ = destination.Close()
+		return err
+	}
+	if err := destination.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, destinationAbs)
 }
 
 func (db *BoltDB) SchemaVersion() (int, error) {
@@ -138,9 +194,13 @@ func migrateLegacyRecords(tx *bolt.Tx) error {
 	interfaces := make(map[uuid.UUID]models.Interface)
 	interfaceServers := make(map[uuid.UUID]models.Server)
 	tunnelMembers := make(map[uuid.UUID][]models.Interface)
-	if err := tx.Bucket(bktServers).ForEach(func(_, value []byte) error {
+	if err := tx.Bucket(bktServers).ForEach(func(key, value []byte) error {
 		var server models.Server
 		if err := json.Unmarshal(value, &server); err != nil {
+			return err
+		}
+		server.Unmanaged = true
+		if err := put(tx.Bucket(bktServers), key, &server); err != nil {
 			return err
 		}
 		for _, interfaceID := range server.Interfaces {
@@ -317,27 +377,15 @@ func migrateEndpoint(iface models.Interface, server models.Server) models.LinkEn
 	}
 }
 
-func migrationStatus(iface models.Interface) models.ResourceStatus {
-	status := models.ResourceStatus{Phase: models.ResourcePending}
-	if iface.InSync {
-		status.ObservedGeneration = 1
-		status.Phase = models.ResourceReady
+func migrationStatus(_ models.Interface) models.ResourceStatus {
+	now := time.Now().UTC()
+	return models.ResourceStatus{
+		Phase: models.ResourcePending,
+		Conditions: []models.Condition{
+			{Type: "Ready", Status: models.ConditionUnknown, Reason: "Unmanaged", Message: "waiting for vpn-agent and AWG provider migration", LastTransitionTime: now},
+			{Type: "Managed", Status: models.ConditionFalse, Reason: "Unmanaged", Message: "resource has not been adopted by an agent provider", LastTransitionTime: now},
+		},
 	}
-	condition := models.Condition{Type: "Ready", Status: models.ConditionUnknown, Reason: "Pending", Message: "waiting for agent reconciliation", ObservedGeneration: status.ObservedGeneration, LastTransitionTime: time.Now().UTC()}
-	if iface.InSync {
-		condition.Status = models.ConditionTrue
-		condition.Reason = "Reconciled"
-		condition.Message = "resource was synchronized before migration"
-		condition.LastTransitionTime = iface.LastSyncedAt
-	}
-	if iface.LastSyncError != "" {
-		status.Phase = models.ResourceDegraded
-		condition.Status = models.ConditionFalse
-		condition.Reason = "ApplyFailed"
-		condition.Message = iface.LastSyncError
-	}
-	status.Conditions = []models.Condition{condition}
-	return status
 }
 
 func secretMigrationCondition() models.Condition {

@@ -163,3 +163,27 @@ func TestRemoteProtocolVersionIsCheckedBeforeMutation(t *testing.T) {
 		t.Fatalf("resource was mutated before protocol validation: %d", mutations)
 	}
 }
+
+func TestLoadProviderRegistryDirectory(t *testing.T) {
+	root := t.TempDir()
+	legacy := filepath.Join(root, "providers.conf")
+	dir := filepath.Join(root, "providers.d")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, registration := range []struct {
+		path string
+		name string
+	}{{legacy, "legacy"}, {filepath.Join(dir, "one.conf"), "one"}, {filepath.Join(dir, "two.conf"), "two"}} {
+		definition := models.ProviderDefinition{Name: registration.name, Version: "1"}
+		config := Config{ProtocolVersion: models.ProtocolVersion, Providers: []models.ProviderRegistration{{Address: "http://127.0.0.1:9090", Provider: definition}}}
+		data, _ := json.Marshal(config)
+		if err := os.WriteFile(registration.path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	providers, err := LoadDir(dir, legacy, nil)
+	if err != nil || len(providers) != 3 {
+		t.Fatalf("LoadDir returned %d providers, %v", len(providers), err)
+	}
+}

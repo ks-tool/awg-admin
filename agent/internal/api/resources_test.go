@@ -122,7 +122,7 @@ func TestResourceAPI(t *testing.T) {
 	deadline = time.Now().Add(2 * time.Second)
 	for {
 		response = request(t, http.MethodGet, server.URL+"/v1/providers/test/resources/Service/public/status", nil)
-		response.Body.Close()
+		_ = response.Body.Close()
 		if response.StatusCode == http.StatusNotFound || time.Now().After(deadline) {
 			break
 		}
@@ -148,7 +148,7 @@ func request(t *testing.T, method, url string, body []byte) *http.Response {
 
 func decodeResponse(t *testing.T, response *http.Response, target any) {
 	t.Helper()
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode >= 400 {
 		var message bytes.Buffer
 		_, _ = message.ReadFrom(response.Body)

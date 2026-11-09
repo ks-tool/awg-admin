@@ -22,6 +22,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/ks-tool/vpn-admin/agent/internal/resource"
 	"github.com/ks-tool/vpn-admin/agent/models"
@@ -30,6 +31,32 @@ import (
 type Config struct {
 	ProtocolVersion string                        `json:"protocolVersion"`
 	Providers       []models.ProviderRegistration `json:"providers"`
+}
+
+func LoadDir(dir, legacyFile string, client *http.Client) ([]resource.Provider, error) {
+	providers, err := Load(legacyFile, client)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return providers, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		extension := filepath.Ext(entry.Name())
+		if entry.IsDir() || (extension != ".json" && extension != ".conf") {
+			continue
+		}
+		registered, err := Load(filepath.Join(dir, entry.Name()), client)
+		if err != nil {
+			return nil, err
+		}
+		providers = append(providers, registered...)
+	}
+	return providers, nil
 }
 
 func Load(path string, client *http.Client) ([]resource.Provider, error) {

@@ -43,39 +43,24 @@ function getStoredTheme(): Theme {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<Theme>(getStoredTheme);
-    const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+    const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(getSystemTheme);
+    const resolvedTheme = theme === 'system' ? systemTheme : theme;
 
-    // Update resolved theme based on current theme and system preference
     useEffect(() => {
-        const newResolvedTheme = theme === 'system' ? getSystemTheme() : theme;
-        setResolvedTheme(newResolvedTheme);
-
-        // Apply theme to DOM
         const root = document.documentElement;
-        if (newResolvedTheme === 'dark') {
+        if (resolvedTheme === 'dark') {
             root.classList.add('dark');
         } else {
             root.classList.remove('dark');
         }
-    }, [theme]);
+    }, [resolvedTheme]);
 
-    // Listen to system theme changes
     useEffect(() => {
         if (theme !== 'system') return;
 
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const handleChange = () => {
-            const newResolvedTheme = mediaQuery.matches ? 'dark' : 'light';
-            setResolvedTheme(newResolvedTheme);
-
-            const root = document.documentElement;
-            if (newResolvedTheme === 'dark') {
-                root.classList.add('dark');
-            } else {
-                root.classList.remove('dark');
-            }
-        };
-
+        const handleChange = () => setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
+        void Promise.resolve().then(handleChange);
         mediaQuery.addEventListener('change', handleChange);
         return () => mediaQuery.removeEventListener('change', handleChange);
     }, [theme]);

@@ -33,6 +33,9 @@ type Server struct {
 	Agent Agent     `json:"agent"`
 
 	Interfaces []uuid.UUID `json:"interfaces,omitempty"`
+	// Unmanaged marks inventory migrated from v1 until a v2 agent with the
+	// required provider successfully adopts its resources.
+	Unmanaged bool `json:"unmanaged,omitempty"`
 }
 
 type ServerInfo struct {
@@ -72,9 +75,8 @@ type Agent struct {
 	ProfilingEnabled bool `json:"profilingEnabled,omitempty"`
 }
 
-// AgentStatus is the tri-state health of a server's agent shown on the
-// dashboard (see Service.ServerAgentStatus), color-coded on the frontend:
-// green / red / amber.
+// AgentStatus is the health and migration state of a server's agent shown on
+// the dashboard (see Service.ServerAgentStatus), color-coded on the frontend.
 type AgentStatus string
 
 const (
@@ -88,6 +90,9 @@ const (
 	// AgentStatusDegraded (amber): the SSH tunnel is up but the agent behind it
 	// isn't responding, or the state is otherwise indeterminate.
 	AgentStatusDegraded AgentStatus = "degraded"
+	// AgentStatusUnmanaged (amber): v1 inventory is waiting for a v2 agent with
+	// the AWG provider to adopt it.
+	AgentStatusUnmanaged AgentStatus = "unmanaged"
 )
 
 // AgentTLS holds the mTLS material for direct (non-tunnelled) communication
@@ -114,7 +119,7 @@ type Interface struct {
 	ID uuid.UUID `json:"id"`
 
 	// json:",inline" flattens the fields under jsonv2 (this module builds with
-	// GOEXPERIMENT=jsonv2), matching the YAML "inline" convention. tstype
+	// ), matching the YAML "inline" convention. tstype
 	// additionally tells tygo to emit "extends InterfaceConfig" on the
 	// generated TS type instead of a nested field — tygo only understands
 	// plain v1 json tag semantics and doesn't infer this on its own.

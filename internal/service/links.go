@@ -139,7 +139,59 @@ func (s *Service) DeleteProviderLink(id string) error {
 		_ = s.failLink(link, err)
 		return err
 	}
-	return s.store.Links().Delete(id)
+	if err := s.store.Links().Delete(id); err != nil {
+		return err
+	}
+	return s.clearLegacyTunnel(link)
+}
+
+func (s *Service) clearLegacyTunnel(link *models.Link) error {
+	var spec struct {
+		TunnelID string `json:"tunnelId"`
+	}
+	if err := json.Unmarshal(link.Spec, &spec); err != nil || spec.TunnelID == "" {
+		return nil
+	}
+	tunnelID, err := uuid.Parse(spec.TunnelID)
+	if err != nil {
+		return nil
+	}
+	remaining, err := s.store.Links().List()
+	if err != nil {
+		return err
+	}
+	for _, candidate := range remaining {
+		var other struct {
+			TunnelID string `json:"tunnelId"`
+		}
+		if json.Unmarshal(candidate.Spec, &other) == nil && other.TunnelID == spec.TunnelID {
+			return nil
+		}
+	}
+	for _, endpoint := range []models.LinkEndpoint{link.Source, link.Target} {
+		serverID, err := uuid.Parse(endpoint.ServerID)
+		if err != nil {
+			continue
+		}
+		interfaceID, err := uuid.Parse(endpoint.ResourceID)
+		if err != nil {
+			continue
+		}
+		iface, err := s.store.Servers().Interfaces(serverID).Get(interfaceID)
+		if storage.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if iface.Tunnel != nil && *iface.Tunnel == tunnelID {
+			iface.Tunnel = nil
+			if err := s.store.Servers().Interfaces(serverID).Set(iface); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Service) coordinateLink(link *models.Link, source, target resolvedEndpoint) error {
@@ -224,7 +276,9 @@ func compatibleLinkKind(source, target resolvedEndpoint) (string, error) {
 			if kind != targetKind {
 				continue
 			}
-			if len(source.port.RemotePorts) == 0 || len(target.port.RemotePorts) == 0 || containsString(source.port.RemotePorts, target.port.Name) || containsString(target.port.RemotePorts, source.port.Name) {
+			sourceAccepts := len(source.port.RemotePorts) == 0 || containsString(source.port.RemotePorts, target.port.Name)
+			targetAccepts := len(target.port.RemotePorts) == 0 || containsString(target.port.RemotePorts, source.port.Name)
+			if sourceAccepts && targetAccepts {
 				return kind, nil
 			}
 		}

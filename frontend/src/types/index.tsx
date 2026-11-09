@@ -1,3 +1,3 @@
-export * from './admin';
-export * from './agent';
-export * from './resources';
+export type * from './admin';
+export type * from './agent';
+export type * from './resources';

@@ -20,7 +20,8 @@ import {Edit2, Network, Play, Plus, Power, RefreshCw, Trash2} from 'lucide-react
 import {toast} from 'sonner';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {FormField} from '@/components/common/FormField';
-import {buttons, inputs, Modal} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {SchemaForm} from '@/components/topology/SchemaForm';
 import {
     deleteProviderResource,

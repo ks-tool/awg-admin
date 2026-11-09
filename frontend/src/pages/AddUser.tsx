@@ -20,7 +20,8 @@ import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
 import {useAppStore} from '@/store';
 import {FormField} from '@/components/common/FormField';
-import {buttons, inputs, Modal} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {cn} from '@/lib/utils';
 
 export default function AddUser({onClose}: {onClose: () => void}) {

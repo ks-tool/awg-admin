@@ -20,7 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"sync"
+	"time"
 
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/models"
@@ -113,6 +115,14 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 	for _, item := range definition.Resources {
 		supported[item.Kind] = item.APIVersion
 	}
+	local, err := s.localProviderResources(serverID)
+	if err != nil {
+		return nil, err
+	}
+	localByName := make(map[string]models.Resource, len(local))
+	for _, item := range local {
+		localByName[item.Kind+"\x00"+item.Name] = item
+	}
 	var resources []models.Resource
 	if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
 		var err error
@@ -124,21 +134,45 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 	result := append([]models.Resource(nil), resources...)
 	remote := make(map[string]struct{}, len(resources))
 	for _, item := range resources {
-		remote[item.Kind+"\x00"+item.Name] = struct{}{}
+		key := item.Kind + "\x00" + item.Name
+		remote[key] = struct{}{}
+		if localItem, ok := localByName[key]; ok {
+			if err := s.migrateProviderResourceSecret(serverID, definition, localItem); err != nil {
+				return nil, err
+			}
+		}
 		if err := s.saveProviderResource(serverID, item); err != nil {
 			return nil, err
 		}
 	}
-	local, err := s.localProviderResources(serverID)
-	if err != nil {
-		return nil, err
-	}
+	sort.SliceStable(local, func(i, j int) bool {
+		if local[i].Kind == local[j].Kind {
+			return local[i].Name < local[j].Name
+		}
+		if local[i].Kind == "Interface" {
+			return true
+		}
+		if local[j].Kind == "Interface" {
+			return false
+		}
+		return local[i].Kind == "Peer"
+	})
 	for _, item := range local {
 		apiVersion, ok := supported[item.Kind]
 		if !ok {
 			continue
 		}
 		if _, exists := remote[item.Kind+"\x00"+item.Name]; exists {
+			continue
+		}
+		if item.Status.Phase == models.ResourceDeleting {
+			if err := s.removeLegacyResource(serverID, item); err != nil {
+				return nil, err
+			}
+			id, _ := uuid.Parse(serverID)
+			if err := s.store.Resources(id).Delete(item.ID); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		item.APIVersion = apiVersion
@@ -159,6 +193,72 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 		result = append(result, *created)
 	}
 	return result, nil
+}
+
+func (s *Service) completeServerMigration(server *models.Server) error {
+	if !server.Unmanaged {
+		return nil
+	}
+	resources, err := s.ListProviderResources(server.ID.String(), "awg")
+	if err != nil {
+		return err
+	}
+	if err := s.waitProviderResourcesReady(server.ID.String(), "awg", resources); err != nil {
+		return err
+	}
+	links, err := s.store.Links().List()
+	if err != nil {
+		return err
+	}
+	for _, link := range links {
+		if link.Source.ServerID != server.ID.String() && link.Target.ServerID != server.ID.String() {
+			continue
+		}
+		if link.Status.Phase == models.LinkReady && link.Status.ObservedGeneration == link.Generation {
+			continue
+		}
+		if _, err := s.ApplyProviderLink(link.ID); err != nil {
+			return err
+		}
+	}
+	server.Unmanaged = false
+	if err := s.store.Servers().Set(server); err != nil {
+		server.Unmanaged = true
+		return err
+	}
+	return nil
+}
+
+func (s *Service) waitProviderResourcesReady(serverID, provider string, resources []models.Resource) error {
+	deadline := time.Now().Add(pushTimeout)
+	for _, resource := range resources {
+		for {
+			var status *models.ResourceStatus
+			if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
+				var err error
+				status, err = client.ResourceStatus(ctx, provider, resource.Kind, resource.Name)
+				return err
+			}); err != nil {
+				return err
+			}
+			if status.ObservedGeneration >= resource.Generation {
+				if status.Phase == models.ResourceReady {
+					break
+				}
+				if status.Phase == models.ResourceDegraded {
+					if len(status.Conditions) > 0 {
+						return errors.New(status.Conditions[0].Message)
+					}
+					return errors.New("provider resource reconciliation failed")
+				}
+			}
+			if time.Now().After(deadline) {
+				return errors.New("provider resource reconciliation timed out")
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	return nil
 }
 
 func (s *Service) PutProviderResource(serverID, provider, kind, name string, spec json.RawMessage) (*models.Resource, error) {
@@ -204,20 +304,69 @@ func (s *Service) PutProviderResource(serverID, provider, kind, name string, spe
 }
 
 func (s *Service) DeleteProviderResource(serverID, provider, kind, name string) error {
+	local, err := s.localProviderResources(serverID)
+	if err != nil {
+		return err
+	}
+	var selected *models.Resource
+	for index := range local {
+		if local[index].Kind == kind && local[index].Name == name {
+			selected = &local[index]
+			break
+		}
+	}
+	if selected != nil {
+		selected.Status.Phase = models.ResourceDeleting
+		if err := s.saveProviderResource(serverID, *selected); err != nil {
+			return err
+		}
+	}
 	if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
 		return client.DeleteResource(ctx, provider, kind, name)
 	}); err != nil {
 		return err
 	}
-	local, err := s.localProviderResources(serverID)
-	if err != nil {
-		return err
-	}
-	for _, item := range local {
-		if item.Kind == kind && item.Name == name {
-			id, _ := uuid.Parse(serverID)
-			return s.store.Resources(id).Delete(item.ID)
+
+	deadline := time.Now().Add(pushTimeout)
+	for {
+		remaining := false
+		var remoteStatus models.ResourceStatus
+		if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
+			resources, err := client.ListResources(ctx, provider)
+			if err != nil {
+				return err
+			}
+			for _, item := range resources {
+				if item.Kind == kind && item.Name == name {
+					remaining = true
+					remoteStatus = item.Status
+					break
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
+		if !remaining {
+			break
+		}
+		if remoteStatus.Phase == models.ResourceDegraded {
+			if len(remoteStatus.Conditions) > 0 {
+				return errors.New(remoteStatus.Conditions[0].Message)
+			}
+			return errors.New("provider resource deletion failed")
+		}
+		if time.Now().After(deadline) {
+			return errors.New("provider resource deletion timed out")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if selected != nil {
+		if err := s.removeLegacyResource(serverID, *selected); err != nil {
+			return err
+		}
+		id, _ := uuid.Parse(serverID)
+		return s.store.Resources(id).Delete(selected.ID)
 	}
 	return nil
 }
@@ -247,6 +396,30 @@ func (s *Service) migrateProviderResourceSecret(serverID string, definition *mod
 	if !actionAvailable {
 		return nil
 	}
+	if item.Kind == "Interface" {
+		serverUUID, err := uuid.Parse(serverID)
+		if err != nil {
+			return err
+		}
+		interfaceID, err := uuid.Parse(item.ID)
+		if err != nil {
+			return err
+		}
+		iface, err := s.store.Servers().Interfaces(serverUUID).Get(interfaceID)
+		if err != nil {
+			return err
+		}
+		arguments, err := json.Marshal(map[string]any{
+			"privateKey": iface.PrivateKey.String(), "preUp": iface.PreUp, "postUp": iface.PostUp,
+			"preDown": iface.PreDown, "postDown": iface.PostDown,
+		})
+		if err != nil {
+			return err
+		}
+		_, err = s.RunProviderResourceAction(serverID, definition.Name, item.Kind, item.Name, "importSecret", arguments)
+		return err
+	}
+
 	var spec struct {
 		UserRef   string `json:"userRef"`
 		PublicKey string `json:"publicKey"`
@@ -267,14 +440,27 @@ func (s *Service) migrateProviderResourceSecret(serverID string, definition *mod
 		if publicKey.String() != spec.PublicKey {
 			continue
 		}
-		arguments, err := json.Marshal(map[string]string{"privateKey": peer.PrivateKey.String()})
+		arguments := map[string]string{"privateKey": peer.PrivateKey.String()}
+		if peer.InterfaceId != uuid.Nil {
+			iface, _, err := s.getInterfaceByID(peer.InterfaceId)
+			if err != nil {
+				return err
+			}
+			for _, configured := range iface.Peers {
+				if configured.Key.String() == spec.PublicKey && configured.PresharedKey != nil {
+					arguments["presharedKey"] = configured.PresharedKey.String()
+					break
+				}
+			}
+		}
+		raw, err := json.Marshal(arguments)
 		if err != nil {
 			return err
 		}
-		_, err = s.RunProviderResourceAction(serverID, definition.Name, item.Kind, item.Name, "importSecret", arguments)
+		_, err = s.RunProviderResourceAction(serverID, definition.Name, item.Kind, item.Name, "importSecret", raw)
 		return err
 	}
-	return nil
+	return errors.New("legacy peer secret was not found")
 }
 
 func (s *Service) localProviderResources(serverID string) ([]models.Resource, error) {
@@ -291,6 +477,9 @@ func (s *Service) saveProviderResource(serverID string, resource models.Resource
 		return invalidInput("invalid server id")
 	}
 	resource.ServerID = serverID
+	if err := s.syncLegacyResource(serverID, resource); err != nil {
+		return err
+	}
 	return s.store.Resources(id).Set(&resource)
 }
 
@@ -317,7 +506,19 @@ func (s *Service) RunProviderResourceAction(serverID, provider, kind, name, acti
 		result, err = client.RunResourceAction(ctx, provider, kind, name, action, arguments)
 		return err
 	})
-	return result, err
+	if err != nil || action != "rotateKeys" {
+		return result, err
+	}
+	resources, listErr := s.localProviderResources(serverID)
+	if listErr != nil {
+		return result, listErr
+	}
+	for _, item := range resources {
+		if item.Kind == kind && item.Name == name {
+			return result, s.removeLegacyResource(serverID, item)
+		}
+	}
+	return result, nil
 }
 
 func (s *Service) withAgent(serverID string, operation func(context.Context, *agentclient.Client) error) error {

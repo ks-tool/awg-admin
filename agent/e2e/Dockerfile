@@ -4,14 +4,14 @@
 # build context is the agent module root (../), so this compiles the agent as it
 # is in the working tree — the amneziawg-go library is compiled in, no external
 # process. Runtime carries iproute2/iptables (addr/up + lifecycle hooks).
-FROM golang:1.26.3-alpine3.23 AS build
+FROM golang:1.27.1-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 # Build the specific file (cmd/ holds several `package main` files — vpn-agent.go,
 # vpn-agent-userspace.go, dump.go — so a whole-package build would fail).
-RUN GOEXPERIMENT=jsonv2 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
     -o /out/vpn-agent-userspace cmd/vpn-agent-userspace.go
 
 FROM alpine:3.23

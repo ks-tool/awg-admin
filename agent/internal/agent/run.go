@@ -155,7 +155,7 @@ func Run(version string) {
 	if err := resourceRuntime.Register(awgProvider); err != nil {
 		log.Fatal().Err(err).Msg("failed to register AWG provider")
 	}
-	remoteProviders, err := providerremote.Load(filepath.Join(cfg.DB, "providers.conf"), nil)
+	remoteProviders, err := providerremote.LoadDir(filepath.Join(cfg.DB, "providers.d"), filepath.Join(cfg.DB, "providers.conf"), nil)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load external providers")
 	}

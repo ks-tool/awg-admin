@@ -10,19 +10,19 @@ GO_BUILD_FLAGS := -ldflags=$(GO_LD_FLAGS) -gcflags=$(GO_GC_FLAGS) -trimpath -o $
 .PHONY: build
 build:
 	@echo 'Build agent (kernel / amneziawg-dkms) ...'
-	@GOEXPERIMENT=jsonv2 CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) cmd/vpn-agent.go
+	@CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) cmd/vpn-agent.go
 
 .PHONY: build-userspace
 build-userspace:
 	@echo 'Build agent (userspace / amneziawg-go) ...'
-	@GOEXPERIMENT=jsonv2 CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) cmd/vpn-agent-userspace.go
+	@CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) cmd/vpn-agent-userspace.go
 
 # Unit tests for the agent module. The e2e module (agent/e2e) is a separate
 # module, so `./...` skips it — run it with `make test-e2e`.
 .PHONY: test
 test:
 	@echo 'Test agent module ...'
-	@GOEXPERIMENT=jsonv2 go test ./...
+	@go test ./...
 
 # End-to-end tunnel test (agent/e2e): builds the userspace image from source and
 # runs two containers that form a real AmneziaWG tunnel. Needs Docker with

@@ -33,7 +33,8 @@ jobs:
       #    (`//go:embed cmd/dist`). That directory is a build artifact this job
       #    does not build, so the embed pattern would match no files. Create a
       #    placeholder to satisfy it; the rest of the package then lints
-      #    normally. Target: ./...
+      #    normally. Target: every module package except third-party Go sources
+      #    vendored under frontend/node_modules.
       #
       #  - agent: agent/cmd/ holds several `package main` files — vpn-agent.go,
       #    vpn-agent-userspace.go and dump.go — so the directory never compiles
@@ -47,7 +48,7 @@ jobs:
             targets=$(go list ./... | sed "s|^$(go list -m)|.|" | grep -v '^\./cmd$' | paste -sd' ' -)
           else
             mkdir -p cmd/dist && printf '<!doctype html>\n' > cmd/dist/index.html
-            targets='./...'
+            targets=$(go list ./... | grep -v /node_modules/ | sed "s|^$(go list -m)|.|" | paste -sd' ' -)
           fi
           echo "targets=$targets" >> "$GITHUB_OUTPUT"
 

@@ -18,10 +18,22 @@ import {type FormEvent, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Plus, Trash2} from 'lucide-react';
 import {toast} from 'sonner';
-import {Modal, buttons, inputs} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {FormField} from '@/components/common/FormField';
+import {ServerFormFields} from '@/components/server/ServerFormFields';
+import {type AuthType, formDataToServerInput, useServerForm} from '@/hooks/useServerForm';
+import {createServer, generateAgentTLS} from '@/services/servers';
+import {useAppStore} from '@/store';
 import {SchemaForm} from './SchemaForm';
-import {createTopologyServer, createVPNService, topologyCoordinates, type NetworkInterfaceInput} from '@/services/topology';
+import {
+    createNetworkInterface,
+    createVPNService,
+    getTopology,
+    topologyCoordinates,
+    updateTopologyServer,
+    type NetworkInterfaceInput,
+} from '@/services/topology';
 import type {PluginDescriptor, Topology, VPNService} from '@/types';
 
 interface ServerModalProps {
@@ -31,10 +43,9 @@ interface ServerModalProps {
 
 export function AddServerModal({onClose, onCreated}: ServerModalProps) {
     const {t} = useTranslation();
-    const [name, setName] = useState('');
-    const [address, setAddress] = useState('');
-    const [description, setDescription] = useState('');
-    const [location, setLocation] = useState('');
+    const refreshData = useAppStore(state => state.refreshData);
+    const {formData, updateField} = useServerForm();
+    const [authType, setAuthType] = useState<AuthType>('key');
     const [latitude, setLatitude] = useState('');
     const [longitude, setLongitude] = useState('');
     const [interfaces, setInterfaces] = useState<NetworkInterfaceInput[]>([{name: '', address: ''}]);
@@ -47,13 +58,25 @@ export function AddServerModal({onClose, onCreated}: ServerModalProps) {
         event.preventDefault();
         setSaving(true);
         try {
-            const topology = await createTopologyServer({
-                name, address, description, location,
+            let server = await createServer(formDataToServerInput(formData, authType));
+            if (!server) throw new Error(t('topology.saveError'));
+            if (formData.agent.tlsEnabled) {
+                server = await generateAgentTLS(server.id) ?? server;
+            }
+            await updateTopologyServer(server.id, {
+                name: server.name,
+                address: server.ssh.host,
+                description: formData.info.description,
+                location: formData.info.location,
                 ...topologyCoordinates(latitude, longitude),
-                interfaces: interfaces.filter(item => item.name.trim() || item.address.trim()),
+                interfaces: [],
             });
+            for (const iface of interfaces.filter(item => item.name.trim() || item.address.trim())) {
+                await createNetworkInterface(server.id, iface);
+            }
+            await refreshData();
             toast.success(t('topology.serverCreated'));
-            onCreated(topology);
+            onCreated(await getTopology());
         } catch (error) {
             toast.error(error instanceof Error ? error.message : t('topology.saveError'));
         } finally {
@@ -64,27 +87,11 @@ export function AddServerModal({onClose, onCreated}: ServerModalProps) {
     return (
         <Modal title={t('topology.addServer')} onClose={onClose} loading={saving} size="lg">
             <form onSubmit={handleSubmit} className="space-y-4">
+                <ServerFormFields formData={formData} onChange={updateField} disabled={saving} showAuth authType={authType} onAuthTypeChange={setAuthType} />
+                <p className="text-xs text-muted-foreground">{t('topology.locationHint')}</p>
                 <div className="grid gap-4 md:grid-cols-2">
-                    <FormField label={t('topology.serverName')}>
-                        <input required autoFocus value={name} onChange={event => setName(event.target.value)} className={inputs.primary} />
-                    </FormField>
-                    <FormField label={t('topology.serverAddress')}>
-                        <input value={address} onChange={event => setAddress(event.target.value)} placeholder="vpn.example.com" className={inputs.primary} />
-                    </FormField>
-                </div>
-                <FormField label={t('topology.descriptionField')}>
-                    <input value={description} onChange={event => setDescription(event.target.value)} className={inputs.primary} />
-                </FormField>
-                <FormField label={t('servers.location')}>
-                    <input aria-label={t('servers.location')} value={location} onChange={event => {setLocation(event.target.value); setLatitude(''); setLongitude('');}} placeholder={t('servers.locationPlaceholder')} className={inputs.primary} />
-                </FormField>
-                <p className="-mt-2 text-xs text-muted-foreground">{t('topology.locationHint')}</p>
-                <div>
-                    <label className="mb-2 block text-sm font-medium text-muted-foreground">{t('topology.coordinates')}</label>
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <input aria-label={t('topology.latitude')} type="number" min={-90} max={90} step="any" value={latitude} onChange={event => setLatitude(event.target.value)} placeholder={t('topology.latitudePlaceholder')} disabled={Boolean(location.trim())} className={`${inputs.primary} disabled:cursor-not-allowed disabled:opacity-50`} />
-                        <input aria-label={t('topology.longitude')} type="number" min={-180} max={180} step="any" value={longitude} onChange={event => setLongitude(event.target.value)} placeholder={t('topology.longitudePlaceholder')} disabled={Boolean(location.trim())} className={`${inputs.primary} disabled:cursor-not-allowed disabled:opacity-50`} />
-                    </div>
+                    <input aria-label={t('topology.latitude')} type="number" min={-90} max={90} step="any" value={latitude} onChange={event => setLatitude(event.target.value)} placeholder={t('topology.latitudePlaceholder')} disabled={saving || Boolean(formData.info.location.trim())} className={`${inputs.primary} disabled:cursor-not-allowed disabled:opacity-50`} />
+                    <input aria-label={t('topology.longitude')} type="number" min={-180} max={180} step="any" value={longitude} onChange={event => setLongitude(event.target.value)} placeholder={t('topology.longitudePlaceholder')} disabled={saving || Boolean(formData.info.location.trim())} className={`${inputs.primary} disabled:cursor-not-allowed disabled:opacity-50`} />
                 </div>
                 <div>
                     <div className="mb-2 flex items-center justify-between">

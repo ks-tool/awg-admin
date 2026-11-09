@@ -64,7 +64,7 @@ func defaultLocationGeocoder() locationGeocoder {
 	return &datacenterAtlas{
 		endpoint:  datacenterAtlasURL,
 		cachePath: cachePath,
-		client:    &http.Client{Timeout: 20 * time.Second},
+		client:    &http.Client{Timeout: locationResolveTimeout},
 	}
 }
 
@@ -154,7 +154,7 @@ func (a *datacenterAtlas) downloadSites(ctx context.Context) ([]atlasSite, error
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected HTTP status %s", response.Status)
 	}
@@ -180,7 +180,7 @@ func readAtlasCache(path string) ([]atlasSite, time.Time, error) {
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	var sites []atlasSite
 	if err := json.NewDecoder(file).Decode(&sites); err != nil {
 		return nil, time.Time{}, err
@@ -195,14 +195,17 @@ func writeAtlasCache(path string, sites []atlasSite) error {
 	if path == "" {
 		return nil
 	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
 	file, err := os.CreateTemp(filepath.Dir(path), ".datacenter-atlas-*")
 	if err != nil {
 		return err
 	}
 	temporaryPath := file.Name()
-	defer os.Remove(temporaryPath)
+	defer func() { _ = os.Remove(temporaryPath) }()
 	if err := json.NewEncoder(file).Encode(sites); err != nil {
-		file.Close()
+		_ = file.Close()
 		return err
 	}
 	if err := file.Close(); err != nil {

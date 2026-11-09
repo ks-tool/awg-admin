@@ -112,7 +112,7 @@ func (c *Client) resourceRequest(ctx context.Context, method, path string, input
 	if err != nil {
 		return fmt.Errorf("%s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return responseError(resp, "")
 	}

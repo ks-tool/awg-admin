@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
@@ -122,4 +123,49 @@ func newLinkTestResource(t *testing.T, svc *Service, server *models.Server) mode
 		t.Fatal(err)
 	}
 	return resource
+}
+
+func TestLinkPortsMustAcceptEachOther(t *testing.T) {
+	source := resolvedEndpoint{port: models.PortDefinition{Name: "source", LinkKinds: []string{"vpn"}, RemotePorts: []string{"target"}}}
+	target := resolvedEndpoint{port: models.PortDefinition{Name: "target", LinkKinds: []string{"vpn"}, RemotePorts: []string{"not-source"}}}
+	if _, err := compatibleLinkKind(source, target); err == nil {
+		t.Fatal("link was accepted although target rejected the source port")
+	}
+}
+
+func TestDeleteProviderLinkClearsMigratedLegacyTunnel(t *testing.T) {
+	svc := newTestService(t)
+	server, _ := newLinkTestServer(t, svc, "a")
+	tunnelID := uuid.New()
+	ids := []uuid.UUID{uuid.New(), uuid.New()}
+	for _, id := range ids {
+		iface := &models.Interface{ID: id, Tunnel: &tunnelID, InterfaceConfig: agentmodels.InterfaceConfig{Interface: "awg" + id.String()[:4], Address: "10.0.0.1/24", ListenPort: 51820}}
+		if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
+			t.Fatal(err)
+		}
+		item := models.Resource{ID: id.String(), ServerID: server.ID.String(), APIVersion: "test/v1", Kind: "Service", Name: id.String(), Spec: json.RawMessage(`{}`)}
+		if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link, err := svc.CreateProviderLink(ids[0].String(), ids[1].String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	link.Spec = json.RawMessage(`{"tunnelId":"` + tunnelID.String() + `"}`)
+	if err := svc.store.Links().Set(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DeleteProviderLink(link.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		iface, err := svc.store.Servers().Interfaces(server.ID).Get(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if iface.Tunnel != nil {
+			t.Fatalf("legacy tunnel guard survived link deletion: %+v", iface.Tunnel)
+		}
+	}
 }

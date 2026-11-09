@@ -26,7 +26,7 @@ RUN npm run build
 # resolve the replaced local module, and copying manifests first caches that
 # step independently of unrelated source changes.
 # ---------------------------------------------------------------------------
-FROM golang:1.26.3-alpine3.23 AS backend
+FROM golang:1.27.1-alpine AS backend
 
 WORKDIR /src
 
@@ -39,7 +39,7 @@ COPY --from=frontend /src/cmd/dist ./cmd/dist
 
 ARG TARGETOS
 ARG TARGETARCH
-RUN GOEXPERIMENT=jsonv2 CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags='-s -w' -o /out/vpn-admin ./cmd/vpn-admin.go \
     && apk add --no-cache ca-certificates
 

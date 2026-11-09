@@ -14,7 +14,8 @@
   limitations under the License.
  */
 
-import {buttons, Modal} from './Modal';
+import {Modal} from './Modal';
+import {buttons} from './controls';
 import {useTranslation} from 'react-i18next';
 
 interface Props {

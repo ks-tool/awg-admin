@@ -53,7 +53,8 @@ type clientConfigArguments struct {
 }
 
 type secretArguments struct {
-	PrivateKey string `json:"privateKey" jsonschema:"required,minLength=1,format=password"`
+	PrivateKey   string `json:"privateKey" jsonschema:"required,minLength=1,format=password"`
+	PresharedKey string `json:"presharedKey,omitempty" jsonschema:"format=password"`
 }
 
 func newPeerDefinition() (models.ResourceDefinition, *packschemavalidator.Compiled, error) {
@@ -128,6 +129,24 @@ func (p *Provider) validatePeer(_ context.Context, item models.Resource) error {
 		if _, err := models.ParseKey(spec.PublicKey); err != nil {
 			return fmt.Errorf("invalid peer public key: %w", err)
 		}
+		if p.resources != nil {
+			items, err := p.resources.List()
+			if err != nil {
+				return err
+			}
+			for _, existing := range items {
+				if existing.Provider != "awg" || existing.Deleted || existing.Resource.Kind != "Peer" || existing.Resource.ID == item.ID {
+					continue
+				}
+				other, err := p.decodePeer(existing.Resource.Spec)
+				if err != nil {
+					return err
+				}
+				if other.PublicKey == spec.PublicKey {
+					return fmt.Errorf("peer public key is already managed by resource %q", existing.Resource.Name)
+				}
+			}
+		}
 	}
 	for _, address := range spec.AllowedIPs {
 		if _, _, err := net.ParseCIDR(address); err != nil {
@@ -199,6 +218,9 @@ func (p *Provider) reconcilePeer(_ context.Context, item models.Resource) (json.
 			break
 		}
 	}
+	if state.PresharedKey != nil {
+		peer.PresharedKey = state.PresharedKey
+	}
 	if index >= 0 {
 		cfg.Peers[index] = peer
 	} else {
@@ -211,7 +233,7 @@ func (p *Provider) reconcilePeer(_ context.Context, item models.Resource) (json.
 		return nil, err
 	}
 	if !models.IsEmpty(privateKey) {
-		if err := p.secrets.put(item.ID, secretRecord{Interface: interfaceSpec.Interface, PrivateKey: privateKey}); err != nil {
+		if err := p.secrets.put(item.ID, secretRecord{Interface: interfaceSpec.Interface, PrivateKey: privateKey, PresharedKey: state.PresharedKey}); err != nil {
 			return nil, err
 		}
 	}
@@ -257,6 +279,9 @@ func (p *Provider) deletePeer(_ context.Context, item models.Resource) error {
 }
 
 func (p *Provider) Action(_ context.Context, item models.Resource, action string, arguments json.RawMessage) (models.ActionResult, error) {
+	if item.Kind == "Interface" && action == "importSecret" {
+		return p.importInterfaceSecret(item, arguments)
+	}
 	if item.Kind != "Peer" {
 		return models.ActionResult{}, errors.New("action is supported only for peers")
 	}
@@ -384,7 +409,15 @@ func (p *Provider) importPeerSecret(item models.Resource, rawArguments json.RawM
 		return models.ActionResult{}, errors.New("private key does not match peer public key")
 	}
 	spec.PublicKey = publicKeyValue
-	if err := p.secrets.put(item.ID, secretRecord{Interface: spec.InterfaceRef, PrivateKey: privateKey}); err != nil {
+	var presharedKey *models.Key
+	if arguments.PresharedKey != "" {
+		parsed, err := models.ParseKey(arguments.PresharedKey)
+		if err != nil {
+			return models.ActionResult{}, err
+		}
+		presharedKey = &parsed
+	}
+	if err := p.secrets.put(item.ID, secretRecord{Interface: spec.InterfaceRef, PrivateKey: privateKey, PresharedKey: presharedKey}); err != nil {
 		return models.ActionResult{}, err
 	}
 	if err := p.updatePeerDesired(item, spec); err != nil {

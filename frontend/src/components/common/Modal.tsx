@@ -17,16 +17,6 @@
 import * as React from "react";
 import {X} from 'lucide-react';
 
-export const inputs = {
-    primary: "w-full rounded-lg border border-input bg-input px-4 py-2 text-foreground placeholder-muted-foreground/50 focus:border-sky-500/50 focus:outline-none transition-colors dark:border-white/10 dark:bg-white/5 dark:text-zinc-100 dark:placeholder-zinc-600/50 dark:focus:bg-white/10",
-}
-
-export const buttons = {
-    primary: "rounded-lg px-6 py-2 text-sm font-medium bg-sky-100 text-sky-700 border border-sky-200 hover:bg-sky-200 dark:bg-sky-500/15 dark:text-sky-400 dark:border-sky-500/25 dark:hover:bg-sky-500/20 disabled:opacity-50 disabled:cursor-not-allowed",
-    secondary: "rounded-lg px-6 py-2 text-sm font-medium transition-colors bg-muted text-muted-foreground border border-border hover:bg-secondary dark:bg-zinc-500/15 dark:text-zinc-400 dark:border-zinc-500/25 dark:hover:bg-zinc-500/20 disabled:opacity-50 disabled:cursor-not-allowed",
-    danger: "rounded-lg px-6 py-2 text-sm font-medium transition-colors bg-red-100 text-red-700 border border-red-200 hover:bg-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/25 disabled:opacity-50 disabled:cursor-not-allowed",
-}
-
 interface Props {
     title: string
     onClose: () => void

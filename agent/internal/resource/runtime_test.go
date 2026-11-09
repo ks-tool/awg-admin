@@ -240,3 +240,38 @@ func waitForDelete(t *testing.T, provider *testProvider, count int) {
 	}
 	t.Fatalf("provider did not reach %d deletes", count)
 }
+
+func TestRuntimeFailedDeleteRemainsVisibleAndCanBeRetried(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &testProvider{failDelete: 1}
+	runtime := NewRuntime(store, "agent", time.Millisecond, time.Hour)
+	if err := runtime.Register(provider); err != nil {
+		t.Fatal(err)
+	}
+	runtime.Start(context.Background())
+	defer runtime.Close()
+	if _, err := runtime.Put("test", "Service", "public", models.Resource{APIVersion: "test/v1", Spec: json.RawMessage(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	waitForStatus(t, runtime, 1, models.ResourceReady)
+	if err := runtime.Delete("test", "Service", "public"); err != nil {
+		t.Fatal(err)
+	}
+	waitForDelete(t, provider, 1)
+	waitForStatus(t, runtime, 2, models.ResourceDegraded)
+	items, err := runtime.List("test")
+	if err != nil || len(items) != 1 || items[0].Status.Phase != models.ResourceDegraded {
+		t.Fatalf("failed deletion disappeared from inventory: %+v, %v", items, err)
+	}
+	if err := runtime.Delete("test", "Service", "public"); err != nil {
+		t.Fatal(err)
+	}
+	waitForDelete(t, provider, 2)
+	items, err = runtime.List("test")
+	if err != nil || len(items) != 0 {
+		t.Fatalf("resource survived successful deletion: %+v, %v", items, err)
+	}
+}

@@ -321,6 +321,11 @@ export interface Server {
   ssh: SSHConfig;
   agent: Agent;
   interfaces?: string[];
+  /**
+   * Unmanaged marks inventory migrated from v1 until a v2 agent with the
+   * required provider successfully adopts its resources.
+   */
+  unmanaged?: boolean;
 }
 export interface ServerInfo {
   description?: string;
@@ -363,9 +368,8 @@ export interface Agent {
   profilingEnabled?: boolean;
 }
 /**
- * AgentStatus is the tri-state health of a server's agent shown on the
- * dashboard (see Service.ServerAgentStatus), color-coded on the frontend:
- * green / red / amber.
+ * AgentStatus is the health and migration state of a server's agent shown on
+ * the dashboard (see Service.ServerAgentStatus), color-coded on the frontend.
  */
 export type AgentStatus = string;
 /**
@@ -384,6 +388,11 @@ export const AgentStatusDown: AgentStatus = "down";
  * isn't responding, or the state is otherwise indeterminate.
  */
 export const AgentStatusDegraded: AgentStatus = "degraded";
+/**
+ * AgentStatusUnmanaged (amber): v1 inventory is waiting for a v2 agent with
+ * the AWG provider to adopt it.
+ */
+export const AgentStatusUnmanaged: AgentStatus = "unmanaged";
 /**
  * AgentTLS holds the mTLS material for direct (non-tunnelled) communication
  * with the agent on a public ("white") IP. CA is kept so vpn-admin can

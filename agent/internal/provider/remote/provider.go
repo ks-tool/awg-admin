@@ -150,7 +150,7 @@ func (p *Provider) do(ctx context.Context, method, path string, input, output an
 	if err != nil {
 		return fmt.Errorf("remote provider %s: %w", p.definition.Name, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		message, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return fmt.Errorf("remote provider %s returned %s: %s", p.definition.Name, resp.Status, strings.TrimSpace(string(message)))

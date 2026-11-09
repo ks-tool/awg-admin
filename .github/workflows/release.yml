@@ -8,8 +8,8 @@ name: release
 # GitHub Actions' `*` doesn't cross `/`, so `v*` never matches `agent/v1.2.3`.
 #
 # Produces, all attached to the same GitHub Release for the tag:
-#   - vpn-admin (standalone web server): linux/darwin/windows, amd64/arm64
-#     archives — built by GoReleaser (see .goreleaser.yaml).
+#   - vpn-admin (standalone web server) and awg-migrate: linux/darwin/windows,
+#     amd64/arm64 archives — built by GoReleaser (see .goreleaser.yaml).
 #   - the vpn-admin multi-arch (amd64+arm64) Docker image pushed to GHCR — also
 #     built by GoReleaser.
 #   - the Wails desktop app for Windows (.exe + NSIS installer), macOS

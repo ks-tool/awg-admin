@@ -21,7 +21,8 @@ import {toast} from 'sonner';
 import {Container} from '@/components/common/Container';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {FormField} from '@/components/common/FormField';
-import {buttons, inputs, Modal} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {
     createNetworkInterface,
     deleteNetworkInterface,

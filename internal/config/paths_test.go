@@ -53,8 +53,8 @@ func TestCurrentDataLayout(t *testing.T) {
 	if info, err := os.Stat(root); err != nil || !info.IsDir() {
 		t.Fatalf("database directory was not created: %v", err)
 	}
-	if got := AdminAutocertPath(home); got != filepath.Join(root, "pki") {
-		t.Fatalf("unexpected PKI path: %q", got)
+	if got := AdminAutocertPath(home); got != filepath.Join(root, "acme") {
+		t.Fatalf("unexpected ACME path: %q", got)
 	}
 	if got := AdminPluginsPath(home); got != filepath.Join(root, "plugins") {
 		t.Fatalf("unexpected plugins path: %q", got)

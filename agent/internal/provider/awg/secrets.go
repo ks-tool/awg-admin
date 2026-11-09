@@ -28,9 +28,10 @@ import (
 )
 
 type secretRecord struct {
-	Interface         string     `json:"interface"`
-	PrivateKey        models.Key `json:"privateKey"`
-	PreviousPublicKey string     `json:"previousPublicKey,omitempty"`
+	Interface         string      `json:"interface"`
+	PrivateKey        models.Key  `json:"privateKey"`
+	PresharedKey      *models.Key `json:"presharedKey,omitempty"`
+	PreviousPublicKey string      `json:"previousPublicKey,omitempty"`
 }
 
 type secretStore struct {
@@ -69,17 +70,17 @@ func (s *secretStore) put(resourceID string, record secretRecord) error {
 		return err
 	}
 	name := file.Name()
-	defer os.Remove(name)
+	defer func() { _ = os.Remove(name) }()
 	if err := file.Chmod(0600); err != nil {
-		file.Close()
+		_ = file.Close()
 		return err
 	}
 	if _, err := file.Write(data); err != nil {
-		file.Close()
+		_ = file.Close()
 		return err
 	}
 	if err := file.Sync(); err != nil {
-		file.Close()
+		_ = file.Close()
 		return err
 	}
 	if err := file.Close(); err != nil {

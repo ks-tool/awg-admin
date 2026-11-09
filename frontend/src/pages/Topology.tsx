@@ -38,7 +38,8 @@ import Users from './Users';
 import AddUser from './AddUser';
 import UserDetail from './UserDetail';
 import Settings from './Settings';
-import {buttons, Modal} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons} from '@/components/common/controls';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {ServerMetricsModal} from '@/components/server/ServerMetricsModal';
 import {AddServerModal} from '@/components/topology/TopologyModals';
@@ -69,7 +70,6 @@ export default function Topology() {
     const {t} = useTranslation();
     const users = useAppStore(state => state.users);
     const refreshData = useAppStore(state => state.refreshData);
-    useAutoRefresh(refreshData);
     const [topology, setTopology] = useState<TopologyData>(emptyTopology);
     const [plugins, setPlugins] = useState<PluginDescriptor[]>([]);
     const [links, setLinks] = useState<ProviderLink[]>([]);
@@ -115,8 +115,11 @@ export default function Topology() {
         const [data, providerLinks] = await Promise.all([getTopology(), listProviderLinks()]);
         setTopology(data);
         setLinks(providerLinks);
-        void refreshAgentStatuses(data.servers);
+        await refreshAgentStatuses(data.servers);
     }, [refreshAgentStatuses]);
+    useAutoRefresh(useCallback(async () => {
+        await Promise.all([refreshData(), refresh()]);
+    }, [refreshData, refresh]));
 
     useEffect(() => {
         void Promise.all([getTopology(), listVPNPlugins(), listProviderLinks()]).then(([topologyData, pluginData, providerLinks]) => {

@@ -70,7 +70,7 @@ func (*Config) PackRoot() packschema.Root {
 					{Path: "/usr/local/bin/example-provider", URL: "{{ .binaryURL }}", Mode: "0755"},
 					{Path: "/etc/systemd/system/example-provider.service", Template: "example-provider.service", Mode: "0644"},
 					{Path: "/etc/example-provider/example-provider.env", Values: "env", Format: "env", Mode: "0600"},
-					{Path: "/var/lib/vpn-agent/providers.conf", Values: "registry", Format: "json", Mode: "0600"},
+					{Path: "/var/lib/vpn-agent/providers.d/example.conf", Values: "registry", Format: "json", Mode: "0600"},
 				},
 				Services: []string{"example-provider"},
 			},

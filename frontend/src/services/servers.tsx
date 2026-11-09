@@ -14,6 +14,7 @@
   limitations under the License.
  */
 
+import * as AppBindings from '../../wailsjs/go/main/App';
 import {get, post, put} from './api';
 import {getCurrentApiMode} from './apiMode';
 import {bindingsClient} from './bindingsClient';
@@ -54,6 +55,24 @@ export async function listServers(): Promise<Server[] | null> {
     if (error) {
         reportError('fetch-servers', 'Failed to fetch servers', error);
         return null;
+    }
+    return data;
+}
+
+export async function createServer(input: ServerInput): Promise<Server | null> {
+    if (getCurrentApiMode() === 'bindings') {
+        try {
+            return await AppBindings.CreateServer(input as never) as unknown as Server;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throwIfPassphraseRequired(message);
+            throw new Error(message);
+        }
+    }
+    const {data, error} = await post<Server, ServerInput>('/servers', input);
+    if (error) {
+        throwIfPassphraseRequired(error);
+        throw new Error(error);
     }
     return data;
 }
@@ -234,10 +253,10 @@ export async function getServerMetricsHistory(serverId: string): Promise<SystemH
 }
 
 /**
- * Tri-state health of a server's agent: 'ok' (agent reachable), 'down' (SSH
- * tunnel not up or an mTLS agent unreachable), 'degraded' (indeterminate).
+ * Agent health and migration state: 'ok', 'down', 'degraded', or 'unmanaged'
+ * while migrated inventory waits for a v2 agent with the AWG provider.
  */
-export type AgentStatus = 'ok' | 'down' | 'degraded';
+export type AgentStatus = 'ok' | 'down' | 'degraded' | 'unmanaged';
 
 export async function getServerAgentStatus(serverId: string): Promise<AgentStatus | null> {
     const client = getClient();

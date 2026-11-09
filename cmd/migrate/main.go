@@ -20,8 +20,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/ks-tool/vpn-admin/storage/boltdb"
 	"github.com/ks-tool/vpn-admin/storage/boltdb/dump"
 
 	bolt "go.etcd.io/bbolt"
@@ -45,6 +47,7 @@ import (
 //
 //	awg-migrate export -db ~/.vpn-admin/db -out dump.json
 //	awg-migrate import -db ~/.vpn-admin/db -in dump.json [-force]
+//	awg-migrate v2 -db ~/.awg-admin -out ~/.vpn-admin/db
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -56,6 +59,8 @@ func main() {
 		runExportCmd(os.Args[2:])
 	case "import":
 		runImportCmd(os.Args[2:])
+	case "v2":
+		runV2Cmd(os.Args[2:])
 	case "-h", "-help", "--help":
 		usage()
 	default:
@@ -66,23 +71,41 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `awg-migrate: export/import vpn-admin's boltdb between machines or
-between the Wails desktop app and the standalone web server — both read
-the same file format, so a dump taken from one can be imported into the
-other.
+	fmt.Fprint(os.Stderr, `awg-migrate: backup, restore and manually migrate vpn-admin's BoltDB.
 
 Usage:
   awg-migrate export -db <path> -out <dump.json>
   awg-migrate import -db <path> -in <dump.json> [-force]
+  awg-migrate v2 [-db <v1-path>] [-out <v2-path>] [-force]
+
+The v2 command reads the v1 source without modifying it and atomically creates
+a separate v2 database. Its defaults are ~/.awg-admin and ~/.vpn-admin/db.
+Stop vpn-admin before replacing an existing destination. The source v1 database
+can remain in use by the previous application version.
 
 Flags:
-  -db     path to the boltdb file (the desktop app and standalone server
-          both default to ~/.vpn-admin/db)
-  -out    (export) path to write the JSON dump to
-  -in     (import) path to read the JSON dump from
-  -force  (import) overwrite keys that already exist in the destination
-          instead of aborting on the first conflict
+  -db     source BoltDB file
+  -out    JSON dump for export, destination BoltDB file for v2
+  -in     JSON dump for import
+  -force  overwrite existing destination data
 `)
+}
+
+func runV2Cmd(args []string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	fs := flag.NewFlagSet("v2", flag.ExitOnError)
+	source := fs.String("db", filepath.Join(home, ".awg-admin"), "path to the v1 source database")
+	destination := fs.String("out", filepath.Join(home, ".vpn-admin", "db"), "path to the new v2 database")
+	force := fs.Bool("force", false, "atomically replace the destination database")
+	_ = fs.Parse(args)
+	if err := boltdb.MigrateV2(*source, *destination, *force); err != nil {
+		fmt.Fprintln(os.Stderr, "v2 migration failed:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("migrated v1 %s -> v2 %s; source was not modified\n", *source, *destination)
 }
 
 func runExportCmd(args []string) {

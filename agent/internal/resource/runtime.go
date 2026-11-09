@@ -49,16 +49,17 @@ type Runtime struct {
 	retryDelay     time.Duration
 	resyncInterval time.Duration
 
-	mu        sync.RWMutex
-	providers map[string]Provider
-	pending   map[queueKey]bool
-	attempts  map[queueKey]int
-	subs      map[chan Event]struct{}
-	queue     chan queueKey
-	ctx       context.Context
-	cancel    context.CancelFunc
-	started   bool
-	wg        sync.WaitGroup
+	mu          sync.RWMutex
+	operationMu sync.Mutex
+	providers   map[string]Provider
+	pending     map[queueKey]bool
+	attempts    map[queueKey]int
+	subs        map[chan Event]struct{}
+	queue       chan queueKey
+	ctx         context.Context
+	cancel      context.CancelFunc
+	started     bool
+	wg          sync.WaitGroup
 }
 
 func NewRuntime(store Store, agentID string, retryDelay, resyncInterval time.Duration) *Runtime {
@@ -153,7 +154,7 @@ func (r *Runtime) List(providerName string) ([]models.Resource, error) {
 	}
 	result := make([]models.Resource, 0)
 	for _, item := range items {
-		if item.Provider == providerName && !item.Deleted {
+		if item.Provider == providerName {
 			result = append(result, item.Resource)
 		}
 	}
@@ -278,7 +279,9 @@ func (r *Runtime) Action(ctx context.Context, providerName, kind, name, actionNa
 	if item.Deleted {
 		return models.ActionResult{}, storage.ErrNotFound
 	}
+	r.operationMu.Lock()
 	result, err := actions.Action(ctx, item.Resource, actionName, arguments)
+	r.operationMu.Unlock()
 	if err == nil && mutating {
 		r.enqueue(queueKey{provider: providerName, kind: kind, name: name})
 	}
@@ -290,6 +293,8 @@ func (r *Runtime) PrepareLink(ctx context.Context, providerName string, link mod
 	if err != nil {
 		return models.LinkOffer{}, err
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	return provider.PrepareLink(ctx, link, endpoint)
 }
 
@@ -298,6 +303,8 @@ func (r *Runtime) CommitLink(ctx context.Context, providerName string, link mode
 	if err != nil {
 		return err
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	return provider.CommitLink(ctx, link, endpoint, remote)
 }
 
@@ -306,6 +313,8 @@ func (r *Runtime) DeleteLink(ctx context.Context, providerName string, link mode
 	if err != nil {
 		return err
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	return provider.DeleteLink(ctx, link, endpoint, remote)
 }
 
@@ -389,6 +398,8 @@ func (r *Runtime) reconcile(key queueKey) {
 	if provider == nil {
 		return
 	}
+	r.operationMu.Lock()
+	defer r.operationMu.Unlock()
 	item, err := r.store.Get(key.provider, key.kind, key.name)
 	if err != nil {
 		return

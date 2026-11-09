@@ -34,9 +34,10 @@ import {listUnmanagedInterfaces, unlockServerSSH} from '@/services/servers';
 import {SSHPassphraseRequiredError} from '@/services/sshErrors';
 import {SSHPassphraseModal} from '@/components/server/SSHPassphraseModal';
 import {formatRelativeTime} from '@/lib/utils';
-import type {InterfaceConfig, UnmanagedInterface} from '@/types';
+import type {Interface, InterfaceConfig, UnmanagedInterface} from '@/types';
 import {FormField} from '@/components/common/FormField';
-import {buttons, inputs, Modal} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {CollapsibleSection} from '@/components/common/CollapsibleSection';
 import {Container} from '@/components/common/Container';
@@ -112,8 +113,6 @@ function InterfaceFormModal({
 }) {
     const {t} = useTranslation();
     const [form, setForm] = useState(initialValues);
-
-    useEffect(() => setForm(initialValues), [initialValues]);
 
     // On add, pre-fill the Amnezia tab with server-generated obfuscation params
     // (kept identical to what CreateInterface would apply). Edit keeps whatever
@@ -316,7 +315,7 @@ export default function ServerDetail({serverId, section, onChanged}: ServerDetai
     // below (server isn't in scope yet here) so the edit form opens on the tab
     // the server actually uses.
     const [authType, setAuthType] = useState<AuthType>('key');
-    const [serverInterfaces, setServerInterfaces] = useState<any[]>([]);
+    const [serverInterfaces, setServerInterfaces] = useState<Interface[]>([]);
     // Live interfaces on the server the agent doesn't manage (wg-quick ones),
     // listed read-only with an Import action. Best-effort: [] when the agent
     // can't be asked.
@@ -344,16 +343,6 @@ export default function ServerDetail({serverId, section, onChanged}: ServerDetai
         server ? serverToFormData(server) : undefined,
     );
 
-    // ---- Effects ------------------------------------------------------------
-
-    useEffect(() => {
-        if (server) {
-            resetForm(serverToFormData(server));
-            setAuthType(authTypeForServer(server));
-            loadInterfaces();
-        }
-    }, [server]);
-
     const loadInterfaces = useCallback(async () => {
         if (!serverId) return;
         const [list, unmanagedList] = await Promise.all([
@@ -363,6 +352,16 @@ export default function ServerDetail({serverId, section, onChanged}: ServerDetai
         if (list) setServerInterfaces(list);
         setUnmanaged(unmanagedList ?? []);
     }, [serverId, listInterfacesForServer]);
+
+    useEffect(() => {
+        if (!server) return;
+        const timeout = window.setTimeout(() => {
+            resetForm(serverToFormData(server));
+            setAuthType(authTypeForServer(server));
+            void loadInterfaces();
+        }, 0);
+        return () => window.clearTimeout(timeout);
+    }, [server, loadInterfaces, resetForm]);
 
     const handleForceReplacePeers = async () => {
         if (!serverId || !forceReplaceInterfaceId) return;
@@ -713,6 +712,7 @@ export default function ServerDetail({serverId, section, onChanged}: ServerDetai
 
             {interfaceModal && (
                 <InterfaceFormModal
+                    key={`${interfaceModal.mode}:${interfaceModal.interfaceId ?? 'new'}`}
                     title={interfaceModal.mode === 'add'
                         ? t('servers.interfaces.addTitle')
                         : t('servers.interfaces.editTitle')}

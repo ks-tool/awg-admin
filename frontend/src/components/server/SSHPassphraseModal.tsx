@@ -16,7 +16,8 @@
 
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Modal, buttons, inputs} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {FormField} from '@/components/common/FormField';
 import {cn} from '@/lib/utils';
 

@@ -19,7 +19,8 @@ import type {FormEvent} from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollText, Save, RefreshCw, DatabaseBackup, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
-import { buttons, inputs, Modal } from '@/components/common/Modal';
+import { Modal } from '@/components/common/Modal';
+import { buttons, inputs } from '@/components/common/controls';
 import { FormField } from '@/components/common/FormField';
 import { CopyButton } from '@/components/common/CopyButton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -183,7 +184,7 @@ function LogsModal({ onClose }: { onClose: () => void }) {
     };
 
     useEffect(() => {
-        load();
+        void Promise.resolve().then(load);
         void debugLoggingEnabled().then(setDebug);
     }, []);
 

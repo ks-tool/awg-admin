@@ -230,3 +230,62 @@ func waitForProviderStatus(t *testing.T, runtime *resource.Runtime, phase models
 	current, _ := runtime.Get("awg", "Interface", "office")
 	t.Fatalf("provider status did not reach %s: %+v", phase, current.Status)
 }
+
+func TestInterfaceSecretMigrationPreservesKeysHooksAndZeroListenPort(t *testing.T) {
+	store, err := fs.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	network := &fakeNetwork{}
+	provider, err := New(store, t.TempDir(), network, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := models.Resource{ID: "legacy-interface", Kind: "Interface", Name: "legacy", Spec: json.RawMessage(`{"iface":"awg0","listen":0,"addr":"10.0.0.2/24"}`)}
+	if err := provider.Validate(context.Background(), item); err != nil {
+		t.Fatalf("zero listen port was rejected: %v", err)
+	}
+	privateKey, err := models.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	arguments, _ := json.Marshal(map[string]any{
+		"privateKey": privateKey.String(), "preUp": []string{"pre-up"}, "postUp": []string{"post-up"},
+		"preDown": []string{"pre-down"}, "postDown": []string{"post-down"},
+	})
+	if _, err := provider.Action(context.Background(), item, "importSecret", arguments); err != nil {
+		t.Fatal(err)
+	}
+	if network.config.PrivateKey != privateKey || len(network.config.PreUp) != 1 || len(network.config.PostUp) != 1 || len(network.config.PreDown) != 1 || len(network.config.PostDown) != 1 {
+		t.Fatalf("legacy secrets and hooks were not imported: %+v", network.config)
+	}
+	if _, err := provider.Reconcile(context.Background(), item); err != nil {
+		t.Fatal(err)
+	}
+	if network.config.PrivateKey != privateKey || len(network.config.PreUp) != 1 {
+		t.Fatal("reconcile discarded imported state")
+	}
+}
+
+func TestInterfaceResourceRejectsDuplicateOperatingSystemName(t *testing.T) {
+	store, err := fs.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventory, err := resource.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := models.Resource{ID: "first", APIVersion: APIVersion, Kind: "Interface", Name: "first", Spec: json.RawMessage(`{"iface":"awg0","listen":51820,"addr":"10.0.0.1/24"}`)}
+	if err := inventory.Put(resource.StoredResource{Provider: "awg", Resource: first}); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := New(store, t.TempDir(), &fakeNetwork{}, "test", inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := models.Resource{ID: "second", Kind: "Interface", Name: "second", Spec: first.Spec}
+	if err := provider.Validate(context.Background(), second); err == nil || !strings.Contains(err.Error(), "already managed") {
+		t.Fatalf("duplicate operating system interface was accepted: %v", err)
+	}
+}

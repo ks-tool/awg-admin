@@ -35,8 +35,7 @@ builds:
     binary: vpn-agent
     env:
       - CGO_ENABLED=0
-      - GOEXPERIMENT=jsonv2
-    goos:
+      - goos:
       - linux
     goarch:
       - amd64
@@ -55,8 +54,7 @@ builds:
     binary: vpn-agent-userspace
     env:
       - CGO_ENABLED=0
-      - GOEXPERIMENT=jsonv2
-    goos:
+      - goos:
       - linux
     goarch:
       - amd64
@@ -75,8 +73,7 @@ builds:
     binary: example-provider
     env:
       - CGO_ENABLED=0
-      - GOEXPERIMENT=jsonv2
-    goos:
+      - goos:
       - linux
     goarch:
       - amd64

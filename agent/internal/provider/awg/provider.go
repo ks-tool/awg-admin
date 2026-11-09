@@ -44,6 +44,14 @@ type Network interface {
 	Delete(string) error
 }
 
+type interfaceSecretArguments struct {
+	PrivateKey string   `json:"privateKey" jsonschema:"required,minLength=1,format=password"`
+	PreUp      []string `json:"preUp,omitempty"`
+	PostUp     []string `json:"postUp,omitempty"`
+	PreDown    []string `json:"preDown,omitempty"`
+	PostDown   []string `json:"postDown,omitempty"`
+}
+
 type Provider struct {
 	version        string
 	store          storage.Storage
@@ -88,6 +96,10 @@ func New(store storage.Storage, secretsRoot string, network Network, version str
 	}
 	hash := sha256.Sum256(raw)
 	uiSchema := json.RawMessage(`{"ui:order":["iface","addr","listen","mtu","dns","disabled","table","fwMark","jc","jmin","jmax","s1","s2","s3","s4","h1","h2","h3","h4","i1","i2","i3","i4","i5"]}`)
+	secretSchema, err := actionSchema(interfaceSecretArguments{})
+	if err != nil {
+		return nil, err
+	}
 	var resources resource.Store
 	if len(inventory) > 0 {
 		resources = inventory[0]
@@ -99,6 +111,10 @@ func New(store storage.Storage, secretsRoot string, network Network, version str
 			APIVersion: APIVersion, Kind: "Interface", SpecSchema: raw, UISchema: uiSchema,
 			SchemaHash: "sha256:" + hex.EncodeToString(hash[:]),
 			Ports:      []models.PortDefinition{{Name: "tunnel", Title: "VPN tunnel", LinkKinds: []string{"awg"}, RemotePorts: []string{"tunnel"}}},
+			Actions: []models.ActionDefinition{{
+				Name: "importSecret", Title: "Import existing interface secrets and hooks", ArgumentsSchema: secretSchema,
+				ResultType: models.ActionResultJSON, TimeoutSeconds: 30, Mutating: true, RequiresConfirmation: true,
+			}},
 		},
 	}, nil
 }
@@ -197,6 +213,45 @@ func publicKeyString(privateKey models.Key) string {
 	return publicKey.String()
 }
 
+func (p *Provider) importInterfaceSecret(item models.Resource, rawArguments json.RawMessage) (models.ActionResult, error) {
+	var arguments interfaceSecretArguments
+	if err := json.Unmarshal(rawArguments, &arguments); err != nil {
+		return models.ActionResult{}, err
+	}
+	privateKey, err := models.ParseKey(arguments.PrivateKey)
+	if err != nil {
+		return models.ActionResult{}, err
+	}
+	spec, err := p.decode(item.Spec)
+	if err != nil {
+		return models.ActionResult{}, err
+	}
+	var previous *models.InterfaceConfig
+	cfg := spec.config()
+	old, err := p.store.Get(spec.Interface)
+	if err == nil {
+		previous = old
+		cfg = *old
+	} else if !storage.IsNotFound(err) {
+		return models.ActionResult{}, err
+	}
+	cfg.PrivateKey = privateKey
+	cfg.PreUp = append([]string(nil), arguments.PreUp...)
+	cfg.PostUp = append([]string(nil), arguments.PostUp...)
+	cfg.PreDown = append([]string(nil), arguments.PreDown...)
+	cfg.PostDown = append([]string(nil), arguments.PostDown...)
+	if err := p.network.One(previous, cfg); err != nil {
+		return models.ActionResult{}, err
+	}
+	if err := p.store.Set(&cfg); err != nil {
+		return models.ActionResult{}, err
+	}
+	if err := p.secrets.put(item.ID, secretRecord{Interface: spec.Interface, PrivateKey: privateKey}); err != nil {
+		return models.ActionResult{}, err
+	}
+	return models.ActionResult{Type: models.ActionResultJSON, Data: json.RawMessage(`{"imported":true}`)}, nil
+}
+
 func (p *Provider) Delete(ctx context.Context, resource models.Resource) error {
 	if resource.Kind == "Peer" {
 		return p.deletePeer(ctx, resource)
@@ -228,9 +283,27 @@ func (p *Provider) decode(raw json.RawMessage) (InterfaceSpec, error) {
 	return spec, nil
 }
 
-func (p *Provider) validateSemantics(_ string, spec InterfaceSpec) error {
+func (p *Provider) validateSemantics(resourceID string, spec InterfaceSpec) error {
 	if !interfaceName.MatchString(spec.Interface) {
 		return errors.New("interface name may contain only letters, digits, dots, underscores and dashes")
+	}
+	if p.resources != nil {
+		items, err := p.resources.List()
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			if item.Provider != "awg" || item.Deleted || item.Resource.Kind != "Interface" || item.Resource.ID == resourceID {
+				continue
+			}
+			other, err := p.decode(item.Resource.Spec)
+			if err != nil {
+				return err
+			}
+			if other.Interface == spec.Interface {
+				return fmt.Errorf("interface %q is already managed by resource %q", spec.Interface, item.Resource.Name)
+			}
+		}
 	}
 	ip, subnet, err := net.ParseCIDR(spec.Address)
 	if err != nil || ip == nil {

@@ -22,7 +22,7 @@ const APIVersion = "awg/v1alpha1"
 
 type InterfaceSpec struct {
 	Interface    string   `json:"iface" jsonschema:"required,minLength=1,maxLength=15"`
-	ListenPort   uint16   `json:"listen" jsonschema:"required,minimum=1"`
+	ListenPort   uint16   `json:"listen" jsonschema:"required,minimum=0"`
 	Address      string   `json:"addr" jsonschema:"required"`
 	MTU          int      `json:"mtu,omitempty" jsonschema:"minimum=576,maximum=65535"`
 	DNS          []string `json:"dns,omitempty"`

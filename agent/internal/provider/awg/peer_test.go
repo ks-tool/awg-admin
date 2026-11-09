@@ -154,6 +154,7 @@ func TestPeerSecretMigration(t *testing.T) {
 	}
 	interfaceKey := mustPeerKey(t)
 	peerKey := mustPeerKey(t)
+	presharedKey := mustPeerKey(t)
 	legacy := models.InterfaceConfig{Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, PrivateKey: interfaceKey, Peers: []models.InterfacePeer{{Key: peerKey.PublicKey(), AllowedIPs: []string{"10.0.0.2/32"}}}}
 	if err := store.Set(&legacy); err != nil {
 		t.Fatal(err)
@@ -186,7 +187,7 @@ func TestPeerSecretMigration(t *testing.T) {
 	if _, err := provider.Action(context.Background(), peerResource, "renderClientConfig", json.RawMessage(`{"endpoint":"192.0.2.1:51820"}`)); err == nil {
 		t.Fatal("client config rendered before private key migration")
 	}
-	arguments, _ := json.Marshal(map[string]string{"privateKey": peerKey.String()})
+	arguments, _ := json.Marshal(map[string]string{"privateKey": peerKey.String(), "presharedKey": presharedKey.String()})
 	if _, err := provider.Action(context.Background(), peerResource, "importSecret", arguments); err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +210,9 @@ func TestPeerSecretMigration(t *testing.T) {
 	_ = json.Unmarshal(result.Data, &config)
 	if !strings.Contains(config, peerKey.String()) {
 		t.Fatal("imported private key was not used for client config")
+	}
+	if !strings.Contains(config, "PresharedKey = "+presharedKey.String()) {
+		t.Fatal("imported preshared key was not used for client config")
 	}
 }
 

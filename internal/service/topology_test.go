@@ -85,7 +85,7 @@ func TestTopologyServiceLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	adapter := &topologyPlugin{}
 	registry := plugin.NewRegistry()
@@ -94,11 +94,11 @@ func TestTopologyServiceLifecycle(t *testing.T) {
 	}
 	svc := New(db, WithPluginRegistry(registry))
 
-	topology, err := svc.CreateTopologyServer(TopologyServerInput{Name: "entry", Interfaces: []NetworkInterfaceInput{{Name: "vpn0", Address: "10.0.0.1/24"}}})
+	_, err = svc.CreateTopologyServer(TopologyServerInput{Name: "entry", Interfaces: []NetworkInterfaceInput{{Name: "vpn0", Address: "10.0.0.1/24"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	topology, err = svc.CreateTopologyServer(TopologyServerInput{Name: "exit", Interfaces: []NetworkInterfaceInput{{Name: "vpn0"}}})
+	topology, err := svc.CreateTopologyServer(TopologyServerInput{Name: "exit", Interfaces: []NetworkInterfaceInput{{Name: "vpn0"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestTopologyServerLocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	calls := 0
 	geocoder := topologyGeocoderFunc(func(_ context.Context, location string) (float64, float64, error) {
@@ -253,7 +253,7 @@ func TestTopologyProjectsExistingInventory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	serverID := uuid.New()
 	interfaceID := uuid.New()

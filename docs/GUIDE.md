@@ -113,7 +113,7 @@ The standalone server is configured through environment variables.
 | `VPN_ADMIN_ADDR`                           | HTTP listen address. Defaults to `:8080`.                                                                                                                                           |
 | `VPN_ADMIN_TLS_CERT` / `VPN_ADMIN_TLS_KEY` | TLS certificate and private key used for HTTPS.                                                                                                                                     |
 | `VPN_ADMIN_AUTOCERT_DOMAINS`               | Comma-separated list of domains for automatic Let's Encrypt certificate provisioning. Cannot be used together with a static certificate. Requires port 80 to be publicly reachable. |
-| `VPN_ADMIN_AUTOCERT_CACHE_DIR`             | Directory used to store automatically issued certificates. Defaults to `$HOME/.vpn-admin/pki`.                                                                                 |
+| `VPN_ADMIN_AUTOCERT_CACHE_DIR`             | Directory used to store automatically issued certificates. Defaults to `$HOME/.vpn-admin/acme`.                                                                                 |
 
 ### Data directories
 
@@ -123,7 +123,7 @@ used:
 | Path                     | Purpose                                                     |
 |--------------------------|-------------------------------------------------------------|
 | `$HOME/.vpn-admin/db`      | BoltDB database containing the infrastructure configuration |
-| `$HOME/.vpn-admin/pki`     | Cache of automatically issued TLS certificates              |
+| `$HOME/.vpn-admin/acme`     | Cache of automatically issued TLS certificates              |
 | `$HOME/.vpn-admin/plugins` | External VPN provider plugins                               |
 | `$HOME/.vpn-admin/cache`   | Cache of downloaded agent binaries                          |
 
@@ -583,17 +583,16 @@ an
 - **System** — host CPU, RAM, load, and network over time.
 - **Peers** — a per-peer activity table with a compact sparkline of each peer's traffic, labelled `<user>/<peer>`.
 
-The **agent status** badge is a tri-state health check that probes the agent and combines the result with the state of
-the connection to it:
+The **agent status** badge probes the agent, checks its connection and tracks adoption of migrated v1 inventory:
 
 - **Green** — the agent is reachable and answering (for an SSH-tunnelled server, this also confirms that the tunnel is
-  up).
+  up), and any migrated resources have been adopted by the AWG provider.
 - **Red** — the connection is down: the SSH tunnel could not be established, or an mTLS agent reached directly is
   unreachable.
-- **Amber** — an intermediate state, for example when the SSH tunnel is up but the agent behind it does not respond.
+- **Amber** — an intermediate state, including **Unmanaged** while a migrated server waits for a v2 agent with the AWG
+  provider, or when the SSH tunnel is up but the agent behind it does not respond.
 
-A grey *unknown* state is shown until the first check completes. Any non-green state is logged at error level, so
-problems are visible in the agent and admin logs.
+A grey *unknown* state is shown until the first check completes.
 
 The **agent type** column reflects what the agent detected about its host at startup: its backend build (`kernel` or
 `userspace`), a **docker** indicator when the agent itself runs in a container, and the interface kinds it can create
@@ -667,6 +666,18 @@ same portable JSON dump format:
   awg-migrate import -db ~/.vpn-admin/db -in dump.json    # into the target installation
   ```
 
+### Upgrading a v1 database to v2
+
+Schema migration is manual and never runs at application startup. Stop v1 before the cutover, then create a separate v2 database:
+
+```sh
+awg-migrate v2 -db ~/.awg-admin -out ~/.vpn-admin/db
+```
+
+The command opens the v1 source read-only, converts a consistent snapshot into a temporary file and atomically renames it to the destination only after complete success. A failed migration leaves both the v1 source and any existing destination untouched. An existing destination is not replaced unless `-force` is explicitly set.
+
+After migration, start v2 against the new database. All migrated servers are shown with their interfaces as **Unmanaged**. Install the v2 agent and AWG provider on each server through pack. On the next agent-status check, vpn-admin adopts the migrated resources through the provider; only after successful adoption does it clear the unmanaged flag and report the server as OK. The original v1 database remains unchanged and can be used to roll back by stopping v2 and starting v1 with that file.
+
 The exported document contains the complete administrative configuration — managed servers, SSH credentials, users, VPN
 peers, and their relationships. Because both deployment modes use the same data model, the same export can migrate
 between desktop and standalone installations or move the application to another machine.
@@ -678,7 +689,7 @@ A file saved by the in-application **Backup** is a valid `awg-migrate` dump. To 
 
 - **Administrative database** — `~/.vpn-admin/db` (BoltDB). It contains everything: servers, SSH credentials and keys,
   users, peers, interface configurations, and the standalone admin account. This is the one item that must be backed up.
-- **Autocert cache** (standalone HTTPS) — `~/.vpn-admin/pki`.
+- **Autocert cache** (standalone HTTPS) — `~/.vpn-admin/acme`.
 - **Agent-binary cache** (deploy presets) — `~/.vpn-admin/cache`.
 - **Agent, per server** — stores only the interface configurations pushed to it (`VPN_AGENT_DB`, default
   `/var/lib/vpn-agent`) together with its metrics-history checkpoint. It holds no administrative secrets beyond the

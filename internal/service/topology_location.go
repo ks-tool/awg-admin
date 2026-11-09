@@ -26,7 +26,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const locationResolveTimeout = 25 * time.Second
+const locationResolveTimeout = 3 * time.Second
 
 type locationGeocoder interface {
 	Geocode(ctx context.Context, location string) (latitude, longitude float64, err error)
@@ -47,6 +47,8 @@ func validateServerCoordinates(latitude, longitude *float64) error {
 
 func (s *Service) resolveTopologyLocations(topology *models.Topology) error {
 	changed := false
+	ctx, cancel := context.WithTimeout(context.Background(), locationResolveTimeout)
+	defer cancel()
 	for index := range topology.Servers {
 		server := &topology.Servers[index]
 		server.LocationError = ""
@@ -71,9 +73,7 @@ func (s *Service) resolveTopologyLocations(topology *models.Topology) error {
 		if server.Latitude != nil && server.Longitude != nil {
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), locationResolveTimeout)
 		latitude, longitude, err := s.geocoder.Geocode(ctx, location)
-		cancel()
 		if err != nil {
 			server.LocationError = err.Error()
 			log.Warn().Err(err).Str("server_id", server.ID.String()).Str("location", location).Msg("failed to resolve server location")

@@ -10,16 +10,16 @@ GO_BUILD_FLAGS := -ldflags=$(GO_LD_FLAGS) -gcflags=$(GO_GC_FLAGS) -trimpath -o $
 .PHONY: server
 server: frontend
 	@echo 'Build server ...'
-	@GOEXPERIMENT=jsonv2 CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) cmd/vpn-admin.go
+	@CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) cmd/vpn-admin.go
 
 .PHONY: run-server
 run-server: frontend
-	@GOEXPERIMENT=jsonv2 go run cmd/vpn-admin.go
+	@go run cmd/vpn-admin.go
 
 .PHONY: desktop
 desktop:
 	@echo 'Build desktop application ...'
-	@GOEXPERIMENT=jsonv2 go tool wails build -race -platform=$(GOOS)/$(GOARCH)
+	@go tool wails build -race -platform=$(GOOS)/$(GOARCH)
 
 .PHONY: agent
 agent:
@@ -32,7 +32,7 @@ agent-userspace:
 .PHONY: migrate
 migrate:
 	@echo 'Build awg-migrate ...'
-	@GOEXPERIMENT=jsonv2 CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) ./cmd/migrate
+	@CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) ./cmd/migrate
 
 .PHONY: frontend
 frontend:
@@ -48,5 +48,5 @@ frontend:
 .PHONY: test
 test:
 	@echo 'Test root module ...'
-	@GOEXPERIMENT=jsonv2 go test $$(go list ./... | grep -v /node_modules/)
+	@go test $$(go list ./... | grep -v /node_modules/)
 	@$(MAKE) -C agent test

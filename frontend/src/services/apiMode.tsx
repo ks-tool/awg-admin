@@ -18,7 +18,7 @@ export type ApiMode = 'http' | 'bindings';
 
 // Check if Wails runtime is available
 export const isWailsAvailable = (): boolean => {
-    return typeof window !== 'undefined' && !!(window as any)['go'];
+    return typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>)['go'];
 };
 
 /**

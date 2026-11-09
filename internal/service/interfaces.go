@@ -17,6 +17,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 
@@ -282,6 +283,42 @@ func (s *Service) DeleteInterface(serverID, ifaceID string) error {
 	iID, err := uuid.Parse(ifaceID)
 	if err != nil {
 		return err
+	}
+
+	links, err := s.store.Links().List()
+	if err != nil {
+		return err
+	}
+	for _, link := range links {
+		if link.Source.ResourceID == ifaceID || link.Target.ResourceID == ifaceID {
+			return invalidInput("remove the provider link attached to interface %q first", ifaceID)
+		}
+	}
+	resources, err := s.localProviderResources(serverID)
+	if err != nil {
+		return err
+	}
+	for _, item := range resources {
+		if item.Kind != "Interface" || item.ID != ifaceID {
+			continue
+		}
+		for _, peer := range resources {
+			if peer.Kind != "Peer" {
+				continue
+			}
+			var spec struct {
+				InterfaceRef string `json:"interfaceRef"`
+			}
+			if err := json.Unmarshal(peer.Spec, &spec); err != nil {
+				return err
+			}
+			if spec.InterfaceRef == ifaceID {
+				if err := s.DeleteProviderResource(serverID, "awg", peer.Kind, peer.Name); err != nil {
+					return err
+				}
+			}
+		}
+		return s.DeleteProviderResource(serverID, "awg", item.Kind, item.Name)
 	}
 
 	ifaces := s.store.Servers().Interfaces(sID)
