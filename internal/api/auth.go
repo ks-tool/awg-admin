@@ -20,7 +20,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/ks-tool/awg-admin/internal/service"
+	"github.com/ks-tool/vpn-admin/internal/service"
 
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bunrouter"

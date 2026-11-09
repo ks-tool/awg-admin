@@ -22,9 +22,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ks-tool/awg-admin/internal/agentclient"
-	"github.com/ks-tool/awg-admin/models"
-	"github.com/ks-tool/awg-admin/storage"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 
 	"github.com/google/uuid"
 )

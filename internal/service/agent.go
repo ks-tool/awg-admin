@@ -28,10 +28,10 @@ import (
 	"strings"
 	"time"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/internal/agentclient"
-	"github.com/ks-tool/awg-admin/internal/sshclient"
-	"github.com/ks-tool/awg-admin/models"
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/internal/sshclient"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
 )
@@ -295,7 +295,7 @@ func (s *Service) SetServerMonitoring(serverID string, enabled bool) (*models.Se
 
 // mtlsHTTPClient builds an *http.Client that presents tlsCfg.Client's
 // certificate and trusts tlsCfg.CA, mirroring the server side built by
-// agent/cmd/awg-agent.go's buildTLSConfig.
+// agent/cmd/vpn-agent.go's buildTLSConfig.
 func mtlsHTTPClient(tlsCfg *models.AgentTLS) (*http.Client, error) {
 	clientCert, err := tls.X509KeyPair([]byte(tlsCfg.Client.Certificate), []byte(tlsCfg.Client.PrivateKey))
 	if err != nil {

@@ -17,8 +17,8 @@
 package boltdb
 
 import (
-	"github.com/ks-tool/awg-admin/models"
-	"github.com/ks-tool/awg-admin/storage"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 
 	bolt "go.etcd.io/bbolt"
 )

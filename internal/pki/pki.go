@@ -15,11 +15,11 @@
 */
 
 // Package pki generates the self-signed CA, server and client certificates
-// used for mutual TLS between awg-admin and an agent listening on a public
-// ("white") IP. Certificates are generated locally by awg-admin and stored
+// used for mutual TLS between vpn-admin and an agent listening on a public
+// ("white") IP. Certificates are generated locally by vpn-admin and stored
 // in its own database (models.AgentTLS); the server certificate and CA are
 // deployed to the agent alongside its binary, the client certificate is
-// kept by awg-admin to authenticate itself when dialing the agent directly.
+// kept by vpn-admin to authenticate itself when dialing the agent directly.
 package pki
 
 import (
@@ -34,7 +34,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 const (
@@ -45,7 +45,7 @@ const (
 // IssueAgentTLS generates a fresh CA plus a server certificate (valid for
 // host, covering the given IPs/DNS names so it matches whatever "white" IP
 // or hostname the agent will be reached on) and a client certificate that
-// awg-admin will present to the agent.
+// vpn-admin will present to the agent.
 func IssueAgentTLS(commonName string, ips []net.IP, dnsNames []string) (*models.AgentTLS, error) {
 	caCert, caKey, err := generateCA(commonName + " CA")
 	if err != nil {
@@ -63,7 +63,7 @@ func IssueAgentTLS(commonName string, ips []net.IP, dnsNames []string) (*models.
 	}
 
 	clientCert, clientKey, err := issueLeaf(caCert, caKey, leafTemplate{
-		commonName:  "awg-admin",
+		commonName:  "vpn-admin",
 		extKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	})
 	if err != nil {

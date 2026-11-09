@@ -4,7 +4,7 @@
 # Frontend: build the SPA. Vite's outDir (see frontend/vite.config.ts) is
 # "../cmd/dist" relative to the frontend project root, so building from
 # /src/frontend lands the output at /src/cmd/dist — exactly where
-# cmd/awg-admin.go's `//go:embed all:dist` expects it.
+# cmd/vpn-admin.go's `//go:embed all:dist` expects it.
 # ---------------------------------------------------------------------------
 FROM node:24-alpine AS frontend
 
@@ -19,7 +19,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---------------------------------------------------------------------------
-# Backend: compile the standalone server (cmd/awg-admin.go), embedding the
+# Backend: compile the standalone server (cmd/vpn-admin.go), embedding the
 # frontend build produced above. The root module uses the agent module via a
 # local `replace => ./agent` (for agent/models), so the agent's manifests are
 # copied alongside the root ones before `go mod download` — both are needed to
@@ -40,18 +40,18 @@ COPY --from=frontend /src/cmd/dist ./cmd/dist
 ARG TARGETOS
 ARG TARGETARCH
 RUN GOEXPERIMENT=jsonv2 CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags='-s -w' -o /out/awg-admin ./cmd/awg-admin.go \
+    go build -trimpath -ldflags='-s -w' -o /out/vpn-admin ./cmd/vpn-admin.go \
     && apk add --no-cache ca-certificates
 
 
 FROM scratch
 
 COPY --from=backend /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=backend /out/awg-admin /awg-admin
+COPY --from=backend /out/vpn-admin /vpn-admin
 
 ENV HOME=/data
 WORKDIR /data
 VOLUME ["/data"]
 
 EXPOSE 8080
-ENTRYPOINT ["/awg-admin"]
+ENTRYPOINT ["/vpn-admin"]

@@ -24,11 +24,11 @@ import (
 	"net/http/pprof"
 	"sync/atomic"
 
-	"github.com/ks-tool/awg-admin/agent/internal/metrics"
-	"github.com/ks-tool/awg-admin/agent/internal/service"
-	"github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/agent/mux"
-	"github.com/ks-tool/awg-admin/agent/storage"
+	"github.com/ks-tool/vpn-admin/agent/internal/metrics"
+	"github.com/ks-tool/vpn-admin/agent/internal/service"
+	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/agent/mux"
+	"github.com/ks-tool/vpn-admin/agent/storage"
 
 	"github.com/Jipok/wgctrl-go"
 	"github.com/rs/zerolog/log"

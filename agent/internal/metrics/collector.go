@@ -50,8 +50,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/agent/storage"
+	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/agent/storage"
 
 	"github.com/Jipok/wgctrl-go"
 	atomicfile "github.com/natefinch/atomic"
@@ -75,7 +75,7 @@ const (
 const retentionPeriod = 48 * time.Hour
 
 // HistoryFilename is the default name of the metrics-history checkpoint the
-// agent writes under its data directory (AWG_AGENT_DB). It deliberately has no
+// agent writes under its data directory (VPN_AGENT_DB). It deliberately has no
 // ".json" extension so agent/storage/fs (which treats every *.json file in
 // that directory as an interface config) and its file watcher both ignore it.
 const HistoryFilename = "metrics-history"
@@ -119,7 +119,7 @@ func NewCollector(awg *wgctrl.Client, agentStore storage.Storage, interval time.
 	return c
 }
 
-// SetEnabled turns sampling on/off at runtime (awg-admin's "disable
+// SetEnabled turns sampling on/off at runtime (vpn-admin's "disable
 // monitoring" toggle, see internal/agentclient.SetMetricsEnabled). Disabling
 // stops new samples from being collected; Snapshot keeps serving whatever
 // was last recorded rather than going blank. The enabled flag itself is not

@@ -38,7 +38,7 @@ type UnmanagedInterface struct {
 }
 
 // ImportSource is a wg-quick/awg-quick configuration file read from the
-// agent's host — the input for adopting an unmanaged interface into awg-admin
+// agent's host — the input for adopting an unmanaged interface into vpn-admin
 // (GET /interfaces/{name}/import-source). Content is the raw file text; Path
 // says which of the candidate locations it was found at.
 type ImportSource struct {

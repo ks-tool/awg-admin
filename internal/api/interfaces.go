@@ -19,7 +19,7 @@ package api
 import (
 	"net/http"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 	"github.com/rs/zerolog/log"
 
 	"github.com/uptrace/bunrouter"

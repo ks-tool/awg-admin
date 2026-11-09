@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/singleflight"
@@ -28,7 +28,7 @@ import (
 
 // Manager holds one TunnelClient per server that doesn't have mTLS
 // configured — those reach their agent exclusively through an SSH tunnel,
-// so awg-admin keeps the underlying SSH connection open for the lifetime of
+// so vpn-admin keeps the underlying SSH connection open for the lifetime of
 // the process instead of dialing per request. Servers with mTLS configured
 // are not tracked here; they're reached directly (see models.AgentTLS).
 type Manager struct {

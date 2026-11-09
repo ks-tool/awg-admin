@@ -16,15 +16,15 @@
   limitations under the License.
 */
 
-// Command awg-agent is the standard agent: it manages interfaces through the
+// Command vpn-agent is the standard agent: it manages interfaces through the
 // AmneziaWG/WireGuard kernel module (the kernel.Backend, netlink). For a
-// userspace (amneziawg-go) build see cmd/awg-agent-userspace.
+// userspace (amneziawg-go) build see cmd/vpn-agent-userspace.
 package main
 
 import (
-	"github.com/ks-tool/awg-admin/agent/internal/agent"
-	"github.com/ks-tool/awg-admin/agent/internal/kernel"
-	"github.com/ks-tool/awg-admin/agent/internal/service"
+	"github.com/ks-tool/vpn-admin/agent/internal/agent"
+	"github.com/ks-tool/vpn-admin/agent/internal/kernel"
+	"github.com/ks-tool/vpn-admin/agent/internal/service"
 )
 
 // version is set at build time via -ldflags "-X main.version=...". See the

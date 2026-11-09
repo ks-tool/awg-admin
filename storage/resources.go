@@ -17,7 +17,7 @@
 package storage
 
 import (
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
 )

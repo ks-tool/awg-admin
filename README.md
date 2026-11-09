@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/logo.png" alt="Amnezia-WG Admin" width="128" height="128">
+  <img src="docs/logo.png" alt="VPN Admin" width="128" height="128">
 </p>
 
-# Amnezia-WG Admin (awg-admin)
+# VPN Admin (vpn-admin)
 
 [Русская версия](README_ru.md)
 
-**Amnezia-WG Admin** is a centralized management application for AmneziaWG and WireGuard infrastructures. It stores the
+**VPN Admin** is a centralized management application for AmneziaWG and WireGuard infrastructures. It stores the
 configuration of managed servers, users, and VPN peers, and applies that configuration through an agent running on each
 server.
 
@@ -17,7 +17,7 @@ agents are responsible for reconciling the actual server state with the stored c
 
 ## Overview
 
-Amnezia-WG Admin provides centralized administration of AmneziaWG and WireGuard deployments without manually editing
+VPN Admin provides centralized administration of AmneziaWG and WireGuard deployments without manually editing
 configuration files or connecting to every server over SSH.
 
 After a server has been added, the application can automatically deploy an agent over SSH. All subsequent management
@@ -36,12 +36,12 @@ The application collects runtime information from managed servers, including CPU
 statistics. The entire infrastructure configuration can be exported to a portable backup and restored on another
 installation.
 
-Amnezia-WG Admin is available as both a desktop application and a standalone web server. Both deployment modes share the
+VPN Admin is available as both a desktop application and a standalone web server. Both deployment modes share the
 same data model, business logic, and user interface.
 
 ## Architecture
 
-Amnezia-WG Admin consists of three components: the administrative application, the agent, and the frontend.
+VPN Admin consists of three components: the administrative application, the agent, and the frontend.
 
 ### Admin app
 
@@ -77,7 +77,7 @@ The source code is located in the `frontend/` directory.
 
 ### Data storage
 
-All infrastructure metadata is stored locally in a BoltDB database (`~/.awg-admin`).
+All infrastructure metadata is stored locally in a BoltDB database (`~/.vpn-admin`).
 
 The database contains information about managed servers, SSH credentials, users, VPN peers, and their relationships. It
 serves as the single source of truth for the administrative application.

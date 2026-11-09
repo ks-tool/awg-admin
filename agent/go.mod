@@ -1,4 +1,4 @@
-module github.com/ks-tool/awg-admin/agent
+module github.com/ks-tool/vpn-admin/agent
 
 go 1.27.1
 

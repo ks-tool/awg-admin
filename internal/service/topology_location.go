@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 	"github.com/rs/zerolog/log"
 )
 

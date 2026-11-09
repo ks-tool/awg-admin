@@ -27,7 +27,7 @@ import (
 // Host-level stats are read straight from /proc instead of pulling in a
 // system-info library — keeps the agent's footprint small (it already runs
 // as a long-lived systemd unit with CAP_NET_ADMIN/CAP_NET_RAW only, see
-// internal/deploy/assets/awg-agent.service) and /proc is always present on
+// internal/deploy/assets/vpn-agent.service) and /proc is always present on
 // the Linux hosts this agent targets.
 
 // cpuTotals is one snapshot of the aggregate "cpu" line from /proc/stat, in

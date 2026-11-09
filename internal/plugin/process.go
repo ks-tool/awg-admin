@@ -25,7 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 const ProtocolVersion = 1

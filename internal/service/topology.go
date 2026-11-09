@@ -20,13 +20,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/ks-tool/awg-admin/internal/plugin"
-	"github.com/ks-tool/awg-admin/internal/plugin/awg"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/internal/config"
+	"github.com/ks-tool/vpn-admin/internal/plugin"
+	"github.com/ks-tool/vpn-admin/internal/plugin/awg"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -39,11 +39,11 @@ func defaultPluginRegistry() *plugin.Registry {
 	if err := registry.Register(awg.New()); err != nil {
 		log.Error().Err(err).Msg("failed to register built-in AWG plugin")
 	}
-	dir := os.Getenv("AWG_ADMIN_PLUGINS_DIR")
+	dir := config.Env("PLUGINS_DIR")
 	if dir == "" {
 		home, err := os.UserHomeDir()
 		if err == nil {
-			dir = filepath.Join(home, ".awg-admin-plugins")
+			dir = config.AdminPluginsPath(home)
 		}
 	}
 	if dir != "" {

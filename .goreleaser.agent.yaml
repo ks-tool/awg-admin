@@ -1,4 +1,4 @@
-# GoReleaser config for the awg-agent RELEASE — the per-server daemon.
+# GoReleaser config for the vpn-agent RELEASE — the per-server daemon.
 # Triggered by an `agent/v*` tag (see .github/workflows/release-agent.yml), run
 # with `--config .goreleaser.agent.yaml --skip=validate`.
 #
@@ -14,9 +14,9 @@
 # release target is the git ref, unaffected by the templating).
 #
 # Builds two Linux-only binaries and one Docker image:
-#   - awg-agent: kernel/amneziawg-dkms backend (agent/cmd/awg-agent.go).
-#   - awg-agent-userspace: userspace/amneziawg-go backend
-#     (agent/cmd/awg-agent-userspace.go).
+#   - vpn-agent: kernel/amneziawg-dkms backend (agent/cmd/vpn-agent.go).
+#   - vpn-agent-userspace: userspace/amneziawg-go backend
+#     (agent/cmd/vpn-agent-userspace.go).
 #   - {IMAGE_AGENT_USERSPACE}: the userspace agent's multi-arch image (linux
 #     amd64+arm64, GHCR), bundling amneziawg-go + iproute2/iptables
 #     (docker/Dockerfile.agent). The kernel agent is systemd-only, no image.
@@ -25,13 +25,13 @@
 # (its own go.mod).
 version: 2
 
-project_name: awg-agent
+project_name: vpn-agent
 
 builds:
   - id: agent
     dir: agent
-    main: ./cmd/awg-agent.go
-    binary: awg-agent
+    main: ./cmd/vpn-agent.go
+    binary: vpn-agent
     env:
       - CGO_ENABLED=0
       - GOEXPERIMENT=jsonv2
@@ -50,8 +50,8 @@ builds:
 
   - id: agent-userspace
     dir: agent
-    main: ./cmd/awg-agent-userspace.go
-    binary: awg-agent-userspace
+    main: ./cmd/vpn-agent-userspace.go
+    binary: vpn-agent-userspace
     env:
       - CGO_ENABLED=0
       - GOEXPERIMENT=jsonv2
@@ -76,13 +76,13 @@ archives:
   - id: agent-archive
     ids: [agent]
     name_template: >-
-      awg-agent_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
+      vpn-agent_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
     formats: [binary]
 
   - id: agent-userspace-archive
     ids: [agent-userspace]
     name_template: >-
-      awg-agent-userspace_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
+      vpn-agent-userspace_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
     formats: [binary]
 
 # Multi-arch userspace-agent image from the prebuilt binary; the Dockerfile
@@ -115,5 +115,5 @@ changelog:
       - "^ci:"
 
 release:
-  name_template: "AWG Agent v{{ .Env.AGENT_VERSION }}"
+  name_template: "VPN Agent v{{ .Env.AGENT_VERSION }}"
   replace_existing_artifacts: true

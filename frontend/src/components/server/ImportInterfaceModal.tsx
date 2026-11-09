@@ -79,7 +79,7 @@ function Section({title, hint, children}: {title: string; hint?: string; childre
 }
 
 // ImportInterfaceModal adopts a wg-quick / awg-quick interface that's up on
-// the server but unknown to awg-admin (Service.PreviewImport /
+// the server but unknown to vpn-admin (Service.PreviewImport /
 // ImportInterfaceFromServer). Two steps: pick the interface + paste the
 // user→peer map, Preview (a dry run that reports what will be created and
 // warns about what changed meaning), then Import. The preview is invalidated

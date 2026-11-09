@@ -23,7 +23,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 func TestResourceClient(t *testing.T) {

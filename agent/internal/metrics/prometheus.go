@@ -21,12 +21,12 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/ks-tool/awg-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/agent/models"
 )
 
 // WritePrometheus renders snap in Prometheus text exposition format, for
 // agents that want to scrape this agent directly rather than go through
-// awg-admin's JSON-consuming Dashboard (see api/handlers.go's "?fmt=prom").
+// vpn-admin's JSON-consuming Dashboard (see api/handlers.go's "?fmt=prom").
 func WritePrometheus(w io.Writer, snap models.MetricsSnapshot) error {
 	ts := snap.System.Timestamp.UnixMilli()
 

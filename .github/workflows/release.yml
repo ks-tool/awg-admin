@@ -8,9 +8,9 @@ name: release
 # GitHub Actions' `*` doesn't cross `/`, so `v*` never matches `agent/v1.2.3`.
 #
 # Produces, all attached to the same GitHub Release for the tag:
-#   - awg-admin (standalone web server): linux/darwin/windows, amd64/arm64
+#   - vpn-admin (standalone web server): linux/darwin/windows, amd64/arm64
 #     archives — built by GoReleaser (see .goreleaser.yaml).
-#   - the awg-admin multi-arch (amd64+arm64) Docker image pushed to GHCR — also
+#   - the vpn-admin multi-arch (amd64+arm64) Docker image pushed to GHCR — also
 #     built by GoReleaser.
 #   - the Wails desktop app for Windows (.exe + NSIS installer), macOS
 #     (.app + .dmg, universal binary) and Linux (binary).
@@ -28,9 +28,9 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------
-  # Everything GoReleaser owns for the admin: the awg-admin binaries,
+  # Everything GoReleaser owns for the admin: the vpn-admin binaries,
   # archives, checksums, changelog, the GitHub Release, and the multi-arch
-  # awg-admin Docker image pushed to GHCR (see the dockers_v2 pipe in
+  # vpn-admin Docker image pushed to GHCR (see the dockers_v2 pipe in
   # .goreleaser.yaml).
   # ---------------------------------------------------------------------
   goreleaser:
@@ -54,7 +54,7 @@ jobs:
       - name: Compute image name (lowercase)
         run: |
           owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          echo "IMAGE_ADMIN=ghcr.io/$owner/awg-admin" >> "$GITHUB_ENV"
+          echo "IMAGE_ADMIN=ghcr.io/$owner/vpn-admin" >> "$GITHUB_ENV"
 
       # arm64 images are built under QEMU emulation via buildx (use: buildx).
       - uses: docker/setup-qemu-action@v3
@@ -152,9 +152,9 @@ jobs:
         shell: pwsh
         # Guard against the silent-skip above ever regressing: `wails build
         # -nsis` writes ${name}-${arch}-installer.exe (name = wails.json "name"),
-        # so for windows/amd64 that's amnezia-wg-admin-amd64-installer.exe.
+        # so for windows/amd64 that's vpn-admin-amd64-installer.exe.
         run: |
-          $installer = 'build/bin/amnezia-wg-admin-amd64-installer.exe'
+          $installer = 'build/bin/vpn-admin-amd64-installer.exe'
           if (-not (Test-Path $installer)) {
             throw "Expected NSIS installer '$installer' was not produced by 'wails build -nsis'"
           }
@@ -162,10 +162,10 @@ jobs:
 
       - name: Package macOS .dmg (drag-to-Applications layout)
         if: runner.os == 'macOS'
-        # Wails leaves an unsigned build/bin/amnezia-wg-admin.app. Here we:
-        #  1. rename the bundle to "Amnezia-WG Admin.app" so it appears under
+        # Wails leaves an unsigned build/bin/vpn-admin.app. Here we:
+        #  1. rename the bundle to "VPN Admin.app" so it appears under
         #     that name in /Applications (the executable inside stays
-        #     amnezia-wg-admin — CFBundleExecutable is unchanged);
+        #     vpn-admin — CFBundleExecutable is unchanged);
         #  2. ad-hoc codesign it — an *unsigned* arm64 app is refused as
         #     "damaged" on Apple Silicon; ad-hoc signing lets it launch. This
         #     does NOT remove Gatekeeper's "unidentified developer" prompt —
@@ -182,8 +182,8 @@ jobs:
           set -euo pipefail
           brew install create-dmg
 
-          bundle="Amnezia-WG Admin.app"
-          mv "build/bin/amnezia-wg-admin.app" "build/bin/$bundle"
+          bundle="VPN Admin.app"
+          mv "build/bin/vpn-admin.app" "build/bin/$bundle"
           codesign --force --deep --sign - "build/bin/$bundle"
 
           # create-dmg images a whole folder — stage just the app so nothing
@@ -195,7 +195,7 @@ jobs:
           # window, which occasionally flakes on the headless runner.
           for attempt in 1 2 3; do
             if create-dmg \
-                --volname "Amnezia-WG Admin" \
+                --volname "VPN Admin" \
                 --volicon "build/bin/$bundle/Contents/Resources/iconfile.icns" \
                 --window-pos 200 120 \
                 --window-size 640 400 \
@@ -204,16 +204,16 @@ jobs:
                 --hide-extension "$bundle" \
                 --app-drop-link 480 190 \
                 --no-internet-enable \
-                "build/bin/amnezia-wg-admin.dmg" \
+                "build/bin/vpn-admin.dmg" \
                 "$staging"; then
               break
             fi
             echo "create-dmg attempt $attempt failed"
-            rm -f "build/bin/amnezia-wg-admin.dmg"
+            rm -f "build/bin/vpn-admin.dmg"
             [ "$attempt" = 3 ] && exit 1
           done
 
-          # Remove the .app so the upload glob (build/bin/amnezia-wg-admin*)
+          # Remove the .app so the upload glob (build/bin/vpn-admin*)
           # doesn't try to upload a directory ("read ...app: is a directory").
           rm -rf "build/bin/$bundle" "$staging"
 
@@ -222,7 +222,7 @@ jobs:
         run: |
           cd build/bin
           tag='${{ github.ref_name }}'
-          for f in amnezia-wg-admin.exe amnezia-wg-admin-amd64-installer.exe amnezia-wg-admin.dmg amnezia-wg-admin; do
+          for f in vpn-admin.exe vpn-admin-amd64-installer.exe vpn-admin.dmg vpn-admin; do
             [ -f "$f" ] || continue
             ext="${f##*.}"
             base="${f%.*}"
@@ -238,4 +238,4 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" build/bin/amnezia-wg-admin* --clobber
+        run: gh release upload "${{ github.ref_name }}" build/bin/vpn-admin* --clobber

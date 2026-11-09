@@ -21,8 +21,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/ks-tool/awg-admin/storage"
-	"github.com/ks-tool/awg-admin/storage/boltdb/dump"
+	"github.com/ks-tool/vpn-admin/storage"
+	"github.com/ks-tool/vpn-admin/storage/boltdb/dump"
 
 	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"

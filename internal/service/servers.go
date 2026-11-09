@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ks-tool/awg-admin/internal/deploy"
-	"github.com/ks-tool/awg-admin/internal/pki"
-	"github.com/ks-tool/awg-admin/internal/sshclient"
-	"github.com/ks-tool/awg-admin/models"
-	"github.com/ks-tool/awg-admin/storage"
+	"github.com/ks-tool/vpn-admin/internal/deploy"
+	"github.com/ks-tool/vpn-admin/internal/pki"
+	"github.com/ks-tool/vpn-admin/internal/sshclient"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -317,7 +317,7 @@ func (s *Service) GenerateAgentTLS(id string) (*models.Server, error) {
 	return srv, s.store.Servers().Set(srv)
 }
 
-// DeployAgent starts installing and starting the awg-agent service on the
+// DeployAgent starts installing and starting the vpn-agent service on the
 // server's host over SSH, using its currently stored SSH credentials,
 // agent address and (if generated) mTLS certificates, returning as soon as
 // the deploy has started rather than waiting for it to finish — it can

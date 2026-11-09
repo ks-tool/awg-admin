@@ -14,7 +14,7 @@
   limitations under the License.
 */
 
-// Package deploy installs the awg-agent onto a managed server over SSH. It
+// Package deploy installs the vpn-agent onto a managed server over SSH. It
 // supports two methods, chosen by the models.AgentSource being deployed:
 //
 //   - systemd (binary): the agent runs as a systemd unit on the host, driving
@@ -32,8 +32,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ks-tool/awg-admin/internal/sshclient"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/internal/sshclient"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -44,10 +44,10 @@ import (
 // the mTLS material written into it (method-specific paths live in systemd.go /
 // docker.go).
 const (
-	remoteConfigDir      = "/etc/awg-agent"
-	remoteCACertPath     = "/etc/awg-agent/ca.pem"
-	remoteServerCertPath = "/etc/awg-agent/server.pem"
-	remoteServerKeyPath  = "/etc/awg-agent/server-key.pem"
+	remoteConfigDir      = "/etc/vpn-agent"
+	remoteCACertPath     = "/etc/vpn-agent/ca.pem"
+	remoteServerCertPath = "/etc/vpn-agent/server.pem"
+	remoteServerKeyPath  = "/etc/vpn-agent/server-key.pem"
 )
 
 // stepFunc reports (and logs) the current deploy step; failFunc logs and
@@ -97,7 +97,7 @@ func ToAgent(ctx context.Context, srv models.Server, src models.AgentSource, udp
 	}
 	defer func() { _ = client.Close() }()
 
-	// A non-root SSH user can't write /usr/local/bin, /etc/systemd, /etc/awg-agent
+	// A non-root SSH user can't write /usr/local/bin, /etc/systemd, /etc/vpn-agent
 	// or drive systemctl/docker directly — escalate every privileged remote
 	// command with sudo. resolveSudo probes the host and, if sudo needs a
 	// password we don't have, returns *SudoPasswordRequiredError for the frontend

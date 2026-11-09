@@ -22,8 +22,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ks-tool/awg-admin/internal/sshclient"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/internal/sshclient"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/ssh"
@@ -35,8 +35,8 @@ const (
 	// port from the server's Agent.Address (published straight through to the
 	// host at that same address); defaultAgentPort is only the fallback when the
 	// address carries no port.
-	dockerContainerName = "awg-agent"
-	dockerDataVolume    = "awg-agent-data"
+	dockerContainerName = "vpn-agent"
+	dockerDataVolume    = "vpn-agent-data"
 	dockerDataPath      = "/data"
 	defaultAgentPort    = "8080"
 )
@@ -110,13 +110,13 @@ func dockerRunCmd(srv models.Server, src models.AgentSource, udpPorts []uint16) 
 	}
 
 	b.WriteString(" -v " + dockerDataVolume + ":" + dockerDataPath)
-	b.WriteString(" -e AWG_AGENT_ADDR=0.0.0.0:" + port)
-	b.WriteString(" -e AWG_AGENT_DB=" + dockerDataPath)
+	b.WriteString(" -e VPN_AGENT_ADDR=0.0.0.0:" + port)
+	b.WriteString(" -e VPN_AGENT_DB=" + dockerDataPath)
 	if tls := srv.Agent.TLS; !tls.IsZero() {
 		b.WriteString(" -v " + remoteConfigDir + ":" + remoteConfigDir + ":ro")
-		b.WriteString(" -e AWG_AGENT_TLS_CERT=" + remoteServerCertPath)
-		b.WriteString(" -e AWG_AGENT_TLS_KEY=" + remoteServerKeyPath)
-		b.WriteString(" -e AWG_AGENT_TLS_CLIENT_CA=" + remoteCACertPath)
+		b.WriteString(" -e VPN_AGENT_TLS_CERT=" + remoteServerCertPath)
+		b.WriteString(" -e VPN_AGENT_TLS_KEY=" + remoteServerKeyPath)
+		b.WriteString(" -e VPN_AGENT_TLS_CLIENT_CA=" + remoteCACertPath)
 	}
 	b.WriteString(" " + shellQuote(src.Image))
 	return b.String()

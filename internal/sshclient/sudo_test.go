@@ -19,7 +19,7 @@ package sshclient
 import "testing"
 
 func TestSudoShell(t *testing.T) {
-	cmd := "systemctl daemon-reload && systemctl restart awg-agent"
+	cmd := "systemctl daemon-reload && systemctl restart vpn-agent"
 	tests := []struct {
 		name string
 		sudo Sudo
@@ -39,7 +39,7 @@ func TestSudoShell(t *testing.T) {
 }
 
 func TestSudoSimple(t *testing.T) {
-	cmd := "install -D -m 755 /dev/stdin '/usr/local/bin/awg-agent'"
+	cmd := "install -D -m 755 /dev/stdin '/usr/local/bin/vpn-agent'"
 	tests := []struct {
 		name string
 		sudo Sudo

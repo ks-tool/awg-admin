@@ -25,7 +25,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/ks-tool/awg-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
 )
 
 // TestTunnelDropped pins down which failures callAgent treats as a dead tunnel

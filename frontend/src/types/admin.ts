@@ -20,7 +20,7 @@ import { type Key, type InterfaceConfig } from "./agent"
 // source: agentrelease.go
 
 /**
- * AgentReleaseAsset is one downloadable awg-agent binary published in a GitHub
+ * AgentReleaseAsset is one downloadable vpn-agent binary published in a GitHub
  * release (tagged agent/v*), offered by the "GitHub releases" picker in the
  * Add-agent-source UI so an official binary can be turned into a URL
  * AgentSource without pasting a URL by hand. Assembled by
@@ -30,7 +30,7 @@ import { type Key, type InterfaceConfig } from "./agent"
 export interface AgentReleaseAsset {
   /**
    * Name is the release-relative asset filename, e.g.
-   * "awg-agent-userspace_linux_amd64".
+   * "vpn-agent-userspace_linux_amd64".
    */
   name: string;
   /**
@@ -44,8 +44,8 @@ export interface AgentReleaseAsset {
    */
   arch: string;
   /**
-   * Userspace is true for the userspace agent binary (awg-agent-userspace),
-   * false for the kernel one (awg-agent). It maps straight onto
+   * Userspace is true for the userspace agent binary (vpn-agent-userspace),
+   * false for the kernel one (vpn-agent). It maps straight onto
    * AgentSource.Userspace so a source created from this asset skips (or keeps)
    * the AmneziaWG kernel-module pre-check on deploy correctly.
    */
@@ -69,7 +69,7 @@ export interface AgentReleaseAsset {
 // source: agentsource.go
 
 /**
- * AgentSource is a named, reusable place to fetch the awg-agent binary
+ * AgentSource is a named, reusable place to fetch the vpn-agent binary
  * from when deploying it to a server (see Service.DeployAgent) — shown as
  * a preset in the "Deploy agent" UI instead of typing a URL every time.
  */
@@ -79,7 +79,7 @@ export interface AgentSource {
   url?: string;
   /**
    * Path, when set instead of URL, is a path to the agent binary already
-   * present on the filesystem of the machine running awg-admin (desktop:
+   * present on the filesystem of the machine running vpn-admin (desktop:
    * the user's own machine; standalone server: that server's host) — read
    * directly and uploaded over SSH the same way a CacheLocally URL preset
    * is, without ever downloading anything. Exactly one of URL or Path is
@@ -91,15 +91,15 @@ export interface AgentSource {
    * CacheLocally, when false (the default), has the *managed server*
    * download URL itself over SSH (curl/wget — see internal/sshclient's
    * DownloadFile) so the binary's bytes never pass through the machine
-   * running awg-admin. When true, awg-admin downloads URL once into a
+   * running vpn-admin. When true, vpn-admin downloads URL once into a
    * local cache (keyed by ID) and uploads it the traditional way on
    * every deploy that uses this source — for servers without outbound
-   * internet access to URL, at the cost of awg-admin's own bandwidth.
+   * internet access to URL, at the cost of vpn-admin's own bandwidth.
    */
   cacheLocally?: boolean;
   /**
    * Image, when set instead of URL/Path, is a Docker image reference (e.g.
-   * ghcr.io/ks-tool/awg-agent-userspace:latest). Deploying such a source runs
+   * ghcr.io/ks-tool/vpn-agent-userspace:latest). Deploying such a source runs
    * the agent as a Docker container on the server (see deploy.ToAgent's docker
    * path) rather than as a systemd unit — for hosts using the userspace
    * amneziawg-go image. Exactly one of URL, Path or Image is set; CacheLocally
@@ -108,7 +108,7 @@ export interface AgentSource {
   image?: string;
   /**
    * Userspace marks a URL/Path source as the *userspace* agent binary
-   * (awg-agent-userspace), which runs over systemd with no kernel module. The
+   * (vpn-agent-userspace), which runs over systemd with no kernel module. The
    * systemd deploy then skips its AmneziaWG-kernel-module pre-check (which
    * otherwise fails fast, as it must for the kernel agent — see
    * deploy.deploySystemd). Meaningless for an Image source (a Docker image is
@@ -122,7 +122,7 @@ export interface AgentSource {
 
 /**
  * AuthCredentials is the single admin account used to log in to the
- * standalone web-server mode (cmd/awg-admin.go). The Wails desktop app
+ * standalone web-server mode (cmd/vpn-admin.go). The Wails desktop app
  * never reads this — it already runs as a local single-user process with
  * no network exposure, so it has nothing to authenticate against.
  */
@@ -332,7 +332,7 @@ export interface SSHConfig {
   port?: number /* uint16 */;
   user?: string;
   /**
-   * Key is a path to the private key file on the machine running awg-admin,
+   * Key is a path to the private key file on the machine running vpn-admin,
    * not the key body itself. Mutually exclusive with KeyData; KeyData takes
    * precedence when both are set (see internal/sshclient).
    */
@@ -386,10 +386,10 @@ export const AgentStatusDown: AgentStatus = "down";
 export const AgentStatusDegraded: AgentStatus = "degraded";
 /**
  * AgentTLS holds the mTLS material for direct (non-tunnelled) communication
- * with the agent on a public ("white") IP. CA is kept so awg-admin can
+ * with the agent on a public ("white") IP. CA is kept so vpn-admin can
  * re-issue Server/Client certs later (e.g. on renewal) without invalidating
  * the other side. Server is deployed to the agent; Client is used by
- * awg-admin itself when dialing the agent directly.
+ * vpn-admin itself when dialing the agent directly.
  */
 export interface AgentTLS {
   ca: CertKeyPair;

@@ -22,10 +22,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/internal/plugin"
-	"github.com/ks-tool/awg-admin/models"
-	"github.com/ks-tool/awg-admin/storage/boltdb"
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/internal/plugin"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage/boltdb"
 
 	"github.com/google/uuid"
 )

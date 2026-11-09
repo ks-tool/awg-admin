@@ -5,11 +5,11 @@
 // module), e.g.:
 //
 //	cd agent/e2e && GOWORK=off AWG_E2E=1 go test -run TestUserspaceTunnel -v .
-module github.com/ks-tool/awg-admin/agent/e2e
+module github.com/ks-tool/vpn-admin/agent/e2e
 
 go 1.27.1
 
-replace github.com/ks-tool/awg-admin/agent => ../
+replace github.com/ks-tool/vpn-admin/agent => ../
 
 // Mirrors agent/go.mod's replace (a replace in a dependency's go.mod doesn't
 // propagate to this module): the ks-tool fork parses/writes the amneziawg-dkms
@@ -17,7 +17,7 @@ replace github.com/ks-tool/awg-admin/agent => ../
 replace github.com/Jipok/wgctrl-go v1.2.0 => github.com/ks-tool/wgctrl-go v0.0.0-20260921051250-2994e82fed6c
 
 require (
-	github.com/ks-tool/awg-admin/agent v1.2.1
+	github.com/ks-tool/vpn-admin/agent v1.2.1
 	github.com/moby/moby/api v1.54.2
 	github.com/testcontainers/testcontainers-go v0.43.0
 )

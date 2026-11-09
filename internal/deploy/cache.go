@@ -24,17 +24,17 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
 )
 
-// cacheDir returns the directory awg-admin caches downloaded agent
+// cacheDir returns the directory vpn-admin caches downloaded agent
 // binaries in for AgentSource presets with CacheLocally set, creating it
 // (and its parents) if missing.
 //
-// This is a *sibling* of "$HOME/.awg-admin", not a child of it —
-// "$HOME/.awg-admin" is the boltdb file itself (see storage/boltdb.Open),
+// This is a *sibling* of "$HOME/.vpn-admin", not a child of it —
+// "$HOME/.vpn-admin" is the boltdb file itself (see storage/boltdb.Open),
 // a plain file, not a directory, so anything under it would fail to
 // create with ENOTDIR.
 func cacheDir() (string, error) {
@@ -42,7 +42,7 @@ func cacheDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".awg-admin-cache", "agent-binaries")
+	dir := filepath.Join(home, ".vpn-admin-cache", "agent-binaries")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create agent binary cache dir: %w", err)
 	}

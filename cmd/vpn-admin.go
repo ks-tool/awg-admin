@@ -24,14 +24,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/ks-tool/awg-admin/internal/api"
-	"github.com/ks-tool/awg-admin/internal/service"
-	"github.com/ks-tool/awg-admin/storage/boltdb"
+	"github.com/ks-tool/vpn-admin/internal/api"
+	"github.com/ks-tool/vpn-admin/internal/config"
+	"github.com/ks-tool/vpn-admin/internal/service"
+	"github.com/ks-tool/vpn-admin/storage/boltdb"
 
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bunrouter"
@@ -46,13 +46,13 @@ var dist embed.FS
 var version = "dev"
 
 // TLS for standalone mode is configured via environment variables:
-//   - AWG_ADMIN_TLS_CERT / AWG_ADMIN_TLS_KEY: serve HTTPS with a static
+//   - VPN_ADMIN_TLS_CERT / VPN_ADMIN_TLS_KEY: serve HTTPS with a static
 //     certificate/key pair.
-//   - AWG_ADMIN_AUTOCERT_DOMAINS: comma-separated list of domains to serve
+//   - VPN_ADMIN_AUTOCERT_DOMAINS: comma-separated list of domains to serve
 //     HTTPS with a certificate obtained automatically from Let's Encrypt
-//     (golang.org/x/crypto/acme/autocert). AWG_ADMIN_AUTOCERT_CACHE_DIR
+//     (golang.org/x/crypto/acme/autocert). VPN_ADMIN_AUTOCERT_CACHE_DIR
 //     selects where issued certificates are cached (default
-//     "$HOME/.awg-admin-autocert" — a sibling of "$HOME/.awg-admin", not a
+//     "$HOME/.vpn-admin-autocert" — a sibling of "$HOME/.vpn-admin", not a
 //     child of it: that path is the boltdb file itself, a plain file, not
 //     a directory). Requires port 80 to be reachable for the HTTP-01
 //     challenge.
@@ -60,14 +60,14 @@ var version = "dev"
 // The two are mutually exclusive; when neither is set, the server falls
 // back to plain HTTP.
 func main() {
-	log.Info().Str("version", version).Msg("starting awg-admin")
+	log.Info().Str("version", version).Msg("starting vpn-admin")
 
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
 	}
 
-	db, err := boltdb.Open(filepath.Join(home, ".awg-admin"))
+	db, err := boltdb.Open(config.AdminDatabasePath(home))
 	if err != nil {
 		log.Fatal().Err(err).Send()
 	}
@@ -87,24 +87,24 @@ func main() {
 
 	sessions := api.New(svc, router.NewGroup(""))
 
-	addr := os.Getenv("AWG_ADMIN_ADDR")
+	addr := config.Env("ADDR")
 	if addr == "" {
 		addr = ":8080"
 	}
 	srv := &http.Server{Addr: addr, Handler: api.ContentSecurityPolicyMiddleware(api.CorsMiddleware(api.BasicAuthMiddleware(svc, sessions)(api.Serve(router))))}
 
-	certFile := os.Getenv("AWG_ADMIN_TLS_CERT")
-	keyFile := os.Getenv("AWG_ADMIN_TLS_KEY")
-	autocertDomains := os.Getenv("AWG_ADMIN_AUTOCERT_DOMAINS")
+	certFile := config.Env("TLS_CERT")
+	keyFile := config.Env("TLS_KEY")
+	autocertDomains := config.Env("AUTOCERT_DOMAINS")
 	if certFile != "" && autocertDomains != "" {
-		log.Fatal().Msg("AWG_ADMIN_TLS_CERT/AWG_ADMIN_TLS_KEY and AWG_ADMIN_AUTOCERT_DOMAINS are mutually exclusive")
+		log.Fatal().Msg("VPN_ADMIN_TLS_CERT/VPN_ADMIN_TLS_KEY and VPN_ADMIN_AUTOCERT_DOMAINS are mutually exclusive")
 	}
 
 	var certManager *autocert.Manager
 	if autocertDomains != "" {
-		cacheDir := os.Getenv("AWG_ADMIN_AUTOCERT_CACHE_DIR")
+		cacheDir := config.Env("AUTOCERT_CACHE_DIR")
 		if cacheDir == "" {
-			cacheDir = filepath.Join(home, ".awg-admin-autocert")
+			cacheDir = config.AdminAutocertPath(home)
 		}
 		certManager = &autocert.Manager{
 			Prompt:     autocert.AcceptTOS,

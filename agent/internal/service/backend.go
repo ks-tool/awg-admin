@@ -20,11 +20,11 @@ package service
 // the one part of the agent that differs between the two builds:
 //
 //   - kernel (agent/internal/kernel): the AmneziaWG kernel module, driven over
-//     netlink (vishvananda/netlink). Wired in by cmd/awg-agent.
+//     netlink (vishvananda/netlink). Wired in by cmd/vpn-agent.
 //   - userspace (agent/internal/userspace): an in-process amneziawg-go TUN,
 //     with address/up/mtu done via the `ip` command (no netlink dependency, the
 //     way jwg / awg-quick's userspace path do it). Wired in by
-//     cmd/awg-agent-userspace.
+//     cmd/vpn-agent-userspace.
 //
 // Keeping this an interface (rather than either build importing the other) is
 // what lets the userspace agent avoid pulling in vishvananda/netlink at all.
@@ -84,8 +84,8 @@ type BackendInfo struct {
 
 // backend is the active link backend for this process. There is no default: a
 // process serves exactly one backend, and its main MUST select it via
-// SetBackend before loading interfaces (cmd/awg-agent → kernel,
-// cmd/awg-agent-userspace → userspace). Kept out of this package so `service`
+// SetBackend before loading interfaces (cmd/vpn-agent → kernel,
+// cmd/vpn-agent-userspace → userspace). Kept out of this package so `service`
 // itself stays free of any particular backend's dependencies (notably netlink).
 var backend Backend
 

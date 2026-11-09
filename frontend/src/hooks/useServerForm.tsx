@@ -34,7 +34,7 @@ export interface ServerFormData {
         host: string;
         port: number;
         user: string;
-        /** Путь к файлу приватного SSH-ключа на машине, где запущен awg-admin. */
+        /** Путь к файлу приватного SSH-ключа на машине, где запущен vpn-admin. */
         key: string;
         /** Содержимое загруженного файла приватного ключа (если выбран upload, а не путь). */
         keyData: string;

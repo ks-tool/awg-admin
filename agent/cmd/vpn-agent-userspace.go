@@ -16,19 +16,19 @@
   limitations under the License.
 */
 
-// Command awg-agent-userspace is the agent built to drive interfaces through an
+// Command vpn-agent-userspace is the agent built to drive interfaces through an
 // in-process userspace WireGuard device (the amneziawg-go library) instead of
 // the kernel module — for hosts without a (matching) AmneziaWG kernel module.
 // It's a self-contained binary (amneziawg-go is compiled in, no external
-// process) and is otherwise identical to awg-agent; it just wires in the
+// process) and is otherwise identical to vpn-agent; it just wires in the
 // userspace backend before starting. It needs /dev/net/tun and CAP_NET_ADMIN
 // at runtime to create and manage the TUN interfaces.
 package main
 
 import (
-	"github.com/ks-tool/awg-admin/agent/internal/agent"
-	"github.com/ks-tool/awg-admin/agent/internal/service"
-	"github.com/ks-tool/awg-admin/agent/internal/userspace"
+	"github.com/ks-tool/vpn-admin/agent/internal/agent"
+	"github.com/ks-tool/vpn-admin/agent/internal/service"
+	"github.com/ks-tool/vpn-admin/agent/internal/userspace"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".

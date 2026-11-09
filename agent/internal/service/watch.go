@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ks-tool/awg-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/agent/models"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"

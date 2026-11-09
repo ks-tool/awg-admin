@@ -27,10 +27,10 @@ import (
 	"sync"
 	"testing"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/internal/pki"
-	"github.com/ks-tool/awg-admin/models"
-	"github.com/ks-tool/awg-admin/storage/boltdb"
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/internal/pki"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage/boltdb"
 )
 
 // fakeAgentTLS is a minimal stand-in for the real agent's HTTP API, served

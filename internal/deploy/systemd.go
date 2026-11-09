@@ -23,21 +23,21 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ks-tool/awg-admin/internal/sshclient"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/internal/sshclient"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/ssh"
 )
 
-//go:embed assets/awg-agent.service
+//go:embed assets/vpn-agent.service
 var systemdUnit []byte
 
 const (
-	remoteBinPath  = "/usr/local/bin/awg-agent"
-	remoteUnitPath = "/etc/systemd/system/awg-agent.service"
-	remoteEnvPath  = "/etc/awg-agent/awg-agent.env"
-	remoteDBPath   = "/var/lib/awg-agent"
+	remoteBinPath  = "/usr/local/bin/vpn-agent"
+	remoteUnitPath = "/etc/systemd/system/vpn-agent.service"
+	remoteEnvPath  = "/etc/vpn-agent/vpn-agent.env"
+	remoteDBPath   = "/var/lib/vpn-agent"
 )
 
 // deploySystemd installs the kernel agent as a systemd unit: it gets the binary
@@ -49,7 +49,7 @@ func deploySystemd(ctx context.Context, client *ssh.Client, sudo sshclient.Sudo,
 	// The kernel agent needs the AmneziaWG kernel module (amneziawg-dkms).
 	// Pre-check it's present so a missing module fails fast with an actionable
 	// message instead of the agent later crash-looping. Skipped for a userspace
-	// source (src.Userspace): the userspace agent (awg-agent-userspace) runs over
+	// source (src.Userspace): the userspace agent (vpn-agent-userspace) runs over
 	// systemd too and needs no kernel module — its whole point.
 	if !src.Userspace {
 		step("check_kernel_module").Msg("deploy step")
@@ -61,7 +61,7 @@ func deploySystemd(ctx context.Context, client *ssh.Client, sudo sshclient.Sudo,
 	step("upload_binary").Msg("deploy step")
 	switch {
 	case len(src.Path) > 0:
-		// The binary is already on awg-admin's own filesystem — read it
+		// The binary is already on vpn-admin's own filesystem — read it
 		// directly and upload the bytes, no download/caching involved.
 		binary, err := os.ReadFile(src.Path)
 		if err != nil {
@@ -74,7 +74,7 @@ func deploySystemd(ctx context.Context, client *ssh.Client, sudo sshclient.Sudo,
 			return failed("upload_binary", fmt.Errorf("upload agent binary: %w", err))
 		}
 	case src.CacheLocally:
-		// awg-admin fetches (or reuses a previously cached copy of) the
+		// vpn-admin fetches (or reuses a previously cached copy of) the
 		// binary itself and uploads the bytes over the same SSH connection —
 		// for servers without outbound internet access to src.URL.
 		binary, err := fetchCached(ctx, src)
@@ -88,7 +88,7 @@ func deploySystemd(ctx context.Context, client *ssh.Client, sudo sshclient.Sudo,
 			return failed("upload_binary", fmt.Errorf("upload agent binary: %w", err))
 		}
 	default:
-		// The server downloads src.URL itself (curl/wget) — awg-admin's own
+		// The server downloads src.URL itself (curl/wget) — vpn-admin's own
 		// machine never sees the bytes.
 		if err := sshclient.DownloadFileAs(client, sudo, src.URL, remoteBinPath, 0o755); err != nil {
 			return failed("upload_binary", fmt.Errorf("download agent binary on server: %w", err))
@@ -118,7 +118,7 @@ func deploySystemd(ctx context.Context, client *ssh.Client, sudo sshclient.Sudo,
 	// leaving the old process running untouched; restarting a unit that isn't
 	// currently active is equivalent to starting it, so this also covers the
 	// "agent was stopped" case in the same command.
-	if _, err := sshclient.RunAs(client, sudo, "systemctl daemon-reload && systemctl enable awg-agent && systemctl restart awg-agent"); err != nil {
+	if _, err := sshclient.RunAs(client, sudo, "systemctl daemon-reload && systemctl enable vpn-agent && systemctl restart vpn-agent"); err != nil {
 		return failed("start_service", fmt.Errorf("start agent service: %w", err))
 	}
 
@@ -133,13 +133,13 @@ func buildEnvFile(srv models.Server) string {
 	}
 
 	var b strings.Builder
-	b.WriteString("AWG_AGENT_ADDR=" + addr + "\n")
-	b.WriteString("AWG_AGENT_DB=" + remoteDBPath + "\n")
+	b.WriteString("VPN_AGENT_ADDR=" + addr + "\n")
+	b.WriteString("VPN_AGENT_DB=" + remoteDBPath + "\n")
 
 	if tls := srv.Agent.TLS; !tls.IsZero() {
-		b.WriteString("AWG_AGENT_TLS_CERT=" + remoteServerCertPath + "\n")
-		b.WriteString("AWG_AGENT_TLS_KEY=" + remoteServerKeyPath + "\n")
-		b.WriteString("AWG_AGENT_TLS_CLIENT_CA=" + remoteCACertPath + "\n")
+		b.WriteString("VPN_AGENT_TLS_CERT=" + remoteServerCertPath + "\n")
+		b.WriteString("VPN_AGENT_TLS_KEY=" + remoteServerKeyPath + "\n")
+		b.WriteString("VPN_AGENT_TLS_CLIENT_CA=" + remoteCACertPath + "\n")
 	}
 	return b.String()
 }

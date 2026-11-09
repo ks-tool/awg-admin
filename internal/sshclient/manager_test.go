@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"

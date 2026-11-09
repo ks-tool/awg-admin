@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -137,7 +137,7 @@ func (s Sudo) stdinPrefix() []byte {
 }
 
 // Dial opens an SSH connection to the server using its stored SSH config.
-// cfg.Key is a path to a private key file on the machine running awg-admin
+// cfg.Key is a path to a private key file on the machine running vpn-admin
 // (see models.SSHConfig), not the key body itself; cfg.KeyData, if set, is
 // the key's raw PEM content uploaded directly into storage and takes
 // precedence over Key. passphrase decrypts the key when it's
@@ -375,7 +375,7 @@ func UploadFileAs(client *ssh.Client, sudo Sudo, remotePath string, mode os.File
 // remotePath on the host client is connected to, with the given
 // permissions — used to deploy an AgentSource without local caching
 // (models.AgentSource.CacheLocally == false), so the binary's bytes never
-// pass through the machine running awg-admin. Tries curl, then wget, taking
+// pass through the machine running vpn-admin. Tries curl, then wget, taking
 // whichever *works* — not just whichever is on PATH: a curl built without HTTPS
 // support fails an https:// URL with exit 4 (CURLE_NOT_BUILT_IN), so we fall
 // through to wget (which normally does have TLS) rather than giving up.
@@ -388,7 +388,7 @@ func DownloadFile(client *ssh.Client, url, remotePath string, mode os.FileMode) 
 
 // DownloadFileAs is DownloadFile with privilege escalation (see Sudo): the
 // whole fetch-then-install pipeline runs through RunAs, so writing remotePath
-// (e.g. /usr/local/bin/awg-agent) works for a non-root SSH user.
+// (e.g. /usr/local/bin/vpn-agent) works for a non-root SSH user.
 func DownloadFileAs(client *ssh.Client, sudo Sudo, url, remotePath string, mode os.FileMode) error {
 	tmp := remotePath + ".download"
 	cmd := fmt.Sprintf(

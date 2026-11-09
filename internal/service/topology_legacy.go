@@ -17,9 +17,9 @@
 package service
 
 import (
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
-	"github.com/ks-tool/awg-admin/storage"
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 
 	"github.com/google/uuid"
 )

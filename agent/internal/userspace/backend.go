@@ -17,7 +17,7 @@
 // Package userspace provides a service.Backend that runs each interface as an
 // in-process userspace WireGuard device using the amneziawg-go library — for
 // hosts without a (matching) AmneziaWG kernel module. It's wired in by the
-// awg-agent-userspace binary via service.SetBackend; the rest of the agent is
+// vpn-agent-userspace binary via service.SetBackend; the rest of the agent is
 // unchanged.
 //
 // Unlike the kernel backend it needs no netlink library: the interface is a TUN
@@ -35,7 +35,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ks-tool/awg-admin/agent/internal/service"
+	"github.com/ks-tool/vpn-admin/agent/internal/service"
 
 	"github.com/amnezia-vpn/amneziawg-go/conn"
 	"github.com/amnezia-vpn/amneziawg-go/device"

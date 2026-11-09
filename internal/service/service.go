@@ -19,9 +19,9 @@ package service
 import (
 	"sync"
 
-	"github.com/ks-tool/awg-admin/internal/plugin"
-	"github.com/ks-tool/awg-admin/internal/sshclient"
-	"github.com/ks-tool/awg-admin/storage"
+	"github.com/ks-tool/vpn-admin/internal/plugin"
+	"github.com/ks-tool/vpn-admin/internal/sshclient"
+	"github.com/ks-tool/vpn-admin/storage"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

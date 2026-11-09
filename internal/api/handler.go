@@ -21,8 +21,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/ks-tool/awg-admin/internal/service"
-	"github.com/ks-tool/awg-admin/storage"
+	"github.com/ks-tool/vpn-admin/internal/service"
+	"github.com/ks-tool/vpn-admin/storage"
 
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bunrouter"
@@ -34,7 +34,7 @@ type Handler struct {
 }
 
 // New registers every route of the standalone web server's JSON API
-// (cmd/awg-admin.go) on rootGroup. The Wails desktop app (app.go) never
+// (cmd/vpn-admin.go) on rootGroup. The Wails desktop app (app.go) never
 // calls this — it binds *service.Service directly to the frontend, so none
 // of this — including the login/session requirement — applies there.
 //

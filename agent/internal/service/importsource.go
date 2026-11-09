@@ -23,8 +23,8 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/agent/storage"
+	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/agent/storage"
 )
 
 // importConfDirs lists, in order of precedence, where awg-quick and wg-quick

@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ks-tool/awg-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/agent/models"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -33,11 +33,11 @@ func TestIfaceNameFromConfigPath(t *testing.T) {
 		path string
 		want string
 	}{
-		{"/var/lib/awg-agent/wg0.json", "wg0"},
+		{"/var/lib/vpn-agent/wg0.json", "wg0"},
 		{"wg0.json", "wg0"},
-		{"/var/lib/awg-agent/wg0.json.tmp", ""}, // not a *.json file
-		{"/var/lib/awg-agent/.json", ""},        // empty name
-		{"/var/lib/awg-agent/notes.txt", ""},
+		{"/var/lib/vpn-agent/wg0.json.tmp", ""}, // not a *.json file
+		{"/var/lib/vpn-agent/.json", ""},        // empty name
+		{"/var/lib/vpn-agent/notes.txt", ""},
 	}
 	for _, c := range cases {
 		if got := ifaceNameFromConfigPath(c.path); got != c.want {

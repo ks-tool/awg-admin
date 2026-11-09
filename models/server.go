@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 )
 
 type Server struct {
@@ -45,7 +45,7 @@ type SSHConfig struct {
 	Host string `json:"host"`
 	Port uint16 `json:"port,omitempty"`
 	User string `json:"user,omitempty"`
-	// Key is a path to the private key file on the machine running awg-admin,
+	// Key is a path to the private key file on the machine running vpn-admin,
 	// not the key body itself. Mutually exclusive with KeyData; KeyData takes
 	// precedence when both are set (see internal/sshclient).
 	Key string `json:"key,omitempty"`
@@ -91,10 +91,10 @@ const (
 )
 
 // AgentTLS holds the mTLS material for direct (non-tunnelled) communication
-// with the agent on a public ("white") IP. CA is kept so awg-admin can
+// with the agent on a public ("white") IP. CA is kept so vpn-admin can
 // re-issue Server/Client certs later (e.g. on renewal) without invalidating
 // the other side. Server is deployed to the agent; Client is used by
-// awg-admin itself when dialing the agent directly.
+// vpn-admin itself when dialing the agent directly.
 type AgentTLS struct {
 	CA     CertKeyPair `json:"ca"`
 	Server CertKeyPair `json:"server"`

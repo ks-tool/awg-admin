@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/testcontainers/testcontainers-go"
@@ -35,7 +35,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// TestUserspaceTunnel brings up two awg-agent-userspace containers, configures
+// TestUserspaceTunnel brings up two vpn-agent-userspace containers, configures
 // each as the other's AmneziaWG peer through the agent HTTP API (with a shared,
 // generated set of obfuscation params), and asserts traffic flows across the
 // resulting tunnel — an end-to-end check that the userspace agent (amneziawg-go
@@ -94,7 +94,7 @@ func TestUserspaceTunnel(t *testing.T) {
 	}
 }
 
-// startAgent builds (once, cached) and starts an awg-agent-userspace container
+// startAgent builds (once, cached) and starts an vpn-agent-userspace container
 // on netName with the given alias, returning it, the base URL of its
 // /interfaces API (host-mapped) and its IP on the network.
 func startAgent(ctx context.Context, t *testing.T, netName, alias string) (testcontainers.Container, string, string) {
@@ -103,7 +103,7 @@ func startAgent(ctx context.Context, t *testing.T, netName, alias string) (testc
 		FromDockerfile: testcontainers.FromDockerfile{
 			Context:    "..", // the agent module root
 			Dockerfile: "e2e/Dockerfile",
-			Repo:       "awg-agent-userspace-e2e",
+			Repo:       "vpn-agent-userspace-e2e",
 			Tag:        "latest",
 			KeepImage:  true,
 		},

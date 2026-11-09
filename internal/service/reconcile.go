@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/internal/agentclient"
-	"github.com/ks-tool/awg-admin/models"
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
 )
@@ -113,7 +113,7 @@ func (s *Service) ReconcileServer(serverID string) (*ReconcileReport, error) {
 // and the models.User it belongs to is NOT recoverable from the agent —
 // the agent only ever stores the server-side wire shape
 // (agentmodels.InterfacePeer: public key, AllowedIPs, PSK, keepalive), it
-// has no idea which awg-admin user a key belongs to. If those user/peer
+// has no idea which vpn-admin user a key belongs to. If those user/peer
 // records are also gone from the DB, they need to be re-created by hand
 // (or the existing peers re-added via AddPeer, which will then need new
 // keys — the old client configs/QR codes for them are gone for good,

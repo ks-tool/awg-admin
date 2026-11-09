@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/agent/storage"
+	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/agent/storage"
 
 	"github.com/Jipok/wgctrl-go"
 	"github.com/Jipok/wgctrl-go/wgtypes"
@@ -188,8 +188,8 @@ func (h *Handler) Delete(iface string) error {
 //
 // Deliberately read-only: the agent can't tell "this is my own orphan" from
 // "an administrator created an unrelated WireGuard interface by hand, with
-// nothing to do with awg-admin" — deciding what to do about a mismatch is
-// left to a human (see awg-admin's agent↔DB reconciliation), this just
+// nothing to do with vpn-admin" — deciding what to do about a mismatch is
+// left to a human (see vpn-admin's agent↔DB reconciliation), this just
 // surfaces the list. The same diff, with the link kind attached, is what
 // ListUnmanaged serves to the admin.
 func (h *Handler) DetectOrphans() ([]string, error) {

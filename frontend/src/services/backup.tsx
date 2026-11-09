@@ -44,7 +44,7 @@ export async function saveBackup(): Promise<boolean> {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'awg-admin-backup.json';
+    a.download = 'vpn-admin-backup.json';
     document.body.appendChild(a);
     a.click();
     a.remove();

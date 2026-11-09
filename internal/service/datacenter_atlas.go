@@ -33,7 +33,7 @@ import (
 
 const (
 	datacenterAtlasURL       = "https://kiankyars.github.io/datacenter-atlas/api/v1/sites.json"
-	datacenterAtlasCacheName = ".awg-admin-datacenter-atlas.json"
+	datacenterAtlasCacheName = ".vpn-admin-datacenter-atlas.json"
 	datacenterAtlasCacheTTL  = 24 * time.Hour
 )
 
@@ -146,7 +146,7 @@ func (a *datacenterAtlas) downloadSites(ctx context.Context) ([]atlasSite, error
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "awg-admin/2 (https://github.com/ks-tool/awg-admin)")
+	req.Header.Set("User-Agent", "vpn-admin/2 (https://github.com/ks-tool/vpn-admin)")
 	req.Header.Set("Accept", "application/json")
 	response, err := a.client.Do(req)
 	if err != nil {

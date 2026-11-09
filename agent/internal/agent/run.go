@@ -14,10 +14,10 @@
   limitations under the License.
 */
 
-// Package agent holds the awg-agent daemon's startup/run logic, shared by every
+// Package agent holds the vpn-agent daemon's startup/run logic, shared by every
 // agent binary regardless of which service.Backend it drives. The kernel build
-// (cmd/awg-agent) uses the default netlink/amneziawg-dkms backend; a userspace
-// build (cmd/awg-agent-userspace) calls service.SetBackend before Run to swap in
+// (cmd/vpn-agent) uses the default netlink/amneziawg-dkms backend; a userspace
+// build (cmd/vpn-agent-userspace) calls service.SetBackend before Run to swap in
 // an amneziawg-go backend. Everything below the backend — config, storage, the
 // HTTP API, metrics, the storage watcher and graceful shutdown — is identical,
 // so it lives here once instead of being duplicated per main.
@@ -33,17 +33,18 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
-	"github.com/ks-tool/awg-admin/agent/internal/api"
-	"github.com/ks-tool/awg-admin/agent/internal/metrics"
-	awgprovider "github.com/ks-tool/awg-admin/agent/internal/provider/awg"
-	"github.com/ks-tool/awg-admin/agent/internal/resource"
-	"github.com/ks-tool/awg-admin/agent/internal/service"
-	"github.com/ks-tool/awg-admin/agent/mux/middleware"
-	"github.com/ks-tool/awg-admin/agent/storage"
-	"github.com/ks-tool/awg-admin/agent/storage/fs"
+	"github.com/ks-tool/vpn-admin/agent/internal/api"
+	"github.com/ks-tool/vpn-admin/agent/internal/metrics"
+	awgprovider "github.com/ks-tool/vpn-admin/agent/internal/provider/awg"
+	"github.com/ks-tool/vpn-admin/agent/internal/resource"
+	"github.com/ks-tool/vpn-admin/agent/internal/service"
+	"github.com/ks-tool/vpn-admin/agent/mux/middleware"
+	"github.com/ks-tool/vpn-admin/agent/storage"
+	"github.com/ks-tool/vpn-admin/agent/storage/fs"
 
 	"github.com/Jipok/wgctrl-go"
 	"github.com/caarlos0/env/v11"
@@ -59,7 +60,7 @@ type config struct {
 	// TLS, when all three are set, makes the agent listen with mTLS instead
 	// of plain HTTP — required when binding to a public ("white") IP instead
 	// of going through an SSH tunnel. TLSClientCA is the CA that signed the
-	// awg-admin client certificate; any request without a valid client cert
+	// vpn-admin client certificate; any request without a valid client cert
 	// signed by it is rejected at the TLS handshake.
 	TLSCert     string `env:"TLS_CERT"`
 	TLSKey      string `env:"TLS_KEY"`
@@ -80,13 +81,13 @@ func Run(version string) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
 
 	var cfg config
-	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: "AWG_AGENT_"}); err != nil {
+	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: agentEnvironmentPrefix()}); err != nil {
 		log.Fatal().Err(err).Send()
 	}
 	zerolog.SetGlobalLevel(cfg.LogLevel)
 	fmt.Printf("log level set to '%s'\n", cfg.LogLevel)
 
-	log.Info().Str("version", version).Msg("starting awg-agent")
+	log.Info().Str("version", version).Msg("starting vpn-agent")
 
 	// Discover what this host supports once, up front (backend/interface kinds,
 	// Docker, in-container, kernel module), log it as a startup diagnostic and
@@ -104,10 +105,10 @@ func Run(version string) {
 	if len(cfg.DB) == 0 {
 		home, err := os.UserHomeDir()
 		if err == nil {
-			cfg.DB = filepath.Join(home, ".awg-agent")
+			cfg.DB = defaultAgentDBPath(home)
 		}
 		if len(cfg.DB) == 0 {
-			log.Fatal().Msg("environment variable 'AWG_AGENT_DB' should not be empty")
+			log.Fatal().Msg("environment variable 'VPN_AGENT_DB' should not be empty")
 		}
 	}
 
@@ -269,8 +270,30 @@ func loadInterfaces(store storage.Storage) error {
 	} else if len(orphans) > 0 {
 		log.Warn().Strs("interfaces", orphans).Msg(
 			"found WireGuard interface(s) on this host with no corresponding stored config — " +
-				"either left over from before a fix to interface deletion, or created outside awg-admin")
+				"either left over from before a fix to interface deletion, or created outside vpn-admin")
 	}
 
 	return nil
+}
+
+func agentEnvironmentPrefix() string {
+	const current = "VPN_AGENT_"
+	for _, variable := range os.Environ() {
+		if strings.HasPrefix(variable, current) {
+			return current
+		}
+	}
+	return "AWG_AGENT_"
+}
+
+func defaultAgentDBPath(home string) string {
+	current := filepath.Join(home, ".vpn-agent")
+	if _, err := os.Stat(current); err == nil {
+		return current
+	}
+	legacy := filepath.Join(home, ".awg-agent")
+	if _, err := os.Stat(legacy); err == nil {
+		return legacy
+	}
+	return current
 }

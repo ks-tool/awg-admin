@@ -24,7 +24,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 func (c *Client) Manifest(ctx context.Context) (*models.Manifest, error) {

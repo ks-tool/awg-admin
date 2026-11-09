@@ -19,7 +19,7 @@ package service
 import (
 	"sync"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
 )
@@ -28,7 +28,7 @@ import (
 // Service.DeployAgent run per server — like sessionStore
 // (internal/api/session.go) and the SSH passphrase cache
 // (internal/sshclient.Manager), this is process-lifetime state, never
-// persisted: a deploy in flight when awg-admin restarts simply loses its
+// persisted: a deploy in flight when vpn-admin restarts simply loses its
 // progress, which is fine since the underlying SSH/systemd operations
 // aren't resumable anyway.
 type deployStatusStore struct {

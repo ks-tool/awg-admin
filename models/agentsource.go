@@ -18,7 +18,7 @@ package models
 
 import "github.com/google/uuid"
 
-// AgentSource is a named, reusable place to fetch the awg-agent binary
+// AgentSource is a named, reusable place to fetch the vpn-agent binary
 // from when deploying it to a server (see Service.DeployAgent) — shown as
 // a preset in the "Deploy agent" UI instead of typing a URL every time.
 type AgentSource struct {
@@ -26,7 +26,7 @@ type AgentSource struct {
 	Name string    `json:"name"`
 	URL  string    `json:"url,omitempty"`
 	// Path, when set instead of URL, is a path to the agent binary already
-	// present on the filesystem of the machine running awg-admin (desktop:
+	// present on the filesystem of the machine running vpn-admin (desktop:
 	// the user's own machine; standalone server: that server's host) — read
 	// directly and uploaded over SSH the same way a CacheLocally URL preset
 	// is, without ever downloading anything. Exactly one of URL or Path is
@@ -36,20 +36,20 @@ type AgentSource struct {
 	// CacheLocally, when false (the default), has the *managed server*
 	// download URL itself over SSH (curl/wget — see internal/sshclient's
 	// DownloadFile) so the binary's bytes never pass through the machine
-	// running awg-admin. When true, awg-admin downloads URL once into a
+	// running vpn-admin. When true, vpn-admin downloads URL once into a
 	// local cache (keyed by ID) and uploads it the traditional way on
 	// every deploy that uses this source — for servers without outbound
-	// internet access to URL, at the cost of awg-admin's own bandwidth.
+	// internet access to URL, at the cost of vpn-admin's own bandwidth.
 	CacheLocally bool `json:"cacheLocally,omitempty"`
 	// Image, when set instead of URL/Path, is a Docker image reference (e.g.
-	// ghcr.io/ks-tool/awg-agent-userspace:latest). Deploying such a source runs
+	// ghcr.io/ks-tool/vpn-agent-userspace:latest). Deploying such a source runs
 	// the agent as a Docker container on the server (see deploy.ToAgent's docker
 	// path) rather than as a systemd unit — for hosts using the userspace
 	// amneziawg-go image. Exactly one of URL, Path or Image is set; CacheLocally
 	// is meaningless here (Docker pulls the image itself) and is always false.
 	Image string `json:"image,omitempty"`
 	// Userspace marks a URL/Path source as the *userspace* agent binary
-	// (awg-agent-userspace), which runs over systemd with no kernel module. The
+	// (vpn-agent-userspace), which runs over systemd with no kernel module. The
 	// systemd deploy then skips its AmneziaWG-kernel-module pre-check (which
 	// otherwise fails fast, as it must for the kernel agent — see
 	// deploy.deploySystemd). Meaningless for an Image source (a Docker image is

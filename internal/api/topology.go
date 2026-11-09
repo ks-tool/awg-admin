@@ -19,8 +19,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/ks-tool/awg-admin/internal/service"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/internal/service"
+	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/uptrace/bunrouter"
 )

@@ -1,8 +1,8 @@
-# Amnezia-WG Admin — User Guide
+# VPN Admin — User Guide
 
 [Русская версия](GUIDE_ru.md) · [← README](../README.md)
 
-This document is a complete guide to installing, running, and operating Amnezia-WG Admin. The
+This document is a complete guide to installing, running, and operating VPN Admin. The
 [README](../README.md) describes the project itself — its purpose, architecture, and how to build it from source; this
 guide covers everything required to run the application and use its features.
 
@@ -41,7 +41,7 @@ guide covers everything required to run the application and use its features.
 
 ## Installation and running
 
-Amnezia-WG Admin can be deployed either as a desktop application or as a standalone web server. Both deployment modes use
+VPN Admin can be deployed either as a desktop application or as a standalone web server. Both deployment modes use
 the same data model and business logic and differ only in how the application is accessed.
 
 ### Desktop application
@@ -52,19 +52,19 @@ configuration is stored locally, and communication with managed servers is perfo
 Prebuilt binaries are available from the project's [Releases](../../../releases) page. The following packages are
 provided for each supported operating system:
 
-- **Windows** — `amnezia-wg-admin-amd64-installer_<version>.exe` (NSIS installer) or the portable executable
-  `amnezia-wg-admin_<version>.exe`.
-- **macOS** — `amnezia-wg-admin_<version>.dmg`, a universal build for both Intel and Apple Silicon systems. Open the
-  `.dmg` and drag **Amnezia-WG Admin** onto the **Applications** shortcut shown next to it in the same window. The app is
+- **Windows** — `vpn-admin-amd64-installer_<version>.exe` (NSIS installer) or the portable executable
+  `vpn-admin_<version>.exe`.
+- **macOS** — `vpn-admin_<version>.dmg`, a universal build for both Intel and Apple Silicon systems. Open the
+  `.dmg` and drag **VPN Admin** onto the **Applications** shortcut shown next to it in the same window. The app is
   ad-hoc signed but **not** notarized with an Apple Developer ID certificate, so on first launch macOS reports it as
   coming from an unidentified developer. Bypass this once, either by right-clicking the app and choosing **Open** (then
   **Open** again in the dialog), or by removing the quarantine attribute manually:
 
 ```sh
-xattr -cr "/Applications/Amnezia-WG Admin.app"
+xattr -cr "/Applications/VPN Admin.app"
 ```
 
-- **Linux** — `amnezia-wg-admin_<version>`. The application requires the `libgtk-3` and `libwebkit2gtk-4.1` system
+- **Linux** — `vpn-admin_<version>`. The application requires the `libgtk-3` and `libwebkit2gtk-4.1` system
   libraries.
 
 The desktop application does not expose a network API and therefore does not require authentication.
@@ -77,15 +77,15 @@ installations or headless environments. By default, the server listens on `:8080
 Run the binary directly:
 
 ```sh
-./awg-admin
+./vpn-admin
 ```
 
 Run using Docker:
 
 ```sh
-docker run -d --name awg-admin \
+docker run -d --name vpn-admin \
   -p 8080:8080 \
-  -v awg-admin-data:/data \
+  -v vpn-admin-data:/data \
   ghcr.io/<owner>/<repo>:latest
 ```
 
@@ -110,10 +110,10 @@ The standalone server is configured through environment variables.
 
 | Variable                                   | Description                                                                                                                                                                         |
 |--------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `AWG_ADMIN_ADDR`                           | HTTP listen address. Defaults to `:8080`.                                                                                                                                           |
-| `AWG_ADMIN_TLS_CERT` / `AWG_ADMIN_TLS_KEY` | TLS certificate and private key used for HTTPS.                                                                                                                                     |
-| `AWG_ADMIN_AUTOCERT_DOMAINS`               | Comma-separated list of domains for automatic Let's Encrypt certificate provisioning. Cannot be used together with a static certificate. Requires port 80 to be publicly reachable. |
-| `AWG_ADMIN_AUTOCERT_CACHE_DIR`             | Directory used to store automatically issued certificates. Defaults to `$HOME/.awg-admin-autocert`.                                                                                 |
+| `VPN_ADMIN_ADDR`                           | HTTP listen address. Defaults to `:8080`.                                                                                                                                           |
+| `VPN_ADMIN_TLS_CERT` / `VPN_ADMIN_TLS_KEY` | TLS certificate and private key used for HTTPS.                                                                                                                                     |
+| `VPN_ADMIN_AUTOCERT_DOMAINS`               | Comma-separated list of domains for automatic Let's Encrypt certificate provisioning. Cannot be used together with a static certificate. Requires port 80 to be publicly reachable. |
+| `VPN_ADMIN_AUTOCERT_CACHE_DIR`             | Directory used to store automatically issued certificates. Defaults to `$HOME/.vpn-admin-autocert`.                                                                                 |
 
 ### Data directories
 
@@ -122,9 +122,9 @@ used:
 
 | Path                        | Purpose                                                     |
 |-----------------------------|-------------------------------------------------------------|
-| `$HOME/.awg-admin`          | BoltDB database containing the infrastructure configuration |
-| `$HOME/.awg-admin-autocert` | Cache of automatically issued TLS certificates              |
-| `$HOME/.awg-admin-cache`    | Cache of downloaded agent binaries                          |
+| `$HOME/.vpn-admin`          | BoltDB database containing the infrastructure configuration |
+| `$HOME/.vpn-admin-autocert` | Cache of automatically issued TLS certificates              |
+| `$HOME/.vpn-admin-cache`    | Cache of downloaded agent binaries                          |
 
 Inside the official Docker image, `$HOME` is mapped to `/data`. This directory is intended to be mounted as a persistent
 Docker volume.
@@ -136,7 +136,7 @@ In most deployments, the administrative application installs and configures the 
 [Deploying the agent](#deploying-the-agent)). Manual startup is also supported:
 
 ```sh
-AWG_AGENT_ADDR=127.0.0.1:8080 AWG_AGENT_DB=/var/lib/awg-agent ./awg-agent
+VPN_AGENT_ADDR=127.0.0.1:8080 VPN_AGENT_DB=/var/lib/vpn-agent ./vpn-agent
 ```
 
 After startup, the agent exposes its management API and waits for connections from the administrative application. By
@@ -149,15 +149,15 @@ The agent is released independently of the desktop/standalone application: its r
 application itself uses `v*` tags), and both appear on the project's [Releases](../../../releases) page. Every agent
 release provides prebuilt Linux binaries for `amd64` and `arm64`:
 
-- `awg-agent_<version>_linux_<arch>` — the **kernel** backend (`awg-agent`), which drives the AmneziaWG kernel module.
-- `awg-agent-userspace_<version>_linux_<arch>` — the **userspace** backend (`awg-agent-userspace`), which needs no
+- `vpn-agent_<version>_linux_<arch>` — the **kernel** backend (`vpn-agent`), which drives the AmneziaWG kernel module.
+- `vpn-agent-userspace_<version>_linux_<arch>` — the **userspace** backend (`vpn-agent-userspace`), which needs no
   kernel module.
 
 These assets are plain executables, not archives, so no extraction is required. The userspace agent is additionally
 published as a multi-arch Docker image:
 
 ```
-ghcr.io/<owner>/awg-agent-userspace:latest
+ghcr.io/<owner>/vpn-agent-userspace:latest
 ```
 
 In most cases the agent is not downloaded by hand: point an [agent source](#agent-sources-deploy-presets) at the
@@ -169,19 +169,19 @@ application a binary already on disk can also be selected directly through a fil
 
 | Variable                                                               | Description                                                                  |
 |------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| `AWG_AGENT_ADDR`                                                       | HTTP listen address. Defaults to `127.0.0.1:8080`.                           |
-| `AWG_AGENT_DB`                                                         | Directory used to store the local interface configuration.                   |
-| `AWG_AGENT_TLS_CERT` / `AWG_AGENT_TLS_KEY` / `AWG_AGENT_TLS_CLIENT_CA` | Enables mutual TLS authentication when all three variables are provided.     |
-| `AWG_AGENT_METRICS_INTERVAL`                                           | Interval between system and WireGuard metrics collection. Defaults to `45s`. |
-| `AWG_AGENT_LOG_LEVEL`                                                  | Logging level. Defaults to `info`.                                           |
+| `VPN_AGENT_ADDR`                                                       | HTTP listen address. Defaults to `127.0.0.1:8080`.                           |
+| `VPN_AGENT_DB`                                                         | Directory used to store the local interface configuration.                   |
+| `VPN_AGENT_TLS_CERT` / `VPN_AGENT_TLS_KEY` / `VPN_AGENT_TLS_CLIENT_CA` | Enables mutual TLS authentication when all three variables are provided.     |
+| `VPN_AGENT_METRICS_INTERVAL`                                           | Interval between system and WireGuard metrics collection. Defaults to `45s`. |
+| `VPN_AGENT_LOG_LEVEL`                                                  | Logging level. Defaults to `info`.                                           |
 
 The agent is available for Linux only and is distributed for both `amd64` and `arm64` architectures.
 
 ## How it fits together
 
-Amnezia-WG Admin manages four types of object, nested within one another:
+VPN Admin manages four types of object, nested within one another:
 
-- A **server** is a remote machine accessible over SSH. Amnezia-WG Admin stores its connection details and, once the agent
+- A **server** is a remote machine accessible over SSH. VPN Admin stores its connection details and, once the agent
   has been deployed, communicates with the agent running on it.
 - An **interface** is a WireGuard/AmneziaWG network interface on a server (`wg0`, `awg0`, and so on). A server may have
   several.
@@ -208,10 +208,10 @@ later — during **Deploy**, **Sync**, or **Update** — rather than at creation
 
 ### SSH authentication
 
-Amnezia-WG Admin connects to a server over SSH to deploy the agent and, by default, to tunnel to its API. The following
+VPN Admin connects to a server over SSH to deploy the agent and, by default, to tunnel to its API. The following
 credential types are supported:
 
-- **Private key file** — a path to a key on the machine running Amnezia-WG Admin.
+- **Private key file** — a path to a key on the machine running VPN Admin.
 - **Uploaded key** — the key contents supplied directly and stored in the database. This is the portable option: it
   behaves identically in the desktop application and in a browser tab and does not depend on a file path that exists on
   only one machine. When both a path and uploaded contents are provided, the uploaded contents take precedence.
@@ -268,7 +268,7 @@ Two choices are independent: the agent **backend** (kernel or userspace — how 
 **URL** or **local file** source installs a binary as a **systemd** service, while an **image** source runs a
 **container**). The server requirements depend on the combination used:
 
-- **`awg-agent` — kernel backend (systemd).** Drives the AmneziaWG kernel module directly and therefore requires it to
+- **`vpn-agent` — kernel backend (systemd).** Drives the AmneziaWG kernel module directly and therefore requires it to
   be installed on the server:
     - the **AmneziaWG kernel module** for AmneziaWG interfaces — install `amneziawg-dkms` as described in the
       [amneziawg-linux-kernel-module README](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module/blob/master/README.md)
@@ -277,12 +277,12 @@ Two choices are independent: the agent **backend** (kernel or userspace — how 
       module is missing;
     - **WireGuard** itself, if plain (non-Amnezia) interfaces are also created — see
       [wireguard.com/install](https://www.wireguard.com/install/).
-- **`awg-agent-userspace` — userspace backend (systemd or Docker).** An in-process userspace WireGuard implementation
+- **`vpn-agent-userspace` — userspace backend (systemd or Docker).** An in-process userspace WireGuard implementation
   (the amneziawg-go library is compiled in) that requires no kernel module, intended for hosts where one cannot or
   should
   not be installed. It can be deployed in either of two ways:
     - **as a binary through systemd** — using a **URL** or **local file** agent source that points to the
-      `awg-agent-userspace` binary with its **Userspace agent (no kernel module)** option enabled. It is installed as a
+      `vpn-agent-userspace` binary with its **Userspace agent (no kernel module)** option enabled. It is installed as a
       systemd service exactly like the kernel agent and requires only `/dev/net/tun` (standard on Linux); Docker is not
       involved. The option instructs the deployment to skip the kernel-module pre-check that otherwise applies to the
       kernel agent.
@@ -342,7 +342,7 @@ user it belongs to exists only in the administrative database and cannot be reco
 ### Importing a wg-quick / awg-quick interface
 
 An interface that was brought up on the server by `wg-quick`/`awg-quick` before the agent was installed is invisible to
-Amnezia-WG Admin: the agent only knows the interfaces it was asked to create. Such interfaces are shown on the server
+VPN Admin: the agent only knows the interfaces it was asked to create. Such interfaces are shown on the server
 page with a **Not managed** badge (the agent lists every live WireGuard/AmneziaWG device it has no configuration for,
 on every request), read-only — they cannot be edited or given peers until they are **imported**. Creating a new
 interface with the same name is refused for the same reason: the agent would take over the live link and replace its
@@ -356,7 +356,7 @@ current before importing. The dialog takes two inputs:
 - **Interface** — one of the unmanaged interfaces, or a name typed by hand (for a configuration file whose interface is
   currently down).
 - **Peer map** — which peers belong to which users. A server configuration only holds each peer's *public* key, while
-  Amnezia-WG Admin renders client configurations and QR codes from the *private* key, which only exists in the client
+  VPN Admin renders client configurations and QR codes from the *private* key, which only exists in the client
   configurations handed out earlier. The map is a short YAML-like text: an unindented `user:` line followed by indented
   `private-key: peer name` lines. Users are matched by exact name and created when missing; each private key is matched
   to the `[Peer]` with the same public key; peer names are labels and need not be unique. Peers left out of the map are
@@ -561,7 +561,7 @@ A tunnel is built from the **Tunnels** page using a wizard:
 3. **Review** — the tunnel's shared subnet is shown for confirmation. It is always the entry interface's own subnet (the
    exit is placed on it), not a value chosen manually.
 
-Amnezia-WG Admin reconfigures both interfaces and pushes them: the relay receives policy-routing rules and a gateway peer
+VPN Admin reconfigures both interfaces and pushes them: the relay receives policy-routing rules and a gateway peer
 pointing at the exit; the exit receives NAT (masquerade) and dials back to the relay. Clients require no configuration
 change — their existing tunnel to the relay now exits through the second server.
 
@@ -603,7 +603,7 @@ best-effort: the last known values are shown while the agent is briefly unreacha
 read.
 
 Metrics are produced by the agent, which samples the host and every peer's rx/tx/handshake on an interval (default 45s,
-configurable via `AWG_AGENT_METRICS_INTERVAL`) into in-memory ring buffers, retaining up to 48 hours of history. The
+configurable via `VPN_AGENT_METRICS_INTERVAL`) into in-memory ring buffers, retaining up to 48 hours of history. The
 history is checkpointed to disk on the agent, so charts survive an agent restart. Metrics are best-effort: a server
 whose
 agent is briefly unreachable shows the last known values, and reachability is signalled separately by the agent-status
@@ -654,7 +654,7 @@ surface to protect.
 
 ## Backup, restore and migration
 
-The entire administrative state resides in a single BoltDB file (`~/.awg-admin`). Two tools operate on it, sharing the
+The entire administrative state resides in a single BoltDB file (`~/.vpn-admin`). Two tools operate on it, sharing the
 same portable JSON dump format:
 
 - **In-application Backup** (Settings → Backup) — a one-step export of the current state to a JSON file.
@@ -662,8 +662,8 @@ same portable JSON dump format:
   standalone modes (both read the same file format):
 
   ```sh
-  awg-migrate export -db ~/.awg-admin -out dump.json   # on the source installation
-  awg-migrate import -db ~/.awg-admin -in dump.json    # into the target installation
+  awg-migrate export -db ~/.vpn-admin -out dump.json   # on the source installation
+  awg-migrate import -db ~/.vpn-admin -in dump.json    # into the target installation
   ```
 
 The exported document contains the complete administrative configuration — managed servers, SSH credentials, users, VPN
@@ -675,12 +675,12 @@ A file saved by the in-application **Backup** is a valid `awg-migrate` dump. To 
 
 ## Data and secret locations
 
-- **Administrative database** — `~/.awg-admin` (BoltDB). It contains everything: servers, SSH credentials and keys,
+- **Administrative database** — `~/.vpn-admin` (BoltDB). It contains everything: servers, SSH credentials and keys,
   users, peers, interface configurations, and the standalone admin account. This is the one item that must be backed up.
-- **Autocert cache** (standalone HTTPS) — `~/.awg-admin-autocert`.
-- **Agent-binary cache** (deploy presets) — `~/.awg-admin-cache`.
-- **Agent, per server** — stores only the interface configurations pushed to it (`AWG_AGENT_DB`, default
-  `/var/lib/awg-agent`) together with its metrics-history checkpoint. It holds no administrative secrets beyond the
+- **Autocert cache** (standalone HTTPS) — `~/.vpn-admin-autocert`.
+- **Agent-binary cache** (deploy presets) — `~/.vpn-admin-cache`.
+- **Agent, per server** — stores only the interface configurations pushed to it (`VPN_AGENT_DB`, default
+  `/var/lib/vpn-agent`) together with its metrics-history checkpoint. It holds no administrative secrets beyond the
   interface and peer keys required to run WireGuard.
 
 In the standalone Docker image, `$HOME` is mapped to `/data`, so mounting that volume persists all of the above.

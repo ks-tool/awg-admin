@@ -14,9 +14,9 @@ name: release-agent
 # .goreleaser.agent.yaml for the full story.
 #
 # Produces, attached to the GitHub Release for the tag:
-#   - awg-agent (kernel/amneziawg-dkms) and awg-agent-userspace
+#   - vpn-agent (kernel/amneziawg-dkms) and vpn-agent-userspace
 #     (userspace/amneziawg-go): linux only, amd64/arm64 archives.
-#   - the awg-agent-userspace multi-arch (amd64+arm64) Docker image on GHCR.
+#   - the vpn-agent-userspace multi-arch (amd64+arm64) Docker image on GHCR.
 on:
   push:
     tags:
@@ -52,7 +52,7 @@ jobs:
           prev=$(git tag -l 'agent/v*' --sort=-version:refname | grep -vxF "$cur" | head -n1)
           [ -n "$prev" ] && echo "GORELEASER_PREVIOUS_TAG=$prev" >> "$GITHUB_ENV"
           owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          echo "IMAGE_AGENT_USERSPACE=ghcr.io/$owner/awg-agent-userspace" >> "$GITHUB_ENV"
+          echo "IMAGE_AGENT_USERSPACE=ghcr.io/$owner/vpn-agent-userspace" >> "$GITHUB_ENV"
 
       # arm64 image is built under QEMU emulation via buildx.
       - uses: docker/setup-qemu-action@v3

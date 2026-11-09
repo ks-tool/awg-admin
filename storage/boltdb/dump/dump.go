@@ -14,7 +14,7 @@
   limitations under the License.
 */
 
-// Package dump reads/writes awg-admin's boltdb as a portable JSON snapshot of
+// Package dump reads/writes vpn-admin's boltdb as a portable JSON snapshot of
 // every bucket's raw key/value pairs — the format shared by the in-app backup
 // (Service.Backup / the desktop "Backup" button / the standalone GET /backup)
 // and the standalone awg-migrate CLI, so a backup taken from one can be
@@ -23,7 +23,7 @@
 // (and isn't tripped up by the historical bktUsers/bktInterfaces bucket-name
 // mismatch in storage/boltdb). The binary format of the values is an internal
 // implementation detail, not a stable cross-version contract — a dump is only
-// guaranteed to restore into the same awg-admin version it was taken from.
+// guaranteed to restore into the same vpn-admin version it was taken from.
 package dump
 
 import (

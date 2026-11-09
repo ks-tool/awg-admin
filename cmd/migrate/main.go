@@ -22,14 +22,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/ks-tool/awg-admin/storage/boltdb/dump"
+	"github.com/ks-tool/vpn-admin/storage/boltdb/dump"
 
 	bolt "go.etcd.io/bbolt"
 )
 
-// awg-migrate moves awg-admin's data between two boltdb files — typically
-// the ~/.awg-admin used by the Wails desktop app on one machine and the one
-// used by the standalone web server (cmd/awg-admin.go) on another. Both
+// awg-migrate moves vpn-admin's data between two boltdb files — typically
+// the ~/.vpn-admin used by the Wails desktop app on one machine and the one
+// used by the standalone web server (cmd/vpn-admin.go) on another. Both
 // already share the exact same file format (same boltdb buckets, same JSON
 // value encoding — see storage/boltdb), so this tool doesn't need to know
 // anything about the application's schema (models.Server, models.User,
@@ -38,13 +38,13 @@ import (
 // historical bktUsers/bktInterfaces bucket-name mismatch in
 // storage/boltdb/bbolt.go — it doesn't care what a bucket is named or what
 // its values mean, only that the source and destination are the same
-// awg-admin version (the binary format of values is an internal,
+// vpn-admin version (the binary format of values is an internal,
 // undocumented implementation detail, not a stable cross-version contract).
 //
 // Usage:
 //
-//	awg-migrate export -db ~/.awg-admin -out dump.json
-//	awg-migrate import -db ~/.awg-admin -in dump.json [-force]
+//	awg-migrate export -db ~/.vpn-admin -out dump.json
+//	awg-migrate import -db ~/.vpn-admin -in dump.json [-force]
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -66,7 +66,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `awg-migrate: export/import awg-admin's boltdb between machines or
+	fmt.Fprint(os.Stderr, `awg-migrate: export/import vpn-admin's boltdb between machines or
 between the Wails desktop app and the standalone web server — both read
 the same file format, so a dump taken from one can be imported into the
 other.
@@ -77,7 +77,7 @@ Usage:
 
 Flags:
   -db     path to the boltdb file (the desktop app and standalone server
-          both default to ~/.awg-admin)
+          both default to ~/.vpn-admin)
   -out    (export) path to write the JSON dump to
   -in     (import) path to read the JSON dump from
   -force  (import) overwrite keys that already exist in the destination

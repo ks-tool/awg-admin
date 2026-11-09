@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/agent/storage"
+	"github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/agent/storage"
 )
 
 type testProvider struct {

@@ -17,7 +17,7 @@
 // Package kernel is the service.Backend that drives interfaces through the
 // AmneziaWG (or plain WireGuard) kernel module over netlink — RTM_NEWLINK to
 // create the link, address/MTU/up on it, RTM_DELLINK to remove it. It's what
-// the standard awg-agent binary wires in via service.SetBackend. Keeping it in
+// the standard vpn-agent binary wires in via service.SetBackend. Keeping it in
 // its own package confines the vishvananda/netlink dependency to the kernel
 // build, so the userspace agent (agent/internal/userspace) doesn't pull it in.
 package kernel
@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/ks-tool/awg-admin/agent/internal/service"
+	"github.com/ks-tool/vpn-admin/agent/internal/service"
 
 	"github.com/rs/zerolog/log"
 	"github.com/vishvananda/netlink"

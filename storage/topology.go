@@ -16,7 +16,7 @@
 
 package storage
 
-import "github.com/ks-tool/awg-admin/models"
+import "github.com/ks-tool/vpn-admin/models"
 
 // Topology stores the visual network as one aggregate so graph updates are
 // atomic, including cascading removal of connections.

@@ -27,10 +27,10 @@ import (
 	"strings"
 	"time"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/internal/agentclient"
-	"github.com/ks-tool/awg-admin/internal/plugin"
-	"github.com/ks-tool/awg-admin/models"
+	agentmodels "github.com/ks-tool/vpn-admin/agent/models"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/internal/plugin"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 type Plugin struct{}
@@ -39,10 +39,10 @@ func New() *Plugin { return &Plugin{} }
 
 func (p *Plugin) Describe(context.Context) (models.PluginDescriptor, error) {
 	return models.PluginDescriptor{
-		ID:          "awg-agent",
+		ID:          "vpn-agent",
 		Name:        "AmneziaWG / WireGuard",
 		Version:     "1.0.0",
-		Description: "Manages an interface through an existing awg-agent HTTP API.",
+		Description: "Manages an interface through an existing vpn-agent HTTP API.",
 		ConfigSchema: map[string]any{
 			"type":     "object",
 			"required": []string{"agentUrl", "interface", "privateKey", "address", "listenPort"},
@@ -153,7 +153,7 @@ func (p *Plugin) Apply(ctx context.Context, deployment plugin.Deployment) (model
 	if err := client.Set(ctx, iface); err != nil {
 		return models.PluginStatus{}, err
 	}
-	return models.PluginStatus{State: "running", Message: "Configuration applied to awg-agent"}, nil
+	return models.PluginStatus{State: "running", Message: "Configuration applied to vpn-agent"}, nil
 }
 
 func (p *Plugin) Delete(ctx context.Context, deployment plugin.Deployment) error {
