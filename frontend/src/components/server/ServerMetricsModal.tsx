@@ -29,6 +29,7 @@ import {
 import {Line} from 'react-chartjs-2';
 import {RefreshCw} from 'lucide-react';
 import {Modal} from '@/components/common/Modal';
+import {ResourceManager} from '@/components/resources/ResourceManager';
 import ServerDetail from '@/pages/ServerDetail';
 import {TopologyServerManage} from '@/components/topology/TopologyServerManage';
 import {getServerMetricsHistory} from '@/services/servers';
@@ -597,10 +598,12 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
                 </div>
             ))}
             {manageTab !== 'metrics' && (
-                legacyServer ? (
+                legacyServer && manageTab === 'interfaces' ? (
+                    <ResourceManager serverId={serverId} onChanged={() => { void onChanged?.(); }} />
+                ) : legacyServer ? (
                     <ServerDetail
                         serverId={serverId}
-                        section={manageTab}
+                        section="information"
                         onChanged={() => { void onChanged?.(); }}
                     />
                 ) : topologyServer && topology && onChanged ? (

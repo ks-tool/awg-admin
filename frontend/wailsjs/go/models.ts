@@ -1,5 +1,53 @@
 export namespace models {
 	
+	export class ActionDefinition {
+	    name: string;
+	    title: string;
+	    description?: string;
+	    argumentsSchema?: number[];
+	    uiSchema?: number[];
+	    resultType: string;
+	    timeoutSeconds?: number;
+	    mutating?: boolean;
+	    requiresConfirmation?: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new ActionDefinition(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.argumentsSchema = source["argumentsSchema"];
+	        this.uiSchema = source["uiSchema"];
+	        this.resultType = source["resultType"];
+	        this.timeoutSeconds = source["timeoutSeconds"];
+	        this.mutating = source["mutating"];
+	        this.requiresConfirmation = source["requiresConfirmation"];
+	    }
+	}
+	export class ActionResult {
+	    type: string;
+	    data?: number[];
+	    fileName?: string;
+	    mediaType?: string;
+	    taskId?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ActionResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.data = source["data"];
+	        this.fileName = source["fileName"];
+	        this.mediaType = source["mediaType"];
+	        this.taskId = source["taskId"];
+	    }
+	}
 	export class CertKeyPair {
 	    cert: string;
 	    pk: string;
@@ -134,6 +182,47 @@ export namespace models {
 	}
 	
 	
+	export class Condition {
+	    type: string;
+	    status: string;
+	    reason: string;
+	    message: string;
+	    observedGeneration?: number;
+	    // Go type: time
+	    lastTransitionTime?: any;
+
+	    static createFrom(source: any = {}) {
+	        return new Condition(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.status = source["status"];
+	        this.reason = source["reason"];
+	        this.message = source["message"];
+	        this.observedGeneration = source["observedGeneration"];
+	        this.lastTransitionTime = this.convertValues(source["lastTransitionTime"], null);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class DeployStatus {
 	    step: string;
 	    done: boolean;
@@ -690,6 +779,136 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class PortDefinition {
+	    name: string;
+	    title?: string;
+	    direction?: string;
+	    linkKinds?: string[];
+	    remotePorts?: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new PortDefinition(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.title = source["title"];
+	        this.direction = source["direction"];
+	        this.linkKinds = source["linkKinds"];
+	        this.remotePorts = source["remotePorts"];
+	    }
+	}
+	export class ResourceDefinition {
+	    apiVersion: string;
+	    kind: string;
+	    specSchema: number[];
+	    uiSchema?: number[];
+	    schemaHash: string;
+	    ports?: PortDefinition[];
+	    actions?: ActionDefinition[];
+
+	    static createFrom(source: any = {}) {
+	        return new ResourceDefinition(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.kind = source["kind"];
+	        this.specSchema = source["specSchema"];
+	        this.uiSchema = source["uiSchema"];
+	        this.schemaHash = source["schemaHash"];
+	        this.ports = this.convertValues(source["ports"], PortDefinition);
+	        this.actions = this.convertValues(source["actions"], ActionDefinition);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ProviderDefinition {
+	    name: string;
+	    version: string;
+	    resources: ResourceDefinition[];
+
+	    static createFrom(source: any = {}) {
+	        return new ProviderDefinition(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.resources = this.convertValues(source["resources"], ResourceDefinition);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Manifest {
+	    protocolVersion: string;
+	    agentId: string;
+	    providers: ProviderDefinition[];
+
+	    static createFrom(source: any = {}) {
+	        return new Manifest(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.protocolVersion = source["protocolVersion"];
+	        this.agentId = source["agentId"];
+	        this.providers = this.convertValues(source["providers"], ProviderDefinition);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SystemSnapshot {
 	    // Go type: time
 	    timestamp: any;
@@ -892,6 +1111,90 @@ export namespace models {
 	        this.data = source["data"];
 	    }
 	}
+
+
+	export class ResourceStatus {
+	    observedGeneration: number;
+	    phase: string;
+	    conditions?: Condition[];
+	    provider?: number[];
+
+	    static createFrom(source: any = {}) {
+	        return new ResourceStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.observedGeneration = source["observedGeneration"];
+	        this.phase = source["phase"];
+	        this.conditions = this.convertValues(source["conditions"], Condition);
+	        this.provider = source["provider"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Resource {
+	    id: string;
+	    serverId: string;
+	    apiVersion: string;
+	    kind: string;
+	    name: string;
+	    generation: number;
+	    spec: number[];
+	    status: ResourceStatus;
+
+	    static createFrom(source: any = {}) {
+	        return new Resource(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.serverId = source["serverId"];
+	        this.apiVersion = source["apiVersion"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.generation = source["generation"];
+	        this.spec = source["spec"];
+	        this.status = this.convertValues(source["status"], ResourceStatus);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+
 	export class SSHConfig {
 	    host: string;
 	    port?: number;

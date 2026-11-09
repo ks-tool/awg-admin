@@ -72,11 +72,12 @@ func withGeocoder(geocoder locationGeocoder) Option {
 }
 
 type Service struct {
-	store      storage.Storage
-	tunnels    *sshclient.Manager
-	plugins    *plugin.Registry
-	geocoder   locationGeocoder
-	topologyMu sync.Mutex
+	store            storage.Storage
+	tunnels          *sshclient.Manager
+	plugins          *plugin.Registry
+	providerRegistry *providerRegistry
+	geocoder         locationGeocoder
+	topologyMu       sync.Mutex
 
 	deployStatus *deployStatusStore
 
@@ -85,7 +86,7 @@ type Service struct {
 }
 
 func New(s storage.Storage, opts ...Option) *Service {
-	svc := &Service{store: s, tunnels: sshclient.NewManager(), plugins: defaultPluginRegistry(), geocoder: defaultLocationGeocoder(), deployStatus: newDeployStatusStore(), version: "dev"}
+	svc := &Service{store: s, tunnels: sshclient.NewManager(), plugins: defaultPluginRegistry(), providerRegistry: newProviderRegistry(), geocoder: defaultLocationGeocoder(), deployStatus: newDeployStatusStore(), version: "dev"}
 	for _, opt := range opts {
 		opt(svc)
 	}

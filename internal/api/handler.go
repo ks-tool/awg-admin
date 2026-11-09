@@ -155,6 +155,14 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 			gr.POST("/ssh/unlock", h.serverUnlockSSH)
 			gr.POST("/sudo/unlock", h.serverUnlockSudo)
 
+			gr.GET("/providers/manifest", h.providerManifest)
+			gr.GET("/providers/:provider/schema", h.providerSchema)
+			gr.GET("/providers/:provider/resources", h.providerResourceList)
+			gr.PUT("/providers/:provider/resources/:kind/:name", h.providerResourcePut)
+			gr.DELETE("/providers/:provider/resources/:kind/:name", h.providerResourceDelete)
+			gr.GET("/providers/:provider/resources/:kind/:name/status", h.providerResourceStatus)
+			gr.POST("/providers/:provider/resources/:kind/:name/actions/:action", h.providerResourceAction)
+
 			gr.WithGroup("/interfaces", func(gr *bunrouter.Group) {
 				gr.POST("", h.interfaceCreate)
 				gr.GET("/", h.interfaceList)

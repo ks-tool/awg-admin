@@ -41,6 +41,8 @@ type fakeAgentTLS struct {
 	mu           sync.Mutex
 	store        map[string]agentmodels.InterfaceConfig
 	replacePeers map[string]bool
+	resources    map[string]models.Resource
+	schemaCalls  int
 
 	// Discovery/import inputs (see the wg-quick import tests): live devices the
 	// agent has no config for, the conf files "on disk" by interface name, and
@@ -56,6 +58,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 	fa := &fakeAgentTLS{
 		store:        make(map[string]agentmodels.InterfaceConfig),
 		replacePeers: make(map[string]bool),
+		resources:    make(map[string]models.Resource),
 		sources:      make(map[string]string),
 		info:         agentmodels.HostInfo{Backend: "kernel", Version: "test", InterfaceKinds: []string{"amneziawg", "wireguard"}},
 	}
@@ -123,6 +126,62 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 			return
 		}
 		_ = json.NewEncoder(w).Encode(cfg)
+	})
+	definition := models.ResourceDefinition{APIVersion: "test/v1", Kind: "Service", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash"}
+	mux.HandleFunc("GET /v1/manifest", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion, AgentID: "agent", Providers: []models.ProviderDefinition{{Name: "test", Version: "1", Resources: []models.ResourceDefinition{definition}}}})
+	})
+	mux.HandleFunc("GET /v1/providers/test/schema", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		fa.schemaCalls++
+		fa.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(models.ProviderDefinition{Name: "test", Version: "1", Resources: []models.ResourceDefinition{definition}})
+	})
+	mux.HandleFunc("GET /v1/providers/test/resources", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		out := make([]models.Resource, 0, len(fa.resources))
+		for _, item := range fa.resources {
+			out = append(out, item)
+		}
+		fa.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(out)
+	})
+	mux.HandleFunc("PUT /v1/providers/test/resources/{kind}/{name}", func(w http.ResponseWriter, r *http.Request) {
+		var desired models.Resource
+		if err := json.NewDecoder(r.Body).Decode(&desired); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		fa.mu.Lock()
+		key := r.PathValue("kind") + "/" + r.PathValue("name")
+		previous, exists := fa.resources[key]
+		if !exists {
+			desired.ID = "resource-id"
+			desired.Generation = 1
+		} else {
+			desired.ID = previous.ID
+			desired.Generation = previous.Generation + 1
+		}
+		desired.Status = models.ResourceStatus{ObservedGeneration: desired.Generation, Phase: models.ResourceReady}
+		fa.resources[key] = desired
+		fa.mu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(desired)
+	})
+	mux.HandleFunc("GET /v1/providers/test/resources/{kind}/{name}/status", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		item := fa.resources[r.PathValue("kind")+"/"+r.PathValue("name")]
+		fa.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(item.Status)
+	})
+	mux.HandleFunc("POST /v1/providers/test/resources/{kind}/{name}/actions/{action}", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(models.ActionResult{Type: models.ActionResultJSON, Data: json.RawMessage(`{"ok":true}`)})
+	})
+	mux.HandleFunc("DELETE /v1/providers/test/resources/{kind}/{name}", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		delete(fa.resources, r.PathValue("kind")+"/"+r.PathValue("name"))
+		fa.mu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
 	})
 
 	ts := httptest.NewUnstartedServer(mux)

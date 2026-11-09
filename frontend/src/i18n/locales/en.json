@@ -576,6 +576,26 @@
     "backupSaved": "Backup saved",
     "version": "Version"
   },
+  "resources": {
+    "title": "VPN resources",
+    "add": "Add resource",
+    "addTitle": "Add resource",
+    "editTitle": "Edit resource",
+    "empty": "No provider resources",
+    "provider": "Provider",
+    "kind": "Resource type",
+    "name": "Resource name",
+    "generation": "Generation",
+    "saved": "Resource saved",
+    "deleted": "Resource deleted",
+    "deleteTitle": "Delete resource",
+    "deleteConfirm": "Delete resource {{name}}? This operation is applied by its provider.",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "loadError": "Failed to load provider resources",
+    "saveError": "Failed to save resource",
+    "deleteError": "Failed to delete resource"
+  },
   "auth": {
     "signInTitle": "Amnezia-WG Admin",
     "username": "Username",

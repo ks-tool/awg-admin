@@ -98,6 +98,10 @@ export function DeletePeer(arg1, arg2) {
   return window['go']['main']['App']['DeletePeer'](arg1, arg2);
 }
 
+export function DeleteProviderResource(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['DeleteProviderResource'](arg1, arg2, arg3, arg4);
+}
+
 export function DeleteServer(arg1) {
   return window['go']['main']['App']['DeleteServer'](arg1);
 }
@@ -158,6 +162,18 @@ export function GetPeerQRCode(arg1, arg2) {
   return window['go']['main']['App']['GetPeerQRCode'](arg1, arg2);
 }
 
+export function GetProviderManifest(arg1) {
+  return window['go']['main']['App']['GetProviderManifest'](arg1);
+}
+
+export function GetProviderResourceStatus(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetProviderResourceStatus'](arg1, arg2, arg3, arg4);
+}
+
+export function GetProviderSchema(arg1, arg2) {
+  return window['go']['main']['App']['GetProviderSchema'](arg1, arg2);
+}
+
 export function GetServer(arg1) {
   return window['go']['main']['App']['GetServer'](arg1);
 }
@@ -206,6 +222,10 @@ export function ListPeers(arg1) {
   return window['go']['main']['App']['ListPeers'](arg1);
 }
 
+export function ListProviderResources(arg1, arg2) {
+  return window['go']['main']['App']['ListProviderResources'](arg1, arg2);
+}
+
 export function ListServers() {
   return window['go']['main']['App']['ListServers']();
 }
@@ -246,6 +266,10 @@ export function PreviewImport(arg1, arg2, arg3) {
   return window['go']['main']['App']['PreviewImport'](arg1, arg2, arg3);
 }
 
+export function PutProviderResource(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['PutProviderResource'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function ReconcileServer(arg1) {
   return window['go']['main']['App']['ReconcileServer'](arg1);
 }
@@ -260,6 +284,10 @@ export function RefreshVPNServiceStatus(arg1) {
 
 export function RemoveTunnel(arg1) {
   return window['go']['main']['App']['RemoveTunnel'](arg1);
+}
+
+export function RunProviderResourceAction(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['RunProviderResourceAction'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function SaveBackup() {

@@ -1,0 +1,76 @@
+export interface ProviderManifest {
+    protocolVersion: string;
+    agentId: string;
+    providers: ProviderDefinition[];
+}
+
+export interface ProviderDefinition {
+    name: string;
+    version: string;
+    resources: ResourceDefinition[];
+}
+
+export interface ResourceDefinition {
+    apiVersion: string;
+    kind: string;
+    specSchema: Record<string, unknown>;
+    uiSchema?: Record<string, unknown>;
+    schemaHash: string;
+    ports?: PortDefinition[];
+    actions?: ActionDefinition[];
+}
+
+export interface PortDefinition {
+    name: string;
+    title?: string;
+    direction?: string;
+    linkKinds?: string[];
+    remotePorts?: string[];
+}
+
+export interface ActionDefinition {
+    name: string;
+    title: string;
+    description?: string;
+    argumentsSchema?: Record<string, unknown>;
+    uiSchema?: Record<string, unknown>;
+    resultType: 'json' | 'file' | 'async';
+    timeoutSeconds?: number;
+    mutating?: boolean;
+    requiresConfirmation?: boolean;
+}
+
+export interface ProviderResource {
+    id: string;
+    serverId: string;
+    apiVersion: string;
+    kind: string;
+    name: string;
+    generation: number;
+    spec: Record<string, unknown>;
+    status: ResourceStatus;
+}
+
+export interface ResourceStatus {
+    observedGeneration: number;
+    phase: 'Pending' | 'Ready' | 'Degraded' | 'Deleting';
+    conditions?: ResourceCondition[];
+    provider?: Record<string, unknown>;
+}
+
+export interface ResourceCondition {
+    type: string;
+    status: 'True' | 'False' | 'Unknown';
+    reason: string;
+    message: string;
+    observedGeneration?: number;
+    lastTransitionTime?: string;
+}
+
+export interface ActionResult {
+    type: 'json' | 'file' | 'async';
+    data?: unknown;
+    fileName?: string;
+    mediaType?: string;
+    taskId?: string;
+}
