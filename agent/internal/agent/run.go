@@ -38,6 +38,7 @@ import (
 
 	"github.com/ks-tool/awg-admin/agent/internal/api"
 	"github.com/ks-tool/awg-admin/agent/internal/metrics"
+	"github.com/ks-tool/awg-admin/agent/internal/resource"
 	"github.com/ks-tool/awg-admin/agent/internal/service"
 	"github.com/ks-tool/awg-admin/agent/mux/middleware"
 	"github.com/ks-tool/awg-admin/agent/storage"
@@ -113,6 +114,17 @@ func Run(version string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize storage")
 	}
+	resourceStore, err := resource.NewFileStore(filepath.Join(cfg.DB, "resources"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize resource storage")
+	}
+	agentID, err := resourceStore.AgentID()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize agent identity")
+	}
+	resourceRuntime := resource.NewRuntime(resourceStore, agentID, time.Second, 30*time.Second)
+	resourceRuntime.Start(context.Background())
+	defer resourceRuntime.Close()
 
 	log.Info().Msg("Loading Wireguard interfaces")
 	if err := loadInterfaces(store); err != nil {
@@ -151,7 +163,7 @@ func Run(version string) {
 		close(metricsDone)
 	}()
 
-	srv := &http.Server{Addr: cfg.Addr, Handler: api.New(hostInfo, store, collector, middleware.RequestID, middleware.Logging)}
+	srv := &http.Server{Addr: cfg.Addr, Handler: api.NewWithResources(hostInfo, store, collector, resourceRuntime, middleware.RequestID, middleware.Logging)}
 
 	tlsConfig, err := buildTLSConfig(cfg)
 	if err != nil {
