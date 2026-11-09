@@ -15,25 +15,15 @@
  */
 
 import { useTranslation } from 'react-i18next'
-import { Users as UsersIcon, Plus, RefreshCw, User as UserIcon } from 'lucide-react'
+import { RefreshCw, User as UserIcon } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { StatusBadge } from '@/components/common/StatusBadge'
-import { PageHeader } from '@/components/layout/PageHeader'
 import { useNavigation } from '@/contexts/NavigationContext'
-import {useAutoRefresh} from "@/hooks/useAutoRefresh";
-import {buttons} from "@/components/common/Modal";
 
 export default function Users() {
     const { t } = useTranslation()
-    const { users, isLoadingUsers, refreshData, setSelectedUser } = useAppStore()
+    const { users, isLoadingUsers, setSelectedUser } = useAppStore()
     const { navigate } = useNavigation()
-
-    // Auto-fetch data on component mount
-    useAutoRefresh(refreshData)
-
-    const handleAddUser = () => {
-        navigate('add-user')
-    }
 
     const handleSelectUser = (userId: string) => {
         setSelectedUser(userId)
@@ -42,21 +32,6 @@ export default function Users() {
 
     return (
         <div className="flex flex-col">
-            <PageHeader
-                title={t('users.title')}
-                icon={UsersIcon}
-                description={`${users.length} ${t('common.total')}`}
-                actions={
-                    <button 
-                        onClick={handleAddUser}
-                        className={buttons.primary}
-                        title={t('users.addUser')}
-                    >
-                        <Plus size={14} />
-                    </button>
-                }
-            />
-
             <div className="p-8">
                 <div className="rounded-xl border border-white/5 overflow-hidden">
                     <table className="w-full text-sm">

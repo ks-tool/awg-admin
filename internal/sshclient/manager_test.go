@@ -202,3 +202,32 @@ func TestManagerEnsureReusesLiveConnection(t *testing.T) {
 		t.Fatal("expected Ensure to reuse the existing live tunnel instead of reconnecting")
 	}
 }
+
+func TestManagerReopenStaleKeepsLiveReplacement(t *testing.T) {
+	srv := newFakeSSHServer(t)
+	cfg := sshCfgFor(srv)
+	serverID := uuid.New()
+
+	m := NewManager()
+	t.Cleanup(func() { _ = m.Close() })
+
+	if err := m.Open(serverID, cfg, "127.0.0.1:0"); err != nil {
+		t.Fatalf("Open stale tunnel: %v", err)
+	}
+	stale, _ := m.Get(serverID)
+	if err := m.Open(serverID, cfg, "127.0.0.1:0"); err != nil {
+		t.Fatalf("Open replacement tunnel: %v", err)
+	}
+	replacement, _ := m.Get(serverID)
+
+	if err := m.ReopenStale(serverID, stale, cfg, "127.0.0.1:0"); err != nil {
+		t.Fatalf("ReopenStale: %v", err)
+	}
+	current, _ := m.Get(serverID)
+	if current != replacement {
+		t.Fatal("expected a late failure from the stale tunnel to keep its live replacement")
+	}
+	if !current.Alive() {
+		t.Fatal("expected the retained replacement tunnel to remain alive")
+	}
+}

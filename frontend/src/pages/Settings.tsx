@@ -17,9 +17,8 @@
 import {useEffect, useRef, useState} from 'react';
 import type {FormEvent} from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings as SettingsIcon, ScrollText, Save, RefreshCw, DatabaseBackup } from 'lucide-react';
+import { ScrollText, Save, RefreshCw, DatabaseBackup, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { buttons, inputs, Modal } from '@/components/common/Modal';
 import { FormField } from '@/components/common/FormField';
 import { CopyButton } from '@/components/common/CopyButton';
@@ -324,7 +323,7 @@ function BackupSection() {
 
 export default function Settings() {
     const { t, i18n } = useTranslation();
-    const { enabled: authEnabled } = useAuth();
+    const { enabled: authEnabled, username, logout } = useAuth();
     const isDesktop = getCurrentApiMode() === 'bindings';
     const [appVersion, setAppVersion] = useState<string | null>(null);
 
@@ -344,10 +343,6 @@ export default function Settings() {
 
     return (
         <div className="flex flex-col">
-            <PageHeader
-                title={t('settings.title')}
-                icon={SettingsIcon}
-            />
 
             <div className="px-8 py-6 space-y-4">
                 <div className="p-4 bg-card border border-border rounded-lg">
@@ -369,6 +364,12 @@ export default function Settings() {
                 {isDesktop && <LogsSection />}
                 {authEnabled && <BasicAuthSection />}
                 {authEnabled && <ChangeCredentialsSection />}
+                {authEnabled && (
+                    <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
+                        <span className="truncate text-sm text-muted-foreground">{username}</span>
+                        <button type="button" onClick={logout} className={cn('inline-flex items-center gap-2', buttons.secondary)}><LogOut size={16} />{t('auth.logout')}</button>
+                    </div>
+                )}
 
                 {appVersion && (
                     <div className="p-4 bg-card border border-border rounded-lg">

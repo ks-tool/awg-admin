@@ -21,6 +21,8 @@ import {MapPin, MapPinned, RotateCcw, ZoomIn, ZoomOut} from 'lucide-react';
 import type {NetworkConnection, NetworkInterface, TopologyServer, Tunnel, VPNService} from '@/types';
 import type {AgentStatus} from '@/services/servers';
 import {centeredMapPan, clampMapPan, fitMapViewport} from './mapViewport';
+import {clusterTopologyServers, expandedClusterCoordinates} from './mapClusters';
+import {TopologyClusterOverlay} from './TopologyClusterOverlay';
 import {TopologyTunnels} from './TopologyTunnels';
 import {WorldLand} from './WorldLand';
 
@@ -62,14 +64,16 @@ interface TopologyMapProps {
     connections: NetworkConnection[];
     tunnels: Tunnel[];
     agentStatuses: Record<string, AgentStatus | null>;
+    totalUsers: number;
     onSelect: (id: string) => void;
 }
 
-export function TopologyMap({servers, interfaces, services, connections, tunnels, agentStatuses, onSelect}: TopologyMapProps) {
+export function TopologyMap({servers, interfaces, services, connections, tunnels, agentStatuses, totalUsers, onSelect}: TopologyMapProps) {
     const {t} = useTranslation();
     const containerRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({width: 0, height: 560});
     const [zoom, setZoom] = useState(1);
+    const [expandedClusterKey, setExpandedClusterKey] = useState<string | null>(null);
     const [pan, setPan] = useState({x: 0, y: 0});
     const [dragging, setDragging] = useState(false);
     const dragRef = useRef<{pointerId: number; startX: number; startY: number; startPan: {x: number; y: number}; moved: boolean} | null>(null);
@@ -133,20 +137,45 @@ export function TopologyMap({servers, interfaces, services, connections, tunnels
         setDragging(false);
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     };
-    const located = useMemo(() => servers.filter(server => server.latitude != null && server.longitude != null), [servers]);
     const unlocated = useMemo(() => servers.filter(server => server.latitude == null || server.longitude == null), [servers]);
-    const points = useMemo<GeoPoint[]>(() => located.map(server => {
-        const serverServices = services.filter(service => service.serverId === server.id);
-        const agentStatus = agentStatuses[server.id];
-        const serviceValue = serverServices.length === 0 ? 1 : Math.min(...serverServices.map(service => serviceStatusValue(service.status)));
-        return {
-            id: server.id,
-            label: server.name,
-            lat: server.latitude!,
-            lon: server.longitude!,
-            value: agentStatus ? agentStatusValue(agentStatus) : serviceValue,
+    const clusters = useMemo(() => clusterTopologyServers(servers), [servers]);
+    const expandedCluster = clusters.find(cluster => cluster.key === expandedClusterKey && cluster.servers.length > 1);
+    const expandedCoordinates = useMemo(() => expandedCluster
+        ? expandedClusterCoordinates(expandedCluster, size.width, size.height, scale)
+        : new Map<string, {lat: number; lon: number}>(), [expandedCluster, scale, size.height, size.width]);
+    const displayServers = useMemo(() => servers.map(server => {
+        const coordinates = expandedCoordinates.get(server.id);
+        return coordinates ? {...server, latitude: coordinates.lat, longitude: coordinates.lon} : server;
+    }), [expandedCoordinates, servers]);
+    const points = useMemo<GeoPoint[]>(() => {
+        const pointForServer = (server: TopologyServer, lat = server.latitude!, lon = server.longitude!): GeoPoint => {
+            const serverServices = services.filter(service => service.serverId === server.id);
+            const agentStatus = agentStatuses[server.id];
+            const serviceValue = serverServices.length === 0 ? 1 : Math.min(...serverServices.map(service => serviceStatusValue(service.status)));
+            return {
+                id: server.id,
+                label: server.name,
+                lat,
+                lon,
+                value: agentStatus ? agentStatusValue(agentStatus) : serviceValue,
+            };
         };
-    }), [agentStatuses, located, services]);
+        return clusters.flatMap(cluster => {
+            if (cluster.servers.length === 1) return [pointForServer(cluster.servers[0])];
+            const clusterPoint: GeoPoint = {
+                id: `cluster:${cluster.key}`,
+                label: cluster.servers.find(server => server.location)?.location ?? `${cluster.lat.toFixed(4)}, ${cluster.lon.toFixed(4)}`,
+                lat: cluster.lat,
+                lon: cluster.lon,
+                value: Math.min(...cluster.servers.map(server => pointForServer(server).value ?? 1)),
+            };
+            if (expandedClusterKey !== cluster.key) return [clusterPoint];
+            return [clusterPoint, ...cluster.servers.map(server => {
+                const coordinates = expandedCoordinates.get(server.id);
+                return pointForServer(server, coordinates?.lat, coordinates?.lon);
+            })];
+        });
+    }, [agentStatuses, clusters, expandedClusterKey, expandedCoordinates, services]);
     const presentStatuses = [...new Set(points.map(point => point.value ?? 1))].sort((a, b) => a - b);
     const pointTheme = {
         ...mapTheme,
@@ -158,7 +187,7 @@ export function TopologyMap({servers, interfaces, services, connections, tunnels
     };
 
     return (
-        <div ref={containerRef} className="relative h-full min-h-[420px]">
+        <div ref={containerRef} className="relative h-full min-h-105">
             <div
                 className={`absolute inset-0 touch-none overflow-hidden bg-muted/40 ${zoom > 1 ? dragging ? 'cursor-grabbing' : 'cursor-grab' : ''}`}
                 style={{'--topology-map-transform': transform} as CSSProperties}
@@ -174,7 +203,7 @@ export function TopologyMap({servers, interfaces, services, connections, tunnels
                 }}
             >
                 <WorldLand width={size.width} height={size.height} transform={transform} />
-                <TopologyTunnels servers={servers} interfaces={interfaces} connections={connections} tunnels={tunnels} width={size.width} height={size.height} transform={transform} zoom={zoom} />
+                <TopologyTunnels servers={displayServers} interfaces={interfaces} connections={connections} tunnels={tunnels} width={size.width} height={size.height} transform={transform} zoom={zoom} />
                 <GeoScatter
                     className="topology-scatter"
                     data={points}
@@ -185,8 +214,28 @@ export function TopologyMap({servers, interfaces, services, connections, tunnels
                 width={size.width || undefined}
                 height={size.height}
                 labels={{ariaLabel: t('topology.mapAria'), empty: t('topology.mapEmpty')}}
-                onPointClick={point => {if (point.id) onSelect(point.id);}}
+                onPointClick={point => {
+                    if (!point.id) return;
+                    if (point.id.startsWith('cluster:')) {
+                        const key = point.id.slice('cluster:'.length);
+                        setExpandedClusterKey(current => current === key ? null : key);
+                        return;
+                    }
+                    onSelect(point.id);
+                }}
                 renderTooltip={point => {
+                    const cluster = point.id?.startsWith('cluster:') ? clusters.find(item => point.id === `cluster:${item.key}`) : undefined;
+                    if (cluster) {
+                        return (
+                            <div>
+                                <div className="font-semibold">{point.label}</div>
+                                <div className="mt-2 space-y-1 border-t border-border pt-2">
+                                    {cluster.servers.map(server => <div key={server.id} className="text-xs">{server.name}</div>)}
+                                </div>
+                                <div className="mt-2 text-xs opacity-70">{t(expandedClusterKey === cluster.key ? 'topology.clusterCollapseHint' : 'topology.clusterExpandHint')}</div>
+                            </div>
+                        );
+                    }
                     const server = servers.find(item => item.id === point.id);
                     const serverServices = services.filter(service => service.serverId === point.id);
                     const agentStatus = point.id ? agentStatuses[point.id] : null;
@@ -217,15 +266,24 @@ export function TopologyMap({servers, interfaces, services, connections, tunnels
                     );
                 }}
                 renderEmpty={() => (
-                    <div className="pointer-events-none flex h-full min-h-[420px] flex-col items-center justify-center text-center">
+                    <div className="pointer-events-none flex h-full min-h-105 flex-col items-center justify-center text-center">
                         <MapPinned className="mb-3 text-sky-500" size={34} />
                         <h2 className="font-semibold">{t('topology.mapEmpty')}</h2>
                         <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t('topology.mapEmptyHint')}</p>
                     </div>
                 )}
             />
+                <TopologyClusterOverlay
+                    clusters={clusters}
+                    expandedCluster={expandedCluster}
+                    expandedCoordinates={expandedCoordinates}
+                    width={size.width}
+                    height={size.height}
+                    scale={scale}
+                    transform={transform}
+                />
             </div>
-            <div className="absolute right-4 top-4 z-20 flex items-center gap-1 rounded-lg border border-border bg-card/90 p-1 shadow-sm backdrop-blur">
+            <div className="absolute right-4 top-20 z-20 flex items-center gap-1 rounded-lg border border-border bg-card/90 p-1 shadow-sm backdrop-blur">
                 <button type="button" aria-label={t('topology.zoomOut')} title={t('topology.zoomOut')} disabled={zoom <= 1} onClick={() => updateZoom(zoom - 0.5)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40">
                     <ZoomOut size={16} />
                 </button>
@@ -236,8 +294,15 @@ export function TopologyMap({servers, interfaces, services, connections, tunnels
                     <ZoomIn size={16} />
                 </button>
             </div>
-            <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-border bg-card/90 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
-                {t('topology.locatedServers', {located: located.length, total: servers.length})}
+            <div className="pointer-events-none absolute left-4 top-4 flex gap-5 rounded-lg border border-border bg-card/90 px-4 py-3 shadow-sm backdrop-blur">
+                <div>
+                    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{t('topology.totalServers')}</div>
+                    <div className="mt-0.5 text-lg font-semibold text-foreground">{servers.length}</div>
+                </div>
+                <div className="border-l border-border pl-5">
+                    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{t('topology.totalUsers')}</div>
+                    <div className="mt-0.5 text-lg font-semibold text-foreground">{totalUsers}</div>
+                </div>
             </div>
             {unlocated.length > 0 && (
                 <div className="absolute bottom-4 left-4 max-w-[min(28rem,calc(100%-2rem))] rounded-xl border border-border bg-card/95 p-3 shadow-lg backdrop-blur">
@@ -256,11 +321,6 @@ export function TopologyMap({servers, interfaces, services, connections, tunnels
                     </div>
                 </div>
             )}
-            <div className="absolute bottom-4 right-4 text-[10px] text-muted-foreground">
-                <a href="https://kiankyars.github.io/datacenter-atlas/" target="_blank" rel="noreferrer" className="hover:text-foreground">Data Center Atlas</a>
-                {' · '}
-                <a href="https://www.naturalearthdata.com/" target="_blank" rel="noreferrer" className="hover:text-foreground">Natural Earth</a>
-            </div>
         </div>
     );
 }

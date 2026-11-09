@@ -18,7 +18,7 @@ import { get, post, remove } from './api';
 import { getCurrentApiMode } from './apiMode';
 import { bindingsClient } from './bindingsClient';
 import { reportError } from './errorReporting';
-import type { Peer, Key } from '@/types';
+import type { Key } from '@/types';
 
 export interface AddPeerInput {
   name: string;
@@ -37,52 +37,6 @@ export interface AddPeerInput {
  */
 function getClient() {
   return getCurrentApiMode() === 'bindings' ? bindingsClient : null;
-}
-
-/**
- * Get all peers for a user
- */
-export async function listPeers(userId: string): Promise<Peer[] | null> {
-  const client = getClient();
-  
-  if (client) {
-    const { data, error } = await client.listPeers(userId);
-    if (error) {
-      reportError(`fetch-peers-${userId}`, `Failed to fetch peers for user ${userId}`, error);
-      return null;
-    }
-    return data as unknown as Peer[];
-  }
-
-  const { data, error } = await get<Peer[]>(`/users/${userId}/peers/`);
-  if (error) {
-    reportError(`fetch-peers-${userId}`, `Failed to fetch peers for user ${userId}`, error);
-    return null;
-  }
-  return data;
-}
-
-/**
- * Get a single peer by public key
- */
-export async function getPeer(userId: string, publicKey: Key): Promise<Peer | null> {
-  const client = getClient();
-  
-  if (client) {
-    const { data, error } = await client.getPeer(userId, publicKey);
-    if (error) {
-      reportError(`fetch-peer-${publicKey}`, `Failed to fetch peer ${publicKey}`, error);
-      return null;
-    }
-    return data as unknown as Peer;
-  }
-
-  const { data, error } = await get<Peer>(`/users/${userId}/peers/${publicKey}`);
-  if (error) {
-    reportError(`fetch-peer-${publicKey}`, `Failed to fetch peer ${publicKey}`, error);
-    return null;
-  }
-  return data;
 }
 
 /**

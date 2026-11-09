@@ -18,8 +18,7 @@ import * as React from 'react';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {ArrowLeft, ArrowRightLeft, Download, FileDown, Key, Plus, Power, PowerOff, QrCode, Trash2, User as UserIcon, UserPen} from 'lucide-react';
-import {PageHeader} from '@/components/layout/PageHeader';
+import {ArrowLeft, ArrowRightLeft, Download, FileDown, Key, Plus, Power, PowerOff, QrCode, Trash2, UserPen} from 'lucide-react';
 import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {listInterfaces} from '@/services/interfaces';
@@ -598,46 +597,20 @@ export default function UserDetail() {
     /* ---- Render: empty state ---------------------------------------------- */
 
     if (!user) {
-        return (
-            <div className="flex flex-col">
-                <PageHeader
-                    title={t('users.title')}
-                    icon={UserIcon}
-                    description={t('users.noUser')}
-                    actions={
-                        <button onClick={handleBack} className={buttons.primary} title={t('users.backToUsers')}>
-                            <ArrowLeft size={14}/>
-                        </button>
-                    }
-                />
-                <div className="p-8 text-center text-muted-foreground">{t('users.noUser')}</div>
-            </div>
-        );
+        return <div className="p-8 text-center text-muted-foreground">{t('users.noUser')}</div>;
     }
 
     /* ---- Render: main ----------------------------------------------------- */
 
     return (
         <div className="flex flex-col">
-            <PageHeader
-                title={user.name || t('users.noName')}
-                icon={UserIcon}
-                description={user.id}
-                actions={
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setShowDeleteUserConfirm(true)}
-                            className={buttons.danger}
-                            title={t('users.deleteUser')}
-                        >
-                            <Trash2 size={14}/>
-                        </button>
-                        <button onClick={handleBack} className={buttons.primary} title={t('users.backToUsers')}>
-                            <ArrowLeft size={14}/>
-                        </button>
-                    </div>
-                }
-            />
+            <div className="flex items-center justify-between px-8 pt-6">
+                <h2 className="font-semibold">{user.name || t('users.noName')}</h2>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setShowDeleteUserConfirm(true)} className={buttons.danger} title={t('users.deleteUser')}><Trash2 size={14}/></button>
+                    <button onClick={handleBack} className={buttons.primary} title={t('users.backToUsers')}><ArrowLeft size={14}/></button>
+                </div>
+            </div>
 
             <div className="p-8 space-y-6">
                 {/* User Information */}

@@ -17,6 +17,7 @@
 import {useId, useMemo} from 'react';
 import {projectMercator} from '@zenith-visuals/maps';
 import type {NetworkConnection, NetworkInterface, TopologyServer, Tunnel} from '@/types';
+import {mergeTopologyConnections} from './connections';
 
 interface TopologyTunnelsProps {
     servers: TopologyServer[];
@@ -31,20 +32,7 @@ interface TopologyTunnelsProps {
 
 export function TopologyTunnels({servers, interfaces, connections, tunnels, width, height, transform, zoom}: TopologyTunnelsProps) {
     const markerID = useId().replaceAll(':', '');
-    const allConnections = useMemo(() => {
-        const legacyConnections = tunnels.flatMap(tunnel => tunnel.members.slice(1).map((member, index) => ({
-            id: `${tunnel.id}:${index}`,
-            sourceId: tunnel.members[index].ifaceId,
-            targetId: member.ifaceId,
-        })));
-        const seen = new Set<string>();
-        return [...connections, ...legacyConnections].filter(connection => {
-            const key = `${connection.sourceId}:${connection.targetId}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-    }, [connections, tunnels]);
+    const allConnections = useMemo(() => mergeTopologyConnections(connections, tunnels), [connections, tunnels]);
     const paths = useMemo(() => {
         if (width === 0) return [];
         const interfaceByID = new Map(interfaces.map(iface => [iface.id, iface]));

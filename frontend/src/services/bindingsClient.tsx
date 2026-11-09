@@ -15,7 +15,7 @@
  */
 
 import * as AppBindings from '../../wailsjs/go/main/App';
-import { models, service } from '../../wailsjs/go/models';
+import { models } from '../../wailsjs/go/models';
 
 interface ApiResponse<T> {
     data: T;
@@ -56,19 +56,6 @@ export const bindingsClient = {
             return { data: data || [] };
         } catch (error) {
             console.error('Bindings ListUsers failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async getUser(id: string): Promise<ApiResponse<models.User>> {
-        try {
-            const data = await AppBindings.GetUser(id);
-            return { data };
-        } catch (error) {
-            console.error('Bindings GetUser failed:', error);
             return {
                 data: null as any,
                 error: extractErrorMessage(error),
@@ -128,32 +115,6 @@ export const bindingsClient = {
         }
     },
 
-    async getServer(id: string): Promise<ApiResponse<models.Server>> {
-        try {
-            const data = await AppBindings.GetServer(id);
-            return { data };
-        } catch (error) {
-            console.error('Bindings GetServer failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async createServer(input: any): Promise<ApiResponse<models.Server>> {
-        try {
-            const data = await AppBindings.CreateServer(input);
-            return { data };
-        } catch (error) {
-            console.error('Bindings CreateServer failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
     async updateServer(id: string, input: any): Promise<ApiResponse<models.Server>> {
         try {
             const data = await AppBindings.UpdateServer(id, input);
@@ -180,180 +141,12 @@ export const bindingsClient = {
         }
     },
 
-    async deployAgent(id: string, agentSourceId: string): Promise<ApiResponse<void>> {
-        try {
-            await AppBindings.DeployAgent(id, agentSourceId);
-            return { data: undefined };
-        } catch (error) {
-            console.error('Bindings DeployAgent failed:', error);
-            return {
-                data: undefined,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async listAgentSources(): Promise<ApiResponse<models.AgentSource[]>> {
-        try {
-            const data = await AppBindings.ListAgentSources();
-            return { data: data || [] };
-        } catch (error) {
-            console.error('Bindings ListAgentSources failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async listAgentReleases(): Promise<ApiResponse<models.AgentReleaseAsset[]>> {
-        try {
-            const data = await AppBindings.ListAgentReleases();
-            return { data: data || [] };
-        } catch (error) {
-            console.error('Bindings ListAgentReleases failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async createAgentSource(name: string, url: string, path: string, image: string, cacheLocally: boolean, userspace: boolean): Promise<ApiResponse<models.AgentSource>> {
-        try {
-            const data = await AppBindings.CreateAgentSource(name, url, path, image, cacheLocally, userspace);
-            return { data };
-        } catch (error) {
-            console.error('Bindings CreateAgentSource failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async updateAgentSource(id: string, name: string, url: string, path: string, image: string, cacheLocally: boolean, userspace: boolean): Promise<ApiResponse<models.AgentSource>> {
-        try {
-            const data = await AppBindings.UpdateAgentSource(id, name, url, path, image, cacheLocally, userspace);
-            return { data };
-        } catch (error) {
-            console.error('Bindings UpdateAgentSource failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async deleteAgentSource(id: string): Promise<ApiResponse<void>> {
-        try {
-            await AppBindings.DeleteAgentSource(id);
-            return { data: undefined };
-        } catch (error) {
-            console.error('Bindings DeleteAgentSource failed:', error);
-            return {
-                data: undefined,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async refreshAgentSourceCache(id: string): Promise<ApiResponse<void>> {
-        try {
-            await AppBindings.RefreshAgentSourceCache(id);
-            return { data: undefined };
-        } catch (error) {
-            console.error('Bindings RefreshAgentSourceCache failed:', error);
-            return {
-                data: undefined,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async getDeployStatus(serverId: string): Promise<ApiResponse<models.DeployStatus>> {
-        try {
-            const data = await AppBindings.GetDeployStatus(serverId);
-            return { data };
-        } catch (error) {
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async deleteServer(id: string): Promise<ApiResponse<void>> {
-        try {
-            await AppBindings.DeleteServer(id);
-            return { data: undefined };
-        } catch (error) {
-            console.error('Bindings DeleteServer failed:', error);
-            return {
-                data: undefined,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async syncServer(id: string): Promise<ApiResponse<void>> {
-        try {
-            await AppBindings.SyncServer(id);
-            return { data: undefined };
-        } catch (error) {
-            console.error('Bindings SyncServer failed:', error);
-            return {
-                data: undefined,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
     async forceReplaceInterfacePeers(serverId: string, interfaceId: string): Promise<ApiResponse<void>> {
         try {
             await AppBindings.ForceReplaceInterfacePeers(serverId, interfaceId);
             return { data: undefined };
         } catch (error) {
             console.error('Bindings ForceReplaceInterfacePeers failed:', error);
-            return {
-                data: undefined,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async reconcileServer(id: string): Promise<ApiResponse<service.ReconcileReport>> {
-        try {
-            const data = await AppBindings.ReconcileServer(id);
-            return { data };
-        } catch (error) {
-            console.error('Bindings ReconcileServer failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async importInterface(id: string, iface: string): Promise<ApiResponse<models.Interface>> {
-        try {
-            const data = await AppBindings.ImportInterface(id, iface);
-            return { data };
-        } catch (error) {
-            console.error('Bindings ImportInterface failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async deleteAgentInterface(id: string, iface: string): Promise<ApiResponse<void>> {
-        try {
-            await AppBindings.DeleteAgentInterface(id, iface);
-            return { data: undefined };
-        } catch (error) {
-            console.error('Bindings DeleteAgentInterface failed:', error);
             return {
                 data: undefined,
                 error: extractErrorMessage(error),
@@ -400,45 +193,6 @@ export const bindingsClient = {
         }
     },
 
-    async setServerMonitoring(id: string, enabled: boolean): Promise<ApiResponse<models.Server>> {
-        try {
-            const data = await AppBindings.SetServerMonitoring(id, enabled);
-            return { data };
-        } catch (error) {
-            console.error('Bindings SetServerMonitoring failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async setServerProfiling(id: string, enabled: boolean): Promise<ApiResponse<models.Server>> {
-        try {
-            const data = await AppBindings.SetServerProfiling(id, enabled);
-            return { data };
-        } catch (error) {
-            console.error('Bindings SetServerProfiling failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async saveServerProfile(id: string, kind: string, seconds: number): Promise<ApiResponse<boolean>> {
-        try {
-            const data = await AppBindings.SaveServerProfile(id, kind, seconds);
-            return { data };
-        } catch (error) {
-            console.error('Bindings SaveServerProfile failed:', error);
-            return {
-                data: false,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
     async unlockServerSSH(id: string, passphrase: string, applyToAll: boolean): Promise<ApiResponse<void>> {
         try {
             await AppBindings.UnlockServerSSH(id, passphrase, applyToAll);
@@ -452,32 +206,6 @@ export const bindingsClient = {
         }
     },
 
-    async unlockServerSudo(id: string, password: string, applyToAll: boolean): Promise<ApiResponse<void>> {
-        try {
-            await AppBindings.UnlockServerSudo(id, password, applyToAll);
-            return { data: undefined };
-        } catch (error) {
-            console.error('Bindings UnlockServerSudo failed:', error);
-            return {
-                data: undefined,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async getServerMetrics(id: string): Promise<ApiResponse<models.MetricsSnapshot>> {
-        try {
-            const data = await AppBindings.GetServerMetrics(id);
-            return { data };
-        } catch (error) {
-            console.error('Bindings GetServerMetrics failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
     async getServerAgentStatus(id: string): Promise<ApiResponse<string>> {
         try {
             const data = await AppBindings.ServerAgentStatus(id);
@@ -486,19 +214,6 @@ export const bindingsClient = {
             console.error('Bindings ServerAgentStatus failed:', error);
             return {
                 data: '',
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async getServerHostInfo(id: string): Promise<ApiResponse<models.HostInfo>> {
-        try {
-            const data = await AppBindings.ServerHostInfo(id);
-            return { data };
-        } catch (error) {
-            console.error('Bindings ServerHostInfo failed:', error);
-            return {
-                data: null as any,
                 error: extractErrorMessage(error),
             };
         }
@@ -537,29 +252,6 @@ export const bindingsClient = {
         } catch (error) {
             console.error('Bindings ListTunnels failed:', error);
             return { data: null as any, error: extractErrorMessage(error) };
-        }
-    },
-
-    // steps carry string uuids at runtime (Go marshals uuid.UUID as a string),
-    // but Wails' generated models.TunnelStep types them as number[] — so accept
-    // the real shape and cast for the binding call.
-    async buildTunnel(steps: { serverId: string; ifaceId: string }[], subnet: string): Promise<ApiResponse<models.Tunnel>> {
-        try {
-            const data = await AppBindings.BuildTunnel(steps as unknown as models.TunnelStep[], subnet);
-            return { data };
-        } catch (error) {
-            console.error('Bindings BuildTunnel failed:', error);
-            return { data: null as any, error: extractErrorMessage(error) };
-        }
-    },
-
-    async removeTunnel(id: string): Promise<ApiResponse<void>> {
-        try {
-            await AppBindings.RemoveTunnel(id);
-            return { data: undefined };
-        } catch (error) {
-            console.error('Bindings RemoveTunnel failed:', error);
-            return { data: undefined, error: extractErrorMessage(error) };
         }
     },
 
@@ -623,32 +315,6 @@ export const bindingsClient = {
             console.error('Bindings DeleteInterface failed:', error);
             return {
                 data: undefined,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async listPeers(userId: string): Promise<ApiResponse<models.Peer[]>> {
-        try {
-            const data = await AppBindings.ListPeers(userId);
-            return { data: data || [] };
-        } catch (error) {
-            console.error('Bindings ListPeers failed:', error);
-            return {
-                data: null as any,
-                error: extractErrorMessage(error),
-            };
-        }
-    },
-
-    async getPeer(userId: string, publicKey: string): Promise<ApiResponse<models.Peer>> {
-        try {
-            const data = await AppBindings.GetPeer(userId, publicKey);
-            return { data };
-        } catch (error) {
-            console.error('Bindings GetPeer failed:', error);
-            return {
-                data: null as any,
                 error: extractErrorMessage(error),
             };
         }

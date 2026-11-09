@@ -20,22 +20,15 @@ import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
 import {
     AlertTriangle,
-    ArrowLeft,
     CheckCircle2,
     Edit2,
     FileInput,
     Network,
     Plus,
     RefreshCw,
-    Server as ServerIcon,
-    Settings,
     Trash2,
-    Wrench,
 } from 'lucide-react';
-import {PageHeader} from '@/components/layout/PageHeader';
-import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
-import {CopyButton} from '@/components/common/CopyButton';
 import {forceReplaceInterfacePeers, getInterfaceDefaults, updateInterfaceConfig} from '@/services/interfaces';
 import {listUnmanagedInterfaces, unlockServerSSH} from '@/services/servers';
 import {SSHPassphraseRequiredError} from '@/services/sshErrors';
@@ -49,7 +42,6 @@ import {CollapsibleSection} from '@/components/common/CollapsibleSection';
 import {Container} from '@/components/common/Container';
 import {cn} from '@/lib/utils';
 import {ServerFormFields} from '@/components/server/ServerFormFields';
-import {AgentModal} from '@/components/server/AgentModal';
 import {ImportInterfaceModal} from '@/components/server/ImportInterfaceModal';
 import {authTypeForServer, formDataToServerInput, serverToFormData, useServerForm} from '@/hooks/useServerForm';
 import type {AuthType} from '@/hooks/useServerForm';
@@ -301,16 +293,18 @@ function InterfaceFormModal({
 // ServerDetail
 // ---------------------------------------------------------------------------
 
-export default function ServerDetail() {
+interface ServerDetailProps {
+    serverId: string;
+    section: 'information' | 'interfaces';
+    onChanged: () => void;
+}
+
+export default function ServerDetail({serverId, section, onChanged}: ServerDetailProps) {
     const {t} = useTranslation();
-    const {navigate} = useNavigation();
     const {
         servers,
         users,
-        selectedServerId,
-        setSelectedServer,
         updateServer,
-        deleteServer,
         createInterface,
         deleteInterface,
         listInterfacesForServer,
@@ -318,25 +312,17 @@ export default function ServerDetail() {
     } = useAppStore();
 
     const [isLoading, setIsLoading] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
     // Initialized to 'key' but corrected from the loaded server in the effect
     // below (server isn't in scope yet here) so the edit form opens on the tab
     // the server actually uses.
     const [authType, setAuthType] = useState<AuthType>('key');
-    // Server-level agent operations live in AgentModal; this page also exposes
-    // the interface-specific force-replace action alongside each interface.
-    const [showAgentModal, setShowAgentModal] = useState(false);
     const [serverInterfaces, setServerInterfaces] = useState<any[]>([]);
     // Live interfaces on the server the agent doesn't manage (wg-quick ones),
     // listed read-only with an Import action. Best-effort: [] when the agent
     // can't be asked.
     const [unmanaged, setUnmanaged] = useState<UnmanagedInterface[]>([]);
     const [importTarget, setImportTarget] = useState<string | null>(null);
-    // sshUnlock is still used here for the server-save passphrase retry (handleSave);
-    // the deploy passphrase flow moved into the AgentModal with the deploy action.
     const [sshUnlock, setSshUnlock] = useState<{retry: () => void} | null>(null);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteInterfaceId, setDeleteInterfaceId] = useState<string | null>(null);
     const [forceReplaceInterfaceId, setForceReplaceInterfaceId] = useState<string | null>(null);
     // Second-stage flag: an interface that has peers requires confirming twice
@@ -353,7 +339,7 @@ export default function ServerDetail() {
         interfaceId?: string;
     } | null>(null);
 
-    const server = servers.find(s => s.id === selectedServerId);
+    const server = servers.find(s => s.id === serverId);
     const {formData, updateField, resetForm} = useServerForm(
         server ? serverToFormData(server) : undefined,
     );
@@ -369,26 +355,27 @@ export default function ServerDetail() {
     }, [server]);
 
     const loadInterfaces = useCallback(async () => {
-        if (!selectedServerId) return;
+        if (!serverId) return;
         const [list, unmanagedList] = await Promise.all([
-            listInterfacesForServer(selectedServerId),
-            listUnmanagedInterfaces(selectedServerId),
+            listInterfacesForServer(serverId),
+            listUnmanagedInterfaces(serverId),
         ]);
         if (list) setServerInterfaces(list);
         setUnmanaged(unmanagedList ?? []);
-    }, [selectedServerId, listInterfacesForServer]);
+    }, [serverId, listInterfacesForServer]);
 
     const handleForceReplacePeers = async () => {
-        if (!selectedServerId || !forceReplaceInterfaceId) return;
+        if (!serverId || !forceReplaceInterfaceId) return;
         setForceReplacePeersLoading(true);
         try {
-            const ok = await forceReplaceInterfacePeers(selectedServerId, forceReplaceInterfaceId);
+            const ok = await forceReplaceInterfacePeers(serverId, forceReplaceInterfaceId);
             if (!ok) {
                 toast.error(t('servers.interfaces.forceReplacePeersError'));
                 return;
             }
             toast.success(t('servers.interfaces.forceReplacePeersSuccess'));
             await loadInterfaces();
+            onChanged();
             setForceReplaceInterfaceId(null);
         } finally {
             setForceReplacePeersLoading(false);
@@ -398,19 +385,19 @@ export default function ServerDetail() {
     // ---- Server handlers ----------------------------------------------------
 
     const handleSave = async () => {
-        if (!selectedServerId || !formData.name.trim()) {
+        if (!formData.name.trim()) {
             return toast.error(t('servers.nameRequired'));
         }
         setIsLoading(true);
         try {
             const updated = await updateServer(
-                selectedServerId,
+                serverId,
                 formDataToServerInput(formData, authType, server),
             );
             if (updated) {
                 toast.success(t('servers.serverUpdated'));
-                setIsEditing(false);
                 await refreshData();
+                onChanged();
             } else {
                 toast.error(t('servers.updateServerError'));
             }
@@ -422,8 +409,7 @@ export default function ServerDetail() {
                 setSshUnlock({
                     retry: () => {
                         toast.success(t('servers.serverUpdated'));
-                        setIsEditing(false);
-                        void refreshData();
+                        void refreshData().then(onChanged);
                     },
                 });
                 return;
@@ -440,40 +426,14 @@ export default function ServerDetail() {
             resetForm(serverToFormData(server));
             setAuthType(authTypeForServer(server));
         }
-        setIsEditing(false);
-    };
-
-    const goBack = () => {
-        setSelectedServer(null);
-        navigate('servers');
-    };
-
-    const handleDeleteServer = async () => {
-        if (!selectedServerId) return;
-        setDeleteLoading(true);
-        try {
-            const ok = await deleteServer(selectedServerId);
-            if (ok) {
-                toast.success(t('servers.serverDeleted'));
-                goBack();
-            } else {
-                toast.error(t('servers.deleteServerError'));
-            }
-        } catch (err) {
-            console.error('Failed to delete server:', err);
-            toast.error(t('servers.deleteServerError'));
-        } finally {
-            setDeleteLoading(false);
-            setShowDeleteConfirm(false);
-        }
     };
 
     const handleUnlockSubmit = async (passphrase: string, applyToAll: boolean) => {
-        if (!selectedServerId || !sshUnlock) return;
+        if (!serverId || !sshUnlock) return;
         setUnlockLoading(true);
         setUnlockError(undefined);
         try {
-            const ok = await unlockServerSSH(selectedServerId, passphrase, applyToAll);
+            const ok = await unlockServerSSH(serverId, passphrase, applyToAll);
             if (ok) {
                 const {retry} = sshUnlock;
                 setSshUnlock(null);
@@ -489,13 +449,14 @@ export default function ServerDetail() {
     // ---- Interface handlers -------------------------------------------------
 
     const handleDeleteInterface = async () => {
-        if (!selectedServerId || !deleteInterfaceId) return;
+        if (!serverId || !deleteInterfaceId) return;
         setDeleteInterfaceLoading(true);
         try {
-            const ok = await deleteInterface(selectedServerId, deleteInterfaceId);
+            const ok = await deleteInterface(serverId, deleteInterfaceId);
             if (ok) {
                 toast.success(t('servers.interfaces.deleted'));
                 await loadInterfaces();
+                onChanged();
             } else {
                 toast.error(t('servers.interfaces.deleteError'));
             }
@@ -537,16 +498,17 @@ export default function ServerDetail() {
 
         const isAdd = interfaceModal?.mode === 'add';
         try {
-            if (isAdd && selectedServerId) {
-                await createInterface(selectedServerId, config);
+            if (isAdd && serverId) {
+                await createInterface(serverId, config);
             } else if (interfaceModal?.mode === 'edit' && interfaceModal.interfaceId) {
-                await updateInterfaceConfig(selectedServerId!, interfaceModal.interfaceId, config);
+                await updateInterfaceConfig(serverId!, interfaceModal.interfaceId, config);
             } else {
                 return;
             }
             toast.success(isAdd ? t('servers.interfaces.added') : t('servers.interfaces.updated'));
             setInterfaceModal(null);
             await loadInterfaces();
+            onChanged();
         } catch (err) {
             // Surface the specific backend reason (e.g. a name/port/subnet
             // conflict) instead of a generic failure.
@@ -558,139 +520,50 @@ export default function ServerDetail() {
     // ---- Render: not found --------------------------------------------------
 
     if (!server) {
-        return (
-            <div className="flex flex-col">
-                <PageHeader
-                    title={t('servers.title')}
-                    icon={ServerIcon}
-                    description={t('servers.noServers')}
-                    actions={
-                        <button onClick={goBack} className={buttons.primary} title={t('servers.backToServers')}>
-                            <ArrowLeft size={14}/>
-                        </button>
-                    }
-                />
-                <div className="p-8 text-center text-muted-foreground">{t('servers.noServers')}</div>
-            </div>
-        );
+        return <div className="p-8 text-center text-muted-foreground">{t('servers.noServers')}</div>;
     }
 
     // ---- Render: main -------------------------------------------------------
 
     return (
-        <div className="flex flex-col">
-            <PageHeader
-                title={server.name || t('servers.noName') || 'Unnamed Server'}
-                icon={ServerIcon}
-                description={server.id}
-                actions={
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setShowDeleteConfirm(true)}
-                            className={buttons.danger}
-                            title={t('servers.deleteServer')}
-                        >
-                            <Trash2 size={14}/>
-                        </button>
-                        <button
-                            onClick={() => setShowAgentModal(true)}
-                            className={cn(buttons.secondary, server.agent?.profilingEnabled && 'text-amber-600 dark:text-amber-400')}
-                            title={t('servers.agentModal.open')}
-                        >
-                            <Wrench size={14}/>
-                        </button>
-                        <button onClick={goBack} className={buttons.primary} title={t('servers.backToServers')}>
-                            <ArrowLeft size={14}/>
-                        </button>
-                    </div>
-                }
-            />
-
-            <div className="p-8 space-y-6">
+        <div>
+            <div className="space-y-6">
                 {/* Server information */}
-                <Container
-                    title={t('servers.information')}
-                    action={!isEditing && (
-                        <button onClick={() => setIsEditing(true)} className={buttons.primary}>
-                            <Settings size={14}/>
-                        </button>
-                    )}
-                >
-                    {isEditing ? (
-                        <form onSubmit={e => e.preventDefault()}>
-                            <ServerFormFields
-                                formData={formData}
-                                onChange={updateField}
-                                disabled={isLoading}
-                                showAuth
-                                authType={authType}
-                                onAuthTypeChange={setAuthType}
-                                serverId={server.id}
-                                hasStoredKey={Boolean(server.ssh.keyData)}
-                                hasTLSCertificates={!!server.agent.tls?.ca?.cert}
-                                onCertificatesGenerated={async () => {
-                                    toast.success(t('servers.certificatesGenerated'));
-                                    await refreshData();
-                                }}
-                            />
-                            <div className="flex gap-3 pt-6">
-                                <button type="button" onClick={handleSave} disabled={isLoading}
-                                        className={buttons.primary}>
-                                    {isLoading ? `${t('common.saving')}...` : t('common.save')}
-                                </button>
-                                <button type="button" onClick={handleCancel} disabled={isLoading}
-                                        className={buttons.secondary}>
-                                    {t('common.cancel')}
-                                </button>
-                            </div>
-                        </form>
-                    ) : (
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-3 text-sm">
-                                <div className="flex items-center gap-1 font-mono text-xs">
-                                    <span className="text-foreground font-semibold dark:text-zinc-100">
-                                        SSH: {server.ssh.host}:{server.ssh.port ?? 22}
-                                    </span>
-                                    <CopyButton value={`${server.ssh.host}:${server.ssh.port ?? 22}`}/>
-                                </div>
-                                <span className="text-muted-foreground dark:text-zinc-400">|</span>
-                                <div className="flex items-center gap-1 font-mono text-xs">
-                                    <span className="text-foreground font-semibold dark:text-zinc-100">
-                                        {t('servers.agentLabel')}: {server.agent.addr}
-                                    </span>
-                                    <CopyButton value={server.agent.addr}/>
-                                </div>
-                                {server.agent.tls && <span className="text-emerald-600 text-xs">🔒</span>}
-                            </div>
-
-                            {(server.info?.location || server.info?.description) && (
-                                <div className="text-xs text-muted-foreground dark:text-zinc-500 space-x-4">
-                                    {server.info.location && (
-                                        <span>
-                                            <span className="font-medium dark:text-zinc-400">{t('servers.location')}:</span>{' '}
-                                            <span className="text-foreground font-semibold dark:text-zinc-100">
-                                                {server.info.location}
-                                            </span>
-                                        </span>
-                                    )}
-                                    {server.info.location && server.info.description && (
-                                        <span className="mx-2">|</span>
-                                    )}
-                                    {server.info.description && (
-                                        <span>
-                                            <span className="font-medium dark:text-zinc-400">{t('common.description')}:</span>{' '}
-                                            <span className="text-foreground font-semibold dark:text-zinc-100">
-                                                {server.info.description}
-                                            </span>
-                                        </span>
-                                    )}
-                                </div>
-                            )}
+                {section === 'information' && (
+                <Container title={t('servers.information')}>
+                    <form onSubmit={e => e.preventDefault()}>
+                        <ServerFormFields
+                            formData={formData}
+                            onChange={updateField}
+                            disabled={isLoading}
+                            showAuth
+                            authType={authType}
+                            onAuthTypeChange={setAuthType}
+                            serverId={server.id}
+                            hasStoredKey={Boolean(server.ssh.keyData)}
+                            hasTLSCertificates={!!server.agent.tls?.ca?.cert}
+                            onCertificatesGenerated={async () => {
+                                toast.success(t('servers.certificatesGenerated'));
+                                await refreshData();
+                                onChanged();
+                            }}
+                        />
+                        <div className="flex gap-3 pt-6">
+                            <button type="button" onClick={handleSave} disabled={isLoading}
+                                    className={buttons.primary}>
+                                {isLoading ? `${t('common.saving')}...` : t('common.save')}
+                            </button>
+                            <button type="button" onClick={handleCancel} disabled={isLoading}
+                                    className={buttons.secondary}>
+                                {t('common.cancel')}
+                            </button>
                         </div>
-                    )}
+                    </form>
                 </Container>
+                )}
 
                 {/* Interfaces */}
+                {section !== 'information' && (
                 <div className="rounded-xl border border-border bg-card p-6 dark:border-white/5 dark:bg-white/3">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100 flex items-center gap-2">
@@ -835,6 +708,7 @@ export default function ServerDetail() {
                         </div>
                     )}
                 </div>
+                )}
             </div>
 
             {interfaceModal && (
@@ -857,15 +731,7 @@ export default function ServerDetail() {
                     initialInterface={importTarget}
                     unmanaged={unmanaged}
                     onClose={() => setImportTarget(null)}
-                    onImported={() => { void refreshData(); void loadInterfaces(); }}
-                />
-            )}
-
-            {showAgentModal && server && (
-                <AgentModal
-                    server={server}
-                    onClose={() => setShowAgentModal(false)}
-                    onChanged={loadInterfaces}
+                    onImported={() => { void refreshData(); void loadInterfaces(); onChanged(); }}
                 />
             )}
 
@@ -875,16 +741,6 @@ export default function ServerDetail() {
                     onClose={() => setSshUnlock(null)}
                     loading={unlockLoading}
                     error={unlockError}
-                />
-            )}
-
-            {showDeleteConfirm && (
-                <ConfirmModal
-                    title={t('servers.deleteServer')}
-                    message={t('servers.confirmDeleteServer')}
-                    onConfirm={handleDeleteServer}
-                    onCancel={() => setShowDeleteConfirm(false)}
-                    loading={deleteLoading}
                 />
             )}
 

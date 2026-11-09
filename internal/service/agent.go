@@ -30,6 +30,7 @@ import (
 
 	agentmodels "github.com/ks-tool/awg-admin/agent/models"
 	"github.com/ks-tool/awg-admin/internal/agentclient"
+	"github.com/ks-tool/awg-admin/internal/sshclient"
 	"github.com/ks-tool/awg-admin/models"
 
 	"github.com/google/uuid"
@@ -39,21 +40,22 @@ import (
 // agentclient.Client: a direct mTLS *http.Client when srv.Agent.TLS is
 // configured (the agent is reachable on its own, typically a public IP),
 // otherwise the SSH tunnel opened by StartTunnels/Manager.Open for that
-// server ID.
-func (s *Service) agentClientFor(srv *models.Server) (*agentclient.Client, error) {
+// server ID. The tunnel is returned so a failed request can reopen that exact
+// generation without replacing a newer healthy one.
+func (s *Service) agentClientFor(srv *models.Server) (*agentclient.Client, *sshclient.TunnelClient, error) {
 	if !srv.Agent.TLS.IsZero() {
 		httpClient, err := mtlsHTTPClient(srv.Agent.TLS)
 		if err != nil {
-			return nil, fmt.Errorf("build mTLS client: %w", err)
+			return nil, nil, fmt.Errorf("build mTLS client: %w", err)
 		}
-		return agentclient.New(httpClient, "https://"+srv.Agent.Address), nil
+		return agentclient.New(httpClient, "https://"+srv.Agent.Address), nil, nil
 	}
 
 	tunnel, err := s.tunnels.Ensure(srv.ID, srv.SSH, srv.Agent.Address)
 	if err != nil {
-		return nil, fmt.Errorf("no SSH tunnel open for server %s (agent unreachable): %w", srv.ID, err)
+		return nil, nil, fmt.Errorf("no SSH tunnel open for server %s (agent unreachable): %w", srv.ID, err)
 	}
-	return agentclient.New(tunnel.Client, "http://"+srv.Agent.Address), nil
+	return agentclient.New(tunnel.Client, "http://"+srv.Agent.Address), tunnel, nil
 }
 
 // callAgent runs an idempotent op against srv's agent, owning transport setup,
@@ -99,7 +101,7 @@ func (s *Service) callAgent(srv *models.Server, op func(context.Context, *agentc
 // profile a "cpu profiling already in use" error from the still-unwinding first
 // attempt). The hard drop signals (EOF/ErrClosed/channel-open) always retry.
 func (s *Service) callAgentTimeout(srv *models.Server, timeout time.Duration, retryOnTimeout bool, op func(context.Context, *agentclient.Client) error) error {
-	client, err := s.agentClientFor(srv)
+	client, tunnel, err := s.agentClientFor(srv)
 	if err != nil {
 		return err
 	}
@@ -111,13 +113,13 @@ func (s *Service) callAgentTimeout(srv *models.Server, timeout time.Duration, re
 	}
 
 	// The tunnel died (or hung until the deadline) underneath the request but
-	// Ensure didn't notice in time. Force a fresh one and try again; keep the
-	// original error if the reconnect itself fails so the caller sees the real
-	// failure.
-	if reopenErr := s.tunnels.Reopen(srv.ID, srv.SSH, srv.Agent.Address); reopenErr != nil {
+	// Ensure didn't notice in time. Reopen this generation unless another
+	// request has already installed a live replacement; keep the original error
+	// if the reconnect itself fails so the caller sees the real failure.
+	if reopenErr := s.tunnels.ReopenStale(srv.ID, tunnel, srv.SSH, srv.Agent.Address); reopenErr != nil {
 		return err
 	}
-	client, reErr := s.agentClientFor(srv)
+	client, _, reErr := s.agentClientFor(srv)
 	if reErr != nil {
 		return err
 	}

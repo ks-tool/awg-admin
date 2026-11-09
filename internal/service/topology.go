@@ -674,12 +674,37 @@ func (s *Service) CreateNetworkConnection(sourceID, targetID string) (*models.Ne
 			return nil, invalidInput("this connection already exists")
 		}
 	}
+	if connectionCreatesCycle(topology.Connections, source, target) {
+		return nil, invalidInput("this connection would create a cycle")
+	}
 	connection := models.NetworkConnection{ID: uuid.New(), SourceID: source, TargetID: target}
 	topology.Connections = append(topology.Connections, connection)
 	if err := s.store.Topology().Set(topology); err != nil {
 		return nil, err
 	}
 	return &connection, nil
+}
+
+func connectionCreatesCycle(connections []models.NetworkConnection, source, target uuid.UUID) bool {
+	next := make(map[uuid.UUID][]uuid.UUID, len(connections))
+	for _, connection := range connections {
+		next[connection.SourceID] = append(next[connection.SourceID], connection.TargetID)
+	}
+	visited := make(map[uuid.UUID]struct{}, len(next))
+	pending := []uuid.UUID{target}
+	for len(pending) > 0 {
+		current := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		if current == source {
+			return true
+		}
+		if _, seen := visited[current]; seen {
+			continue
+		}
+		visited[current] = struct{}{}
+		pending = append(pending, next[current]...)
+	}
+	return false
 }
 
 func (s *Service) DeleteNetworkConnection(id string) error {

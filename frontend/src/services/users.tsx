@@ -62,29 +62,6 @@ export async function listUsers(): Promise<User[] | null> {
 }
 
 /**
- * Get a single user by ID
- */
-export async function getUser(userId: string): Promise<User | null> {
-  const client = getClient();
-  
-  if (client) {
-    const { data, error } = await client.getUser(userId);
-    if (error) {
-      reportError(`fetch-user-${userId}`, `Failed to fetch user ${userId}`, error);
-      return null;
-    }
-    return data as unknown as User;
-  }
-
-  const { data, error } = await get<User>(`/users/${userId}`);
-  if (error) {
-    reportError(`fetch-user-${userId}`, `Failed to fetch user ${userId}`, error);
-    return null;
-  }
-  return data;
-}
-
-/**
  * Create a new user
  */
 export async function createUser(input: CreateUserInput): Promise<User | null> {

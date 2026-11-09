@@ -114,6 +114,9 @@ func TestTopologyServiceLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := svc.CreateNetworkConnection(target.ID.String(), source.ID.String()); err == nil {
+		t.Fatal("expected reverse connection to be rejected as a cycle")
+	}
 
 	service, err := svc.CreateVPNService(VPNServiceInput{
 		ServerID: source.ServerID.String(), InterfaceID: source.ID.String(), PluginID: "test-vpn", Name: "Entry VPN",
@@ -330,5 +333,30 @@ func TestTopologyProjectsExistingInventory(t *testing.T) {
 	}
 	if len(topology.Servers) != 0 || len(topology.Interfaces) != 0 {
 		t.Fatalf("deleted legacy inventory reappeared: %#v", topology)
+	}
+}
+
+func TestConnectionCreatesCycle(t *testing.T) {
+	a, b, c, d := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	connections := []models.NetworkConnection{
+		{SourceID: a, TargetID: b},
+		{SourceID: b, TargetID: c},
+	}
+	for _, test := range []struct {
+		name           string
+		source, target uuid.UUID
+		want           bool
+	}{
+		{name: "direct cycle", source: b, target: a, want: true},
+		{name: "indirect cycle", source: c, target: a, want: true},
+		{name: "new path", source: c, target: d, want: false},
+		{name: "incoming path", source: d, target: a, want: false},
+		{name: "shortcut", source: a, target: c, want: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := connectionCreatesCycle(connections, test.source, test.target); got != test.want {
+				t.Fatalf("connectionCreatesCycle() = %v, want %v", got, test.want)
+			}
+		})
 	}
 }

@@ -1,13 +1,13 @@
 export namespace models {
-
+	
 	export class CertKeyPair {
 	    cert: string;
 	    pk: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CertKeyPair(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.cert = source["cert"];
@@ -18,18 +18,18 @@ export namespace models {
 	    ca: CertKeyPair;
 	    server: CertKeyPair;
 	    client: CertKeyPair;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AgentTLS(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ca = this.convertValues(source["ca"], CertKeyPair);
 	        this.server = this.convertValues(source["server"], CertKeyPair);
 	        this.client = this.convertValues(source["client"], CertKeyPair);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -53,11 +53,11 @@ export namespace models {
 	    tls?: AgentTLS;
 	    monitoringDisabled?: boolean;
 	    profilingEnabled?: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Agent(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.addr = source["addr"];
@@ -65,7 +65,7 @@ export namespace models {
 	        this.monitoringDisabled = source["monitoringDisabled"];
 	        this.profilingEnabled = source["profilingEnabled"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -92,11 +92,11 @@ export namespace models {
 	    url: string;
 	    size: number;
 	    publishedAt: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AgentReleaseAsset(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -116,11 +116,11 @@ export namespace models {
 	    cacheLocally?: boolean;
 	    image?: string;
 	    userspace?: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AgentSource(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -132,17 +132,17 @@ export namespace models {
 	        this.userspace = source["userspace"];
 	    }
 	}
-
-
+	
+	
 	export class DeployStatus {
 	    step: string;
 	    done: boolean;
 	    error?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new DeployStatus(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.step = source["step"];
@@ -158,11 +158,11 @@ export namespace models {
 	    kernelModule: boolean;
 	    interfaceKinds: string[];
 	    arch: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new HostInfo(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.backend = source["backend"];
@@ -179,11 +179,11 @@ export namespace models {
 	    postUp?: string[];
 	    preDown?: string[];
 	    postDown?: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ImportPreviewHooks(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.preUp = source["preUp"];
@@ -199,11 +199,11 @@ export namespace models {
 	    endpoint?: string;
 	    keepalive: number;
 	    presharedKey: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ImportPreviewPeer(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -218,18 +218,18 @@ export namespace models {
 	    name: string;
 	    exists: boolean;
 	    peers: ImportPreviewPeer[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ImportPreviewUser(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.exists = source["exists"];
 	        this.peers = this.convertValues(source["peers"], ImportPreviewPeer);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -264,11 +264,11 @@ export namespace models {
 	    hooks: ImportPreviewHooks;
 	    generatedHooks: ImportPreviewHooks;
 	    warnings: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ImportPreview(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.interface = source["interface"];
@@ -287,7 +287,7 @@ export namespace models {
 	        this.generatedHooks = this.convertValues(source["generatedHooks"], ImportPreviewHooks);
 	        this.warnings = source["warnings"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -306,9 +306,9 @@ export namespace models {
 		    return a;
 		}
 	}
-
-
-
+	
+	
+	
 	export class InterfacePeer {
 	    key: number[];
 	    psk?: number[];
@@ -316,11 +316,11 @@ export namespace models {
 	    endpoint?: string;
 	    disabled?: boolean;
 	    keepalive: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InterfacePeer(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.key = source["key"];
@@ -368,11 +368,11 @@ export namespace models {
 	    // Go type: time
 	    lastSyncedAt?: any;
 	    tunnel?: number[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Interface(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -411,7 +411,7 @@ export namespace models {
 	        this.lastSyncedAt = this.convertValues(source["lastSyncedAt"], null);
 	        this.tunnel = source["tunnel"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -461,11 +461,11 @@ export namespace models {
 	    i3?: string;
 	    i4?: string;
 	    i5?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InterfaceConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.iface = source["iface"];
@@ -499,7 +499,7 @@ export namespace models {
 	        this.i4 = source["i4"];
 	        this.i5 = source["i5"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -525,11 +525,11 @@ export namespace models {
 	    tx: number;
 	    // Go type: time
 	    lastHandshake: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PeerHistoryPoint(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.timestamp = this.convertValues(source["timestamp"], null);
@@ -537,7 +537,7 @@ export namespace models {
 	        this.tx = source["tx"];
 	        this.lastHandshake = this.convertValues(source["lastHandshake"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -559,17 +559,17 @@ export namespace models {
 	export class PeerHistory {
 	    publicKey: string;
 	    points: PeerHistoryPoint[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PeerHistory(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.publicKey = source["publicKey"];
 	        this.points = this.convertValues(source["points"], PeerHistoryPoint);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -591,17 +591,17 @@ export namespace models {
 	export class InterfaceHistory {
 	    interface: string;
 	    peers: PeerHistory[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InterfaceHistory(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.interface = source["interface"];
 	        this.peers = this.convertValues(source["peers"], PeerHistory);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -620,18 +620,18 @@ export namespace models {
 		    return a;
 		}
 	}
-
+	
 	export class PeerSnapshot {
 	    publicKey: string;
 	    rx: number;
 	    tx: number;
 	    // Go type: time
 	    lastHandshake: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PeerSnapshot(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.publicKey = source["publicKey"];
@@ -639,7 +639,7 @@ export namespace models {
 	        this.tx = source["tx"];
 	        this.lastHandshake = this.convertValues(source["lastHandshake"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -661,17 +661,17 @@ export namespace models {
 	export class InterfaceSnapshot {
 	    interface: string;
 	    peers: PeerSnapshot[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InterfaceSnapshot(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.interface = source["interface"];
 	        this.peers = this.convertValues(source["peers"], PeerSnapshot);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -701,11 +701,11 @@ export namespace models {
 	    load15: number;
 	    netRxBytes: number;
 	    netTxBytes: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SystemSnapshot(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.timestamp = this.convertValues(source["timestamp"], null);
@@ -718,7 +718,7 @@ export namespace models {
 	        this.netRxBytes = source["netRxBytes"];
 	        this.netTxBytes = source["netTxBytes"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -740,17 +740,17 @@ export namespace models {
 	export class MetricsSnapshot {
 	    system: SystemSnapshot;
 	    interfaces: InterfaceSnapshot[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new MetricsSnapshot(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.system = this.convertValues(source["system"], SystemSnapshot);
 	        this.interfaces = this.convertValues(source["interfaces"], InterfaceSnapshot);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -773,11 +773,11 @@ export namespace models {
 	    id: number[];
 	    sourceId: number[];
 	    targetId: number[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new NetworkConnection(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -794,11 +794,11 @@ export namespace models {
 	    serviceId?: number[];
 	    x: number;
 	    y: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new NetworkInterface(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -815,11 +815,11 @@ export namespace models {
 	    id: number[];
 	    x: number;
 	    y: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new NodePosition(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -833,11 +833,11 @@ export namespace models {
 	    interface: number[];
 	    disabled?: boolean;
 	    dns?: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Peer(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -847,9 +847,9 @@ export namespace models {
 	        this.dns = source["dns"];
 	    }
 	}
-
-
-
+	
+	
+	
 	export class PluginDescriptor {
 	    id: string;
 	    name: string;
@@ -860,11 +860,11 @@ export namespace models {
 	    uiSchema?: Record<string, any>;
 	    available: boolean;
 	    error?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PluginDescriptor(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -881,11 +881,11 @@ export namespace models {
 	export class PluginUser {
 	    id: string;
 	    data: Record<string, any>;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PluginUser(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -899,11 +899,11 @@ export namespace models {
 	    key?: string;
 	    keyData?: string;
 	    password?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SSHConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
@@ -918,11 +918,11 @@ export namespace models {
 	    description?: string;
 	    location?: string;
 	    tags?: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServerInfo(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.description = source["description"];
@@ -937,11 +937,11 @@ export namespace models {
 	    ssh: SSHConfig;
 	    agent: Agent;
 	    interfaces?: number[][];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Server(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -951,7 +951,7 @@ export namespace models {
 	        this.agent = this.convertValues(source["agent"], Agent);
 	        this.interfaces = source["interfaces"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -970,7 +970,7 @@ export namespace models {
 		    return a;
 		}
 	}
-
+	
 	export class SystemHistoryPoint {
 	    // Go type: time
 	    timestamp: any;
@@ -979,11 +979,11 @@ export namespace models {
 	    memTotalBytes: number;
 	    netRxBytes: number;
 	    netTxBytes: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SystemHistoryPoint(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.timestamp = this.convertValues(source["timestamp"], null);
@@ -993,7 +993,7 @@ export namespace models {
 	        this.netRxBytes = source["netRxBytes"];
 	        this.netTxBytes = source["netTxBytes"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1015,17 +1015,17 @@ export namespace models {
 	export class SystemHistory {
 	    points: SystemHistoryPoint[];
 	    interfaces: InterfaceHistory[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SystemHistory(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.points = this.convertValues(source["points"], SystemHistoryPoint);
 	        this.interfaces = this.convertValues(source["interfaces"], InterfaceHistory);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1044,8 +1044,8 @@ export namespace models {
 		    return a;
 		}
 	}
-
-
+	
+	
 	export class VPNService {
 	    id: number[];
 	    serverId: number[];
@@ -1057,11 +1057,11 @@ export namespace models {
 	    statusMessage?: string;
 	    // Go type: time
 	    lastAppliedAt?: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new VPNService(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -1074,7 +1074,7 @@ export namespace models {
 	        this.statusMessage = source["statusMessage"];
 	        this.lastAppliedAt = this.convertValues(source["lastAppliedAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1106,11 +1106,11 @@ export namespace models {
 	    coordinatesManual?: boolean;
 	    x: number;
 	    y: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TopologyServer(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -1132,11 +1132,11 @@ export namespace models {
 	    interfaces: NetworkInterface[];
 	    services: VPNService[];
 	    connections: NetworkConnection[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Topology(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.servers = this.convertValues(source["servers"], TopologyServer);
@@ -1144,7 +1144,7 @@ export namespace models {
 	        this.services = this.convertValues(source["services"], VPNService);
 	        this.connections = this.convertValues(source["connections"], NetworkConnection);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1163,18 +1163,18 @@ export namespace models {
 		    return a;
 		}
 	}
-
+	
 	export class TunnelMember {
 	    serverId: number[];
 	    serverName: string;
 	    ifaceId: number[];
 	    interface: string;
 	    role: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TunnelMember(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.serverId = source["serverId"];
@@ -1187,17 +1187,17 @@ export namespace models {
 	export class Tunnel {
 	    id: number[];
 	    members: TunnelMember[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Tunnel(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.members = this.convertValues(source["members"], TunnelMember);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1216,15 +1216,15 @@ export namespace models {
 		    return a;
 		}
 	}
-
+	
 	export class TunnelStep {
 	    serverId: number[];
 	    ifaceId: number[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TunnelStep(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.serverId = source["serverId"];
@@ -1234,11 +1234,11 @@ export namespace models {
 	export class UnmanagedInterface {
 	    name: string;
 	    kind: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new UnmanagedInterface(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -1251,11 +1251,11 @@ export namespace models {
 	    description?: string;
 	    disabled?: boolean;
 	    peers?: Peer[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new User(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -1264,7 +1264,7 @@ export namespace models {
 	        this.disabled = source["disabled"];
 	        this.peers = this.convertValues(source["peers"], Peer);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1287,7 +1287,7 @@ export namespace models {
 }
 
 export namespace service {
-
+	
 	export class AddPeerInput {
 	    Name: string;
 	    InterfaceID: number[];
@@ -1298,11 +1298,11 @@ export namespace service {
 	    PresharedKey: string;
 	    WithPresharedKey: boolean;
 	    KeepaliveInterval: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AddPeerInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Name = source["Name"];
@@ -1319,11 +1319,11 @@ export namespace service {
 	export class NetworkInterfaceInput {
 	    name: string;
 	    address: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new NetworkInterfaceInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -1333,11 +1333,11 @@ export namespace service {
 	export class ProfileDump {
 	    filename: string;
 	    data: number[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProfileDump(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.filename = source["filename"];
@@ -1347,17 +1347,17 @@ export namespace service {
 	export class ReconcileReport {
 	    agentOnly: models.InterfaceConfig[];
 	    dbOnly: models.Interface[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ReconcileReport(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.agentOnly = this.convertValues(source["agentOnly"], models.InterfaceConfig);
 	        this.dbOnly = this.convertValues(source["dbOnly"], models.Interface);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1381,11 +1381,11 @@ export namespace service {
 	    Info: models.ServerInfo;
 	    SSH: models.SSHConfig;
 	    Agent: models.Agent;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServerInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Name = source["Name"];
@@ -1393,7 +1393,7 @@ export namespace service {
 	        this.SSH = this.convertValues(source["SSH"], models.SSHConfig);
 	        this.Agent = this.convertValues(source["Agent"], models.Agent);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1420,11 +1420,11 @@ export namespace service {
 	    latitude?: number;
 	    longitude?: number;
 	    interfaces: NetworkInterfaceInput[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TopologyServerInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -1435,7 +1435,7 @@ export namespace service {
 	        this.longitude = source["longitude"];
 	        this.interfaces = this.convertValues(source["interfaces"], NetworkInterfaceInput);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1458,11 +1458,11 @@ export namespace service {
 	    Name: string;
 	    Description: string;
 	    Disabled: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new UserInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Name = source["Name"];
@@ -1476,11 +1476,11 @@ export namespace service {
 	    pluginId: string;
 	    name: string;
 	    config: Record<string, any>;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new VPNServiceInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.serverId = source["serverId"];

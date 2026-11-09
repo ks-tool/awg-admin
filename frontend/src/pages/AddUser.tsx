@@ -18,17 +18,13 @@ import type {ChangeEvent, SubmitEvent} from 'react';
 import {useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {ArrowLeft, User as UserIcon} from 'lucide-react';
-import {PageHeader} from '@/components/layout/PageHeader';
-import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {FormField} from '@/components/common/FormField';
-import {buttons, inputs} from '@/components/common/Modal';
+import {buttons, inputs, Modal} from '@/components/common/Modal';
 import {cn} from '@/lib/utils';
 
-export default function AddUser() {
+export default function AddUser({onClose}: {onClose: () => void}) {
     const {t} = useTranslation();
-    const {navigate} = useNavigation();
     const {createUser} = useAppStore();
 
     const [isLoading, setIsLoading] = useState(false);
@@ -62,7 +58,7 @@ export default function AddUser() {
 
             if (newUser) {
                 toast.success(t('users.userCreated'));
-                navigate('users');
+                onClose();
             } else {
                 toast.error(t('users.createUserError'));
             }
@@ -74,62 +70,43 @@ export default function AddUser() {
         }
     };
 
-    const handleCancel = () => navigate('users');
-
     return (
-        <div className="flex flex-col">
-            <PageHeader
-                title={t('users.addUser')}
-                icon={UserIcon}
-                description={t('users.addUserDescription')}
-                actions={
-                    <button
-                        onClick={handleCancel}
-                        className={cn(buttons.secondary, "flex items-center gap-2")}
-                        title={t('users.backToUsers')}
-                    >
-                        <ArrowLeft size={14}/>
+        <Modal title={t('users.addUser')} onClose={onClose} loading={isLoading}>
+            <form onSubmit={handleSubmit} className="space-y-6">
+                <FormField label={t('common.name')}>
+                    <input
+                        type="text"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        placeholder={t('users.namePlaceholder')}
+                        disabled={isLoading}
+                        autoFocus
+                        className={inputs.primary}
+                    />
+                </FormField>
+
+                <FormField label={t('common.description')}>
+                    <textarea
+                        name="description"
+                        value={formData.description}
+                        onChange={handleInputChange}
+                        placeholder={t('common.descriptionPlaceholder')}
+                        rows={4}
+                        disabled={isLoading}
+                        className={cn(inputs.primary, 'resize-none')}
+                    />
+                </FormField>
+
+                <div className="flex gap-3 pt-4">
+                    <button type="submit" disabled={isLoading} className={buttons.primary}>
+                        {isLoading ? `${t('common.creating')}...` : t('common.create')}
                     </button>
-                }
-            />
-
-            <div className="p-8">
-                <div className="max-w-2xl">
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <FormField label={t('common.name')}>
-                            <input
-                                type="text"
-                                name="name"
-                                value={formData.name}
-                                onChange={handleInputChange}
-                                placeholder={t('users.namePlaceholder')}
-                                className={inputs.primary}
-                            />
-                        </FormField>
-
-                        <FormField label={t('common.description')}>
-                            <textarea
-                                name="description"
-                                value={formData.description}
-                                onChange={handleInputChange}
-                                placeholder={t('common.descriptionPlaceholder')}
-                                rows={4}
-                                className={cn(inputs.primary, "resize-none")}
-                            />
-                        </FormField>
-
-                        <div className="flex gap-3 pt-4">
-                            <button type="submit" disabled={isLoading} className={buttons.primary}>
-                                {isLoading ? `${t('common.creating')}...` : t('common.create')}
-                            </button>
-                            <button type="button" onClick={handleCancel} disabled={isLoading}
-                                    className={buttons.secondary}>
-                                {t('common.cancel')}
-                            </button>
-                        </div>
-                    </form>
+                    <button type="button" onClick={onClose} disabled={isLoading} className={buttons.secondary}>
+                        {t('common.cancel')}
+                    </button>
                 </div>
-            </div>
-        </div>
+            </form>
+        </Modal>
     );
 }
