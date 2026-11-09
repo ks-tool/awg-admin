@@ -1,0 +1,15 @@
+[Unit]
+Description=VPN Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/vpn-agent/vpn-agent.env
+ExecStart=/usr/local/bin/vpn-agent
+Restart=on-failure
+RestartSec=3
+StateDirectory=vpn-agent
+
+[Install]
+WantedBy=multi-user.target

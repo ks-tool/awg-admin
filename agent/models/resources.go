@@ -89,6 +89,11 @@ type ProviderDefinition struct {
 	Resources []ResourceDefinition `json:"resources"`
 }
 
+type ProviderRegistration struct {
+	Address  string             `json:"address"`
+	Provider ProviderDefinition `json:"provider"`
+}
+
 type PortDefinition struct {
 	Name        string   `json:"name"`
 	Title       string   `json:"title,omitempty"`

@@ -1,0 +1,15 @@
+[Unit]
+Description=Example External VPN Provider
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/example-provider/example-provider.env
+ExecStart=/usr/local/bin/example-provider
+Restart=on-failure
+RestartSec=3
+StateDirectory=example-provider
+
+[Install]
+WantedBy=multi-user.target

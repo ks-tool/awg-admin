@@ -40,6 +40,7 @@ import (
 	"github.com/ks-tool/vpn-admin/agent/internal/api"
 	"github.com/ks-tool/vpn-admin/agent/internal/metrics"
 	awgprovider "github.com/ks-tool/vpn-admin/agent/internal/provider/awg"
+	providerremote "github.com/ks-tool/vpn-admin/agent/internal/provider/remote"
 	"github.com/ks-tool/vpn-admin/agent/internal/resource"
 	"github.com/ks-tool/vpn-admin/agent/internal/service"
 	"github.com/ks-tool/vpn-admin/agent/mux/middleware"
@@ -153,6 +154,15 @@ func Run(version string) {
 	}
 	if err := resourceRuntime.Register(awgProvider); err != nil {
 		log.Fatal().Err(err).Msg("failed to register AWG provider")
+	}
+	remoteProviders, err := providerremote.Load(filepath.Join(cfg.DB, "providers.conf"), nil)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to load external providers")
+	}
+	for _, provider := range remoteProviders {
+		if err := resourceRuntime.Register(provider); err != nil {
+			log.Fatal().Err(err).Msg("failed to register external provider")
+		}
 	}
 	resourceRuntime.Start(context.Background())
 

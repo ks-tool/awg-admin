@@ -13,10 +13,11 @@
 # Release itself is still created on the real `agent/v1.2.3` tag (GoReleaser's
 # release target is the git ref, unaffected by the templating).
 #
-# Builds two Linux-only binaries and one Docker image:
+# Builds three Linux-only binaries and one Docker image:
 #   - vpn-agent: kernel/amneziawg-dkms backend (agent/cmd/vpn-agent.go).
 #   - vpn-agent-userspace: userspace/amneziawg-go backend
 #     (agent/cmd/vpn-agent-userspace.go).
+#   - example-provider: external provider protocol example (agent/cmd/example-provider).
 #   - {IMAGE_AGENT_USERSPACE}: the userspace agent's multi-arch image (linux
 #     amd64+arm64, GHCR), bundling amneziawg-go + iproute2/iptables
 #     (docker/Dockerfile.agent). The kernel agent is systemd-only, no image.
@@ -68,6 +69,23 @@ builds:
       # modal. AGENT_VERSION itself stays bare (1.2.3) for archive/image names.
       - -s -w -X main.version=v{{ .Env.AGENT_VERSION }}
 
+  - id: example-provider
+    dir: agent
+    main: ./cmd/example-provider
+    binary: example-provider
+    env:
+      - CGO_ENABLED=0
+      - GOEXPERIMENT=jsonv2
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version=v{{ .Env.AGENT_VERSION }}
+
 # Publish the agents as RAW binaries (formats: [binary]), not tar.gz archives:
 # the admin deploys an agent by downloading its release-asset URL directly
 # (systemd deploy → curl/wget the binary), so the URL must point at a runnable
@@ -83,6 +101,12 @@ archives:
     ids: [agent-userspace]
     name_template: >-
       vpn-agent-userspace_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
+    formats: [binary]
+
+  - id: example-provider-archive
+    ids: [example-provider]
+    name_template: >-
+      example-provider_{{ .Env.AGENT_VERSION }}_{{ .Os }}_{{ .Arch }}
     formats: [binary]
 
 # Multi-arch userspace-agent image from the prebuilt binary; the Dockerfile

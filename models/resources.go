@@ -48,6 +48,7 @@ type Condition = agentmodels.Condition
 type ConditionStatus = agentmodels.ConditionStatus
 type Manifest = agentmodels.Manifest
 type ProviderDefinition = agentmodels.ProviderDefinition
+type ProviderRegistration = agentmodels.ProviderRegistration
 type PortDefinition = agentmodels.PortDefinition
 type ActionDefinition = agentmodels.ActionDefinition
 type ActionResultType = agentmodels.ActionResultType
