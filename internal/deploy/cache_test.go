@@ -33,6 +33,8 @@ import (
 // UploadFile/DownloadFile) talks to an actual SSH server and has no cheap
 // fake to substitute, so it's verified manually instead (see TODO.md).
 func TestFetchCached(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
 	var requests int
 	body := []byte("fake-binary-content")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

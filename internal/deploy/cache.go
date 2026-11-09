@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ks-tool/vpn-admin/internal/config"
 	"github.com/ks-tool/vpn-admin/models"
 
 	"github.com/google/uuid"
@@ -33,16 +34,14 @@ import (
 // binaries in for AgentSource presets with CacheLocally set, creating it
 // (and its parents) if missing.
 //
-// This is a *sibling* of "$HOME/.vpn-admin", not a child of it —
-// "$HOME/.vpn-admin" is the boltdb file itself (see storage/boltdb.Open),
-// a plain file, not a directory, so anything under it would fail to
-// create with ENOTDIR.
+// The database lives at "$HOME/.vpn-admin/db"; downloaded binaries use the
+// shared cache directory.
 func cacheDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".vpn-admin-cache", "agent-binaries")
+	dir := filepath.Join(config.AdminCachePath(home), "agent-binaries")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create agent binary cache dir: %w", err)
 	}

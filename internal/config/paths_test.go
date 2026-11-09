@@ -31,12 +31,36 @@ func TestExistingDatabaseIsUsedWithoutMovingIt(t *testing.T) {
 	if got := AdminDatabasePath(home); got != legacy {
 		t.Fatalf("legacy database was not selected: %q", got)
 	}
-	current := filepath.Join(home, ".vpn-admin")
+	root := filepath.Join(home, ".vpn-admin")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	current := filepath.Join(root, "db")
 	if err := os.WriteFile(current, []byte("current"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if got := AdminDatabasePath(home); got != current {
 		t.Fatalf("current database did not take precedence: %q", got)
+	}
+}
+
+func TestCurrentDataLayout(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, ".vpn-admin")
+	if got := AdminDatabasePath(home); got != filepath.Join(root, "db") {
+		t.Fatalf("unexpected database path: %q", got)
+	}
+	if info, err := os.Stat(root); err != nil || !info.IsDir() {
+		t.Fatalf("database directory was not created: %v", err)
+	}
+	if got := AdminAutocertPath(home); got != filepath.Join(root, "pki") {
+		t.Fatalf("unexpected PKI path: %q", got)
+	}
+	if got := AdminPluginsPath(home); got != filepath.Join(root, "plugins") {
+		t.Fatalf("unexpected plugins path: %q", got)
+	}
+	if got := AdminCachePath(home); got != filepath.Join(root, "cache") {
+		t.Fatalf("unexpected cache path: %q", got)
 	}
 }
 

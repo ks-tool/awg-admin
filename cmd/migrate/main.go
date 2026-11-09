@@ -28,7 +28,7 @@ import (
 )
 
 // awg-migrate moves vpn-admin's data between two boltdb files — typically
-// the ~/.vpn-admin used by the Wails desktop app on one machine and the one
+// the ~/.vpn-admin/db used by the Wails desktop app on one machine and the one
 // used by the standalone web server (cmd/vpn-admin.go) on another. Both
 // already share the exact same file format (same boltdb buckets, same JSON
 // value encoding — see storage/boltdb), so this tool doesn't need to know
@@ -43,8 +43,8 @@ import (
 //
 // Usage:
 //
-//	awg-migrate export -db ~/.vpn-admin -out dump.json
-//	awg-migrate import -db ~/.vpn-admin -in dump.json [-force]
+//	awg-migrate export -db ~/.vpn-admin/db -out dump.json
+//	awg-migrate import -db ~/.vpn-admin/db -in dump.json [-force]
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -77,7 +77,7 @@ Usage:
 
 Flags:
   -db     path to the boltdb file (the desktop app and standalone server
-          both default to ~/.vpn-admin)
+          both default to ~/.vpn-admin/db)
   -out    (export) path to write the JSON dump to
   -in     (import) path to read the JSON dump from
   -force  (import) overwrite keys that already exist in the destination

@@ -77,7 +77,7 @@ The source code is located in the `frontend/` directory.
 
 ### Data storage
 
-All infrastructure metadata is stored locally in a BoltDB database (`~/.vpn-admin`).
+All infrastructure metadata is stored locally in a BoltDB database (`~/.vpn-admin/db`).
 
 The database contains information about managed servers, SSH credentials, users, VPN peers, and their relationships. It
 serves as the single source of truth for the administrative application.

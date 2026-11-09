@@ -28,12 +28,14 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/ks-tool/vpn-admin/internal/config"
+
 	"github.com/rs/zerolog/log"
 )
 
 const (
 	datacenterAtlasURL       = "https://kiankyars.github.io/datacenter-atlas/api/v1/sites.json"
-	datacenterAtlasCacheName = ".vpn-admin-datacenter-atlas.json"
+	datacenterAtlasCacheName = "datacenter-atlas.json"
 	datacenterAtlasCacheTTL  = 24 * time.Hour
 )
 
@@ -57,7 +59,7 @@ type datacenterAtlas struct {
 func defaultLocationGeocoder() locationGeocoder {
 	cachePath := ""
 	if home, err := os.UserHomeDir(); err == nil {
-		cachePath = filepath.Join(home, datacenterAtlasCacheName)
+		cachePath = filepath.Join(config.AdminCachePath(home), datacenterAtlasCacheName)
 	}
 	return &datacenterAtlas{
 		endpoint:  datacenterAtlasURL,

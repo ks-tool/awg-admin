@@ -52,9 +52,7 @@ var version = "dev"
 //     HTTPS with a certificate obtained automatically from Let's Encrypt
 //     (golang.org/x/crypto/acme/autocert). VPN_ADMIN_AUTOCERT_CACHE_DIR
 //     selects where issued certificates are cached (default
-//     "$HOME/.vpn-admin-autocert" — a sibling of "$HOME/.vpn-admin", not a
-//     child of it: that path is the boltdb file itself, a plain file, not
-//     a directory). Requires port 80 to be reachable for the HTTP-01
+//     "$HOME/.vpn-admin/pki"). Requires port 80 to be reachable for the HTTP-01
 //     challenge.
 //
 // The two are mutually exclusive; when neither is set, the server falls

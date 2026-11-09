@@ -29,15 +29,29 @@ func Env(name string) string {
 }
 
 func AdminDatabasePath(home string) string {
-	return existingPath(home, ".vpn-admin", ".awg-admin")
+	root := filepath.Join(home, ".vpn-admin")
+	current := filepath.Join(root, "db")
+	if _, err := os.Stat(current); err == nil {
+		return current
+	}
+	legacy := filepath.Join(home, ".awg-admin")
+	if _, err := os.Stat(legacy); err == nil {
+		return legacy
+	}
+	_ = os.MkdirAll(root, 0700)
+	return current
 }
 
 func AdminAutocertPath(home string) string {
-	return existingPath(home, ".vpn-admin-autocert", ".awg-admin-autocert")
+	return existingPath(home, filepath.Join(".vpn-admin", "pki"), ".awg-admin-autocert")
 }
 
 func AdminPluginsPath(home string) string {
-	return existingPath(home, ".vpn-admin-plugins", ".awg-admin-plugins")
+	return existingPath(home, filepath.Join(".vpn-admin", "plugins"), ".awg-admin-plugins")
+}
+
+func AdminCachePath(home string) string {
+	return filepath.Join(home, ".vpn-admin", "cache")
 }
 
 func existingPath(home, current, legacy string) string {

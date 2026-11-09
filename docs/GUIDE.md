@@ -113,18 +113,19 @@ The standalone server is configured through environment variables.
 | `VPN_ADMIN_ADDR`                           | HTTP listen address. Defaults to `:8080`.                                                                                                                                           |
 | `VPN_ADMIN_TLS_CERT` / `VPN_ADMIN_TLS_KEY` | TLS certificate and private key used for HTTPS.                                                                                                                                     |
 | `VPN_ADMIN_AUTOCERT_DOMAINS`               | Comma-separated list of domains for automatic Let's Encrypt certificate provisioning. Cannot be used together with a static certificate. Requires port 80 to be publicly reachable. |
-| `VPN_ADMIN_AUTOCERT_CACHE_DIR`             | Directory used to store automatically issued certificates. Defaults to `$HOME/.vpn-admin-autocert`.                                                                                 |
+| `VPN_ADMIN_AUTOCERT_CACHE_DIR`             | Directory used to store automatically issued certificates. Defaults to `$HOME/.vpn-admin/pki`.                                                                                 |
 
 ### Data directories
 
 The standalone server stores all runtime data under the user's home directory. By default, the following locations are
 used:
 
-| Path                        | Purpose                                                     |
-|-----------------------------|-------------------------------------------------------------|
-| `$HOME/.vpn-admin`          | BoltDB database containing the infrastructure configuration |
-| `$HOME/.vpn-admin-autocert` | Cache of automatically issued TLS certificates              |
-| `$HOME/.vpn-admin-cache`    | Cache of downloaded agent binaries                          |
+| Path                     | Purpose                                                     |
+|--------------------------|-------------------------------------------------------------|
+| `$HOME/.vpn-admin/db`      | BoltDB database containing the infrastructure configuration |
+| `$HOME/.vpn-admin/pki`     | Cache of automatically issued TLS certificates              |
+| `$HOME/.vpn-admin/plugins` | External VPN provider plugins                               |
+| `$HOME/.vpn-admin/cache`   | Cache of downloaded agent binaries                          |
 
 Inside the official Docker image, `$HOME` is mapped to `/data`. This directory is intended to be mounted as a persistent
 Docker volume.
@@ -654,7 +655,7 @@ surface to protect.
 
 ## Backup, restore and migration
 
-The entire administrative state resides in a single BoltDB file (`~/.vpn-admin`). Two tools operate on it, sharing the
+The entire administrative state resides in a single BoltDB file (`~/.vpn-admin/db`). Two tools operate on it, sharing the
 same portable JSON dump format:
 
 - **In-application Backup** (Settings → Backup) — a one-step export of the current state to a JSON file.
@@ -662,8 +663,8 @@ same portable JSON dump format:
   standalone modes (both read the same file format):
 
   ```sh
-  awg-migrate export -db ~/.vpn-admin -out dump.json   # on the source installation
-  awg-migrate import -db ~/.vpn-admin -in dump.json    # into the target installation
+  awg-migrate export -db ~/.vpn-admin/db -out dump.json   # on the source installation
+  awg-migrate import -db ~/.vpn-admin/db -in dump.json    # into the target installation
   ```
 
 The exported document contains the complete administrative configuration — managed servers, SSH credentials, users, VPN
@@ -675,10 +676,10 @@ A file saved by the in-application **Backup** is a valid `awg-migrate` dump. To 
 
 ## Data and secret locations
 
-- **Administrative database** — `~/.vpn-admin` (BoltDB). It contains everything: servers, SSH credentials and keys,
+- **Administrative database** — `~/.vpn-admin/db` (BoltDB). It contains everything: servers, SSH credentials and keys,
   users, peers, interface configurations, and the standalone admin account. This is the one item that must be backed up.
-- **Autocert cache** (standalone HTTPS) — `~/.vpn-admin-autocert`.
-- **Agent-binary cache** (deploy presets) — `~/.vpn-admin-cache`.
+- **Autocert cache** (standalone HTTPS) — `~/.vpn-admin/pki`.
+- **Agent-binary cache** (deploy presets) — `~/.vpn-admin/cache`.
 - **Agent, per server** — stores only the interface configurations pushed to it (`VPN_AGENT_DB`, default
   `/var/lib/vpn-agent`) together with its metrics-history checkpoint. It holds no administrative secrets beyond the
   interface and peer keys required to run WireGuard.
