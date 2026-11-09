@@ -33,6 +33,9 @@ type Storage interface {
 	Auth() Auth
 	AgentSources() AgentSources
 	Topology() Topology
+	Resources(serverID uuid.UUID) Resources
+	Links() Links
+	Providers() Providers
 	// Backup writes a consistent, restorable snapshot of the entire store to
 	// w (see storage/boltdb/dump — the same format as the awg-migrate CLI).
 	Backup(w io.Writer) error

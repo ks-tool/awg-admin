@@ -58,3 +58,8 @@ type LinkEndpoint = agentmodels.LinkEndpoint
 type LinkStatus = agentmodels.LinkStatus
 type LinkPhase = agentmodels.LinkPhase
 type LinkOffer = agentmodels.LinkOffer
+
+type ProviderRecord struct {
+	ServerID   string             `json:"serverId"`
+	Definition ProviderDefinition `json:"definition"`
+}

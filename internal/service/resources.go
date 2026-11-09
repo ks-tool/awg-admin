@@ -105,13 +105,57 @@ func (s *Service) GetProviderSchema(serverID, providerName string) (*models.Prov
 }
 
 func (s *Service) ListProviderResources(serverID, provider string) ([]models.Resource, error) {
+	definition, err := s.GetProviderSchema(serverID, provider)
+	if err != nil {
+		return nil, err
+	}
+	supported := make(map[string]string)
+	for _, item := range definition.Resources {
+		supported[item.Kind] = item.APIVersion
+	}
 	var resources []models.Resource
-	err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
+	if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
 		var err error
 		resources, err = client.ListResources(ctx, provider)
 		return err
-	})
-	return resources, err
+	}); err != nil {
+		return nil, err
+	}
+	result := append([]models.Resource(nil), resources...)
+	remote := make(map[string]struct{}, len(resources))
+	for _, item := range resources {
+		remote[item.Kind+"\x00"+item.Name] = struct{}{}
+		if err := s.saveProviderResource(serverID, item); err != nil {
+			return nil, err
+		}
+	}
+	local, err := s.localProviderResources(serverID)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range local {
+		apiVersion, ok := supported[item.Kind]
+		if !ok {
+			continue
+		}
+		if _, exists := remote[item.Kind+"\x00"+item.Name]; exists {
+			continue
+		}
+		item.APIVersion = apiVersion
+		var created *models.Resource
+		if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
+			var err error
+			created, err = client.PutResource(ctx, provider, item.Kind, item.Name, item)
+			return err
+		}); err != nil {
+			return nil, err
+		}
+		if err := s.saveProviderResource(serverID, *created); err != nil {
+			return nil, err
+		}
+		result = append(result, *created)
+	}
+	return result, nil
 }
 
 func (s *Service) PutProviderResource(serverID, provider, kind, name string, spec json.RawMessage) (*models.Resource, error) {
@@ -150,13 +194,46 @@ func (s *Service) PutProviderResource(serverID, provider, kind, name string, spe
 		result, err = client.PutResource(ctx, provider, kind, name, desired)
 		return err
 	})
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	return result, s.saveProviderResource(serverID, *result)
 }
 
 func (s *Service) DeleteProviderResource(serverID, provider, kind, name string) error {
-	return s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
+	if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
 		return client.DeleteResource(ctx, provider, kind, name)
-	})
+	}); err != nil {
+		return err
+	}
+	local, err := s.localProviderResources(serverID)
+	if err != nil {
+		return err
+	}
+	for _, item := range local {
+		if item.Kind == kind && item.Name == name {
+			id, _ := uuid.Parse(serverID)
+			return s.store.Resources(id).Delete(item.ID)
+		}
+	}
+	return nil
+}
+
+func (s *Service) localProviderResources(serverID string) ([]models.Resource, error) {
+	id, err := uuid.Parse(serverID)
+	if err != nil {
+		return nil, invalidInput("invalid server id")
+	}
+	return s.store.Resources(id).List()
+}
+
+func (s *Service) saveProviderResource(serverID string, resource models.Resource) error {
+	id, err := uuid.Parse(serverID)
+	if err != nil {
+		return invalidInput("invalid server id")
+	}
+	resource.ServerID = serverID
+	return s.store.Resources(id).Set(&resource)
 }
 
 func (s *Service) GetProviderResourceStatus(serverID, provider, kind, name string) (*models.ResourceStatus, error) {
