@@ -10,11 +10,11 @@ export namespace models {
 	    timeoutSeconds?: number;
 	    mutating?: boolean;
 	    requiresConfirmation?: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ActionDefinition(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -34,11 +34,11 @@ export namespace models {
 	    fileName?: string;
 	    mediaType?: string;
 	    taskId?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ActionResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.type = source["type"];
@@ -190,11 +190,11 @@ export namespace models {
 	    observedGeneration?: number;
 	    // Go type: time
 	    lastTransitionTime?: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Condition(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.type = source["type"];
@@ -204,7 +204,7 @@ export namespace models {
 	        this.observedGeneration = source["observedGeneration"];
 	        this.lastTransitionTime = this.convertValues(source["lastTransitionTime"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -783,18 +783,18 @@ export namespace models {
 	    observedGeneration: number;
 	    phase: string;
 	    conditions?: Condition[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new LinkStatus(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.observedGeneration = source["observedGeneration"];
 	        this.phase = source["phase"];
 	        this.conditions = this.convertValues(source["conditions"], Condition);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -821,11 +821,11 @@ export namespace models {
 	    name: string;
 	    port: string;
 	    address?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new LinkEndpoint(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.serverId = source["serverId"];
@@ -846,11 +846,11 @@ export namespace models {
 	    target: LinkEndpoint;
 	    spec?: number[];
 	    status: LinkStatus;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Link(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -862,7 +862,7 @@ export namespace models {
 	        this.spec = source["spec"];
 	        this.status = this.convertValues(source["status"], LinkStatus);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -881,19 +881,19 @@ export namespace models {
 		    return a;
 		}
 	}
-
-
+	
+	
 	export class PortDefinition {
 	    name: string;
 	    title?: string;
 	    direction?: string;
 	    linkKinds?: string[];
 	    remotePorts?: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PortDefinition(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -911,11 +911,11 @@ export namespace models {
 	    schemaHash: string;
 	    ports?: PortDefinition[];
 	    actions?: ActionDefinition[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ResourceDefinition(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiVersion = source["apiVersion"];
@@ -926,7 +926,7 @@ export namespace models {
 	        this.ports = this.convertValues(source["ports"], PortDefinition);
 	        this.actions = this.convertValues(source["actions"], ActionDefinition);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -949,18 +949,18 @@ export namespace models {
 	    name: string;
 	    version: string;
 	    resources: ResourceDefinition[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProviderDefinition(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.version = source["version"];
 	        this.resources = this.convertValues(source["resources"], ResourceDefinition);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -983,18 +983,18 @@ export namespace models {
 	    protocolVersion: string;
 	    agentId: string;
 	    providers: ProviderDefinition[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Manifest(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.protocolVersion = source["protocolVersion"];
 	        this.agentId = source["agentId"];
 	        this.providers = this.convertValues(source["providers"], ProviderDefinition);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1215,18 +1215,18 @@ export namespace models {
 	        this.data = source["data"];
 	    }
 	}
-
-
+	
+	
 	export class ResourceStatus {
 	    observedGeneration: number;
 	    phase: string;
 	    conditions?: Condition[];
 	    provider?: number[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ResourceStatus(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.observedGeneration = source["observedGeneration"];
@@ -1234,7 +1234,7 @@ export namespace models {
 	        this.conditions = this.convertValues(source["conditions"], Condition);
 	        this.provider = source["provider"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1262,11 +1262,11 @@ export namespace models {
 	    generation: number;
 	    spec: number[];
 	    status: ResourceStatus;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Resource(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -1278,7 +1278,7 @@ export namespace models {
 	        this.spec = source["spec"];
 	        this.status = this.convertValues(source["status"], ResourceStatus);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1297,8 +1297,8 @@ export namespace models {
 		    return a;
 		}
 	}
-
-
+	
+	
 	export class SSHConfig {
 	    host: string;
 	    port?: number;
@@ -1344,6 +1344,7 @@ export namespace models {
 	    ssh: SSHConfig;
 	    agent: Agent;
 	    interfaces?: number[][];
+	    unmanaged?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Server(source);
@@ -1357,6 +1358,7 @@ export namespace models {
 	        this.ssh = this.convertValues(source["ssh"], SSHConfig);
 	        this.agent = this.convertValues(source["agent"], Agent);
 	        this.interfaces = source["interfaces"];
+	        this.unmanaged = source["unmanaged"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

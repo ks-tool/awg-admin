@@ -22,7 +22,7 @@ v2 destination: ~/.vpn-admin/db
 - The destination is written to a temporary file in the destination directory.
 - The temporary file is atomically renamed only after the entire migration succeeds.
 - A failed migration removes the temporary file and leaves the source and any existing destination untouched.
-- An existing destination is never replaced without the explicit `-force` flag.
+- An existing destination is never replaced without the explicit `--force` flag.
 - Source and destination must be different files.
 
 The database contains sensitive material, including SSH credentials, agent mTLS private keys and VPN peer keys. Database files are created with mode `0600`; protect them and any exported backups accordingly.
@@ -35,7 +35,7 @@ Agent certificates and private keys remain stored in BoltDB. `~/.vpn-admin/acme`
 2. Optionally create an additional backup using the v1 Backup function or:
 
    ```sh
-   awg-migrate export -db ~/.awg-admin -out v1-backup.json
+   awg-migrate export --db ~/.awg-admin --out v1-backup.json
    ```
 
 3. Make sure the destination filesystem has enough free space for a complete copy of the database.
@@ -60,7 +60,7 @@ awg-migrate v2
 Or specify both files explicitly:
 
 ```sh
-awg-migrate v2 -db ~/.awg-admin -out ~/.vpn-admin/db
+awg-migrate v2 --db ~/.awg-admin --out ~/.vpn-admin/db
 ```
 
 Successful output has the form:
@@ -69,13 +69,29 @@ Successful output has the form:
 migrated v1 /home/user/.awg-admin -> v2 /home/user/.vpn-admin/db; source was not modified
 ```
 
-To replace an existing v2 destination atomically, add `-force`:
+To replace an existing v2 destination atomically, add `--force`:
 
 ```sh
-awg-migrate v2 -db ~/.awg-admin -out ~/.vpn-admin/db -force
+awg-migrate v2 --db ~/.awg-admin --out ~/.vpn-admin/db --force
 ```
 
-Use `-force` only when replacing the destination is intentional. It does not modify the v1 source.
+Use `--force` only when replacing the destination is intentional. It does not modify the v1 source.
+
+### If the source is already v2
+
+A database that already has the `resources` and `links` buckets is a v2 database even when it is still named
+`~/.awg-admin`. Do not migrate it again. Stop vpn-admin and copy it to the expected destination without creating a
+JSON dump containing secrets:
+
+```sh
+mkdir -p ~/.vpn-admin
+chmod 700 ~/.vpn-admin
+cp ~/.awg-admin ~/.vpn-admin/db
+chmod 600 ~/.vpn-admin/db
+```
+
+If `~/.vpn-admin/db` already exists, back it up before intentionally replacing it. The migrator reports
+`source is already a v2 database` for this case and creates no destination file.
 
 ### What is converted
 
@@ -142,7 +158,7 @@ Do not point v1 at the migrated v2 database. Changes made only in v2 are not wri
 - Целевая БД записывается во временный файл в каталоге назначения.
 - Временный файл атомарно переименовывается только после полного успеха миграции.
 - При ошибке временный файл удаляется, а источник и существующая целевая БД не изменяются.
-- Существующая целевая БД не перезаписывается без явно указанного флага `-force`.
+- Существующая целевая БД не перезаписывается без явно указанного флага `--force`.
 - Источник и назначение должны быть разными файлами.
 
 БД содержит секреты: SSH-учётные данные, приватные ключи mTLS агентов и ключи VPN-пиров. Файлы БД создаются с режимом `0600`; защищайте их и экспортированные резервные копии.
@@ -155,7 +171,7 @@ Do not point v1 at the migrated v2 database. Changes made only in v2 are not wri
 2. Дополнительно можно создать резервную копию через Backup в v1 или командой:
 
    ```sh
-   awg-migrate export -db ~/.awg-admin -out v1-backup.json
+   awg-migrate export --db ~/.awg-admin --out v1-backup.json
    ```
 
 3. Убедитесь, что в целевой файловой системе достаточно места для полной копии БД.
@@ -180,7 +196,7 @@ awg-migrate v2
 Или укажите оба файла явно:
 
 ```sh
-awg-migrate v2 -db ~/.awg-admin -out ~/.vpn-admin/db
+awg-migrate v2 --db ~/.awg-admin --out ~/.vpn-admin/db
 ```
 
 Пример успешного вывода:
@@ -189,13 +205,29 @@ awg-migrate v2 -db ~/.awg-admin -out ~/.vpn-admin/db
 migrated v1 /home/user/.awg-admin -> v2 /home/user/.vpn-admin/db; source was not modified
 ```
 
-Для атомарной замены существующей целевой БД v2 добавьте `-force`:
+Для атомарной замены существующей целевой БД v2 добавьте `--force`:
 
 ```sh
-awg-migrate v2 -db ~/.awg-admin -out ~/.vpn-admin/db -force
+awg-migrate v2 --db ~/.awg-admin --out ~/.vpn-admin/db --force
 ```
 
-Используйте `-force` только при необходимости заменить целевую БД. Этот флаг не изменяет источник v1.
+Используйте `--force` только при необходимости заменить целевую БД. Этот флаг не изменяет источник v1.
+
+### Если источник уже имеет схему v2
+
+БД, в которой уже существуют buckets `resources` и `links`, является БД v2, даже если файл всё ещё называется
+`~/.awg-admin`. Повторная миграция не нужна. Остановите vpn-admin и скопируйте файл в ожидаемый путь, не создавая
+JSON-дамп с секретами:
+
+```sh
+mkdir -p ~/.vpn-admin
+chmod 700 ~/.vpn-admin
+cp ~/.awg-admin ~/.vpn-admin/db
+chmod 600 ~/.vpn-admin/db
+```
+
+Если `~/.vpn-admin/db` уже существует, создайте его резервную копию перед намеренной заменой. В таком случае мигратор
+сообщает `source is already a v2 database` и не создаёт целевой файл.
 
 ### Что преобразуется
 

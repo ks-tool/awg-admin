@@ -153,6 +153,43 @@ func TestManualMigrationPreservesSourceAndMarksServersUnmanaged(t *testing.T) {
 	}
 }
 
+func TestLegacyDatabaseWithSchemaVersionTwoMigrates(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "legacy.db")
+	destination := filepath.Join(root, "v2.db")
+	createLegacyFixture(t, source, false)
+	raw, err := bolt.Open(source, 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := raw.Update(func(tx *bolt.Tx) error {
+		if _, err := tx.CreateBucketIfNotExists(bktMeta); err != nil {
+			return err
+		}
+		return tx.Bucket(bktMeta).Put(schemaVersionKey, []byte("2"))
+	}); err != nil {
+		_ = raw.Close()
+		t.Fatal(err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(source); err == nil {
+		t.Fatal("legacy database with schemaVersion=2 was opened without migration")
+	}
+	if err := MigrateV2(source, destination, false); err != nil {
+		t.Fatalf("MigrateV2 with legacy schemaVersion=2: %v", err)
+	}
+	db, err := Open(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if version, err := db.SchemaVersion(); err != nil || version != currentSchemaVersion {
+		t.Fatalf("SchemaVersion = %d, %v", version, err)
+	}
+}
+
 func TestV1DatabaseRequiresManualMigration(t *testing.T) {
 	source := filepath.Join(t.TempDir(), "legacy.db")
 	createLegacyFixture(t, source, false)
@@ -219,6 +256,25 @@ func TestMigrationDoesNotReplaceDestinationWithoutForce(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
+}
+
+func TestMigrationRejectsCurrentV2Database(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "v2.db")
+	destination := filepath.Join(root, "copy.db")
+	db, err := Open(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateV2(source, destination, false); err == nil || !strings.Contains(err.Error(), "already a v2 database") {
+		t.Fatalf("current v2 database was not identified: %v", err)
+	}
+	if _, err := os.Stat(destination); !os.IsNotExist(err) {
+		t.Fatalf("destination was created for an already migrated source: %v", err)
+	}
 }
 
 func TestNewDatabaseStartsAtCurrentSchema(t *testing.T) {

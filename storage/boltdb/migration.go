@@ -45,7 +45,7 @@ var (
 )
 
 func (db *BoltDB) initialize(path string) error {
-	version, legacy, err := readSchemaVersion(db.db)
+	version, legacy, _, err := readSchemaVersion(db.db)
 	if err != nil {
 		return err
 	}
@@ -58,9 +58,10 @@ func (db *BoltDB) initialize(path string) error {
 	return db.db.Update(initializeSchema)
 }
 
-func readSchemaVersion(db *bolt.DB) (int, bool, error) {
+func readSchemaVersion(db *bolt.DB) (int, bool, bool, error) {
 	version := 0
 	legacy := false
+	current := false
 	err := db.View(func(tx *bolt.Tx) error {
 		meta := tx.Bucket(bktMeta)
 		if meta != nil && meta.Get(schemaVersionKey) != nil {
@@ -70,10 +71,11 @@ func readSchemaVersion(db *bolt.DB) (int, bool, error) {
 			}
 			version = parsed
 		}
-		legacy = version == 0 && tx.Bucket(bktServers) != nil
+		legacy = tx.Bucket(bktServers) != nil && tx.Bucket(bktResources) == nil && tx.Bucket(bktLinks) == nil
+		current = tx.Bucket(bktResources) != nil && tx.Bucket(bktLinks) != nil
 		return nil
 	})
-	return version, legacy, err
+	return version, legacy, current, err
 }
 
 func initializeSchema(tx *bolt.Tx) error {
@@ -118,9 +120,12 @@ func MigrateV2(sourcePath, destinationPath string, force bool) error {
 		return fmt.Errorf("open v1 source: %w", err)
 	}
 	defer func() { _ = source.Close() }()
-	version, legacy, err := readSchemaVersion(source)
+	version, legacy, current, err := readSchemaVersion(source)
 	if err != nil {
 		return err
+	}
+	if current {
+		return errors.New("source is already a v2 database; copy it to the v2 destination instead of migrating")
 	}
 	if !legacy {
 		return fmt.Errorf("source schema version %d is not a v1 database", version)
