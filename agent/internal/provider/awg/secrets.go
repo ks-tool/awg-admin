@@ -28,8 +28,9 @@ import (
 )
 
 type secretRecord struct {
-	Interface  string     `json:"interface"`
-	PrivateKey models.Key `json:"privateKey"`
+	Interface         string     `json:"interface"`
+	PrivateKey        models.Key `json:"privateKey"`
+	PreviousPublicKey string     `json:"previousPublicKey,omitempty"`
 }
 
 type secretStore struct {

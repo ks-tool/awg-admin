@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ks-tool/awg-admin/agent/internal/resource"
 	"github.com/ks-tool/awg-admin/agent/models"
 	"github.com/ks-tool/awg-admin/agent/storage"
 
@@ -43,15 +44,18 @@ type Network interface {
 }
 
 type Provider struct {
-	version    string
-	store      storage.Storage
-	secrets    *secretStore
-	network    Network
-	definition models.ResourceDefinition
-	validator  *packschemavalidator.Compiled
+	version        string
+	store          storage.Storage
+	resources      resource.Store
+	secrets        *secretStore
+	network        Network
+	definition     models.ResourceDefinition
+	validator      *packschemavalidator.Compiled
+	peerDefinition models.ResourceDefinition
+	peerValidator  *packschemavalidator.Compiled
 }
 
-func New(store storage.Storage, secretsRoot string, network Network, version string) (*Provider, error) {
+func New(store storage.Storage, secretsRoot string, network Network, version string, inventory ...resource.Store) (*Provider, error) {
 	secrets, err := newSecretStore(secretsRoot)
 	if err != nil {
 		return nil, err
@@ -72,10 +76,19 @@ func New(store storage.Storage, secretsRoot string, network Network, version str
 	if err != nil {
 		return nil, err
 	}
+	peerDefinition, peerValidator, err := newPeerDefinition()
+	if err != nil {
+		return nil, err
+	}
 	hash := sha256.Sum256(raw)
 	uiSchema := json.RawMessage(`{"ui:order":["iface","addr","listen","mtu","dns","disabled","table","fwMark","jc","jmin","jmax","s1","s2","s3","s4","h1","h2","h3","h4","i1","i2","i3","i4","i5"]}`)
+	var resources resource.Store
+	if len(inventory) > 0 {
+		resources = inventory[0]
+	}
 	return &Provider{
-		version: version, store: store, secrets: secrets, network: network, validator: validator,
+		version: version, store: store, resources: resources, secrets: secrets, network: network, validator: validator,
+		peerDefinition: peerDefinition, peerValidator: peerValidator,
 		definition: models.ResourceDefinition{
 			APIVersion: APIVersion, Kind: "Interface", SpecSchema: raw, UISchema: uiSchema,
 			SchemaHash: "sha256:" + hex.EncodeToString(hash[:]),
@@ -87,10 +100,16 @@ func New(store storage.Storage, secretsRoot string, network Network, version str
 func (p *Provider) Name() string    { return "awg" }
 func (p *Provider) Version() string { return p.version }
 func (p *Provider) Definitions() []models.ResourceDefinition {
-	return []models.ResourceDefinition{p.definition}
+	return []models.ResourceDefinition{p.definition, p.peerDefinition}
 }
 
-func (p *Provider) Validate(_ context.Context, resource models.Resource) error {
+func (p *Provider) Validate(ctx context.Context, resource models.Resource) error {
+	if resource.Kind == "Peer" {
+		return p.validatePeer(ctx, resource)
+	}
+	if resource.Kind != "" && resource.Kind != "Interface" {
+		return errors.New("unsupported resource kind")
+	}
 	spec, err := p.decode(resource.Spec)
 	if err != nil {
 		return err
@@ -111,7 +130,14 @@ func (p *Provider) Validate(_ context.Context, resource models.Resource) error {
 	return p.validateSemantics(resource.ID, spec)
 }
 
-func (p *Provider) Reconcile(_ context.Context, resource models.Resource) (json.RawMessage, error) {
+func (p *Provider) Reconcile(ctx context.Context, resource models.Resource) (json.RawMessage, error) {
+	if resource.Kind == "Peer" {
+		return p.reconcilePeer(ctx, resource)
+	}
+	return p.reconcileInterface(ctx, resource)
+}
+
+func (p *Provider) reconcileInterface(_ context.Context, resource models.Resource) (json.RawMessage, error) {
 	spec, err := p.decode(resource.Spec)
 	if err != nil {
 		return nil, err
@@ -165,7 +191,14 @@ func publicKeyString(privateKey models.Key) string {
 	return publicKey.String()
 }
 
-func (p *Provider) Delete(_ context.Context, resource models.Resource) error {
+func (p *Provider) Delete(ctx context.Context, resource models.Resource) error {
+	if resource.Kind == "Peer" {
+		return p.deletePeer(ctx, resource)
+	}
+	return p.deleteInterface(ctx, resource)
+}
+
+func (p *Provider) deleteInterface(_ context.Context, resource models.Resource) error {
 	spec, err := p.decode(resource.Spec)
 	if err != nil {
 		return err

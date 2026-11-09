@@ -150,6 +150,9 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 		}); err != nil {
 			return nil, err
 		}
+		if err := s.migrateProviderResourceSecret(serverID, definition, item); err != nil {
+			return nil, err
+		}
 		if err := s.saveProviderResource(serverID, *created); err != nil {
 			return nil, err
 		}
@@ -215,6 +218,61 @@ func (s *Service) DeleteProviderResource(serverID, provider, kind, name string) 
 			id, _ := uuid.Parse(serverID)
 			return s.store.Resources(id).Delete(item.ID)
 		}
+	}
+	return nil
+}
+
+func (s *Service) migrateProviderResourceSecret(serverID string, definition *models.ProviderDefinition, item models.Resource) error {
+	pending := false
+	for _, condition := range item.Status.Conditions {
+		if condition.Type == "Secrets" && condition.Reason == "SecretMigrationPending" {
+			pending = true
+			break
+		}
+	}
+	if !pending {
+		return nil
+	}
+	actionAvailable := false
+	for _, resourceDefinition := range definition.Resources {
+		if resourceDefinition.Kind != item.Kind {
+			continue
+		}
+		for _, action := range resourceDefinition.Actions {
+			if action.Name == "importSecret" {
+				actionAvailable = true
+			}
+		}
+	}
+	if !actionAvailable {
+		return nil
+	}
+	var spec struct {
+		UserRef   string `json:"userRef"`
+		PublicKey string `json:"publicKey"`
+	}
+	if err := json.Unmarshal(item.Spec, &spec); err != nil {
+		return err
+	}
+	userID, err := uuid.Parse(spec.UserRef)
+	if err != nil {
+		return nil
+	}
+	user, err := s.store.Users().Get(userID)
+	if err != nil {
+		return err
+	}
+	for _, peer := range user.Peers {
+		publicKey := peer.PrivateKey.PublicKey()
+		if publicKey.String() != spec.PublicKey {
+			continue
+		}
+		arguments, err := json.Marshal(map[string]string{"privateKey": peer.PrivateKey.String()})
+		if err != nil {
+			return err
+		}
+		_, err = s.RunProviderResourceAction(serverID, definition.Name, item.Kind, item.Name, "importSecret", arguments)
+		return err
 	}
 	return nil
 }

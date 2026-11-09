@@ -256,9 +256,11 @@ func (r *Runtime) Action(ctx context.Context, providerName, kind, name, actionNa
 		return models.ActionResult{}, err
 	}
 	found := false
+	mutating := false
 	for _, action := range definition.Actions {
 		if action.Name == actionName {
 			found = true
+			mutating = action.Mutating
 			break
 		}
 	}
@@ -276,7 +278,11 @@ func (r *Runtime) Action(ctx context.Context, providerName, kind, name, actionNa
 	if item.Deleted {
 		return models.ActionResult{}, storage.ErrNotFound
 	}
-	return actions.Action(ctx, item.Resource, actionName, arguments)
+	result, err := actions.Action(ctx, item.Resource, actionName, arguments)
+	if err == nil && mutating {
+		r.enqueue(queueKey{provider: providerName, kind: kind, name: name})
+	}
+	return result, err
 }
 
 func (r *Runtime) Resync() {
@@ -360,7 +366,11 @@ func (r *Runtime) reconcile(key queueKey) {
 	}
 
 	current, getErr := r.store.Get(key.provider, key.kind, key.name)
-	if getErr != nil || current.Resource.Generation != generation || current.Deleted != item.Deleted {
+	if getErr != nil {
+		return
+	}
+	if current.Resource.Generation != generation || current.Deleted != item.Deleted {
+		r.enqueue(key)
 		return
 	}
 	if err == nil && item.Deleted {

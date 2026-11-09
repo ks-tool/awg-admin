@@ -43,6 +43,7 @@ type fakeAgentTLS struct {
 	replacePeers map[string]bool
 	resources    map[string]models.Resource
 	schemaCalls  int
+	actionCalls  int
 
 	// Discovery/import inputs (see the wg-quick import tests): live devices the
 	// agent has no config for, the conf files "on disk" by interface name, and
@@ -127,7 +128,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 		}
 		_ = json.NewEncoder(w).Encode(cfg)
 	})
-	definition := models.ResourceDefinition{APIVersion: "test/v1", Kind: "Service", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash"}
+	definition := models.ResourceDefinition{APIVersion: "test/v1", Kind: "Service", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash", Actions: []models.ActionDefinition{{Name: "importSecret", Title: "Import", ResultType: models.ActionResultJSON, Mutating: true}}}
 	mux.HandleFunc("GET /v1/manifest", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion, AgentID: "agent", Providers: []models.ProviderDefinition{{Name: "test", Version: "1", Resources: []models.ResourceDefinition{definition}}}})
 	})
@@ -175,6 +176,9 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 		_ = json.NewEncoder(w).Encode(item.Status)
 	})
 	mux.HandleFunc("POST /v1/providers/test/resources/{kind}/{name}/actions/{action}", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		fa.actionCalls++
+		fa.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(models.ActionResult{Type: models.ActionResultJSON, Data: json.RawMessage(`{"ok":true}`)})
 	})
 	mux.HandleFunc("DELETE /v1/providers/test/resources/{kind}/{name}", func(w http.ResponseWriter, r *http.Request) {

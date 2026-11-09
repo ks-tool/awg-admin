@@ -18,7 +18,11 @@ package service
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+
+	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	"github.com/ks-tool/awg-admin/models"
 )
 
 func TestProviderResourceLifecycleAndSchemaCache(t *testing.T) {
@@ -75,5 +79,46 @@ func TestProviderResourceLifecycleAndSchemaCache(t *testing.T) {
 	resources, err = svc.ListProviderResources(serverID, "test")
 	if err != nil || len(resources) != 0 {
 		t.Fatalf("resource was not deleted: %+v, %v", resources, err)
+	}
+}
+
+func TestMigratedSecretIsSentOnlyThroughAction(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	key, err := agentmodels.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := svc.CreateUser(UserInput{Name: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	user.Peers = []models.Peer{{Name: "laptop", PrivateKey: key}}
+	if err := svc.store.Users().Set(user); err != nil {
+		t.Fatal(err)
+	}
+	publicKey := key.PublicKey()
+	spec, _ := json.Marshal(map[string]any{"userRef": user.ID.String(), "publicKey": publicKey.String()})
+	item := models.Resource{
+		ID: "pending-peer", ServerID: server.ID.String(), APIVersion: "test/v1", Kind: "Service", Name: "alice-laptop", Generation: 1, Spec: spec,
+		Status: models.ResourceStatus{Conditions: []models.Condition{{Type: "Secrets", Status: models.ConditionFalse, Reason: "SecretMigrationPending"}}},
+	}
+	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+		t.Fatal(err)
+	}
+	resources, err := svc.ListProviderResources(server.ID.String(), "test")
+	if err != nil || len(resources) != 1 {
+		t.Fatalf("ListProviderResources: %+v, %v", resources, err)
+	}
+	agent.mu.Lock()
+	calls := agent.actionCalls
+	agent.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("secret import action calls = %d, want 1", calls)
+	}
+	if !json.Valid(resources[0].Spec) {
+		t.Fatal("invalid resource spec")
+	}
+	if strings.Contains(string(resources[0].Spec), key.String()) {
+		t.Fatal("private key leaked into resource spec")
 	}
 }

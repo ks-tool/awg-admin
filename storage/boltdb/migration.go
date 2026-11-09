@@ -277,7 +277,7 @@ func migratePeer(user models.User, peer models.Peer, iface models.Interface, ser
 	}
 	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte(user.ID.String()+":"+peer.InterfaceId.String()+":"+publicKeyValue))
 	spec, err := json.Marshal(map[string]any{
-		"name": peer.Name, "interfaceRef": peer.InterfaceId.String(), "userRef": user.ID.String(),
+		"name": peer.Name, "interfaceRef": peer.InterfaceId.String(), "userRef": user.ID.String(), "publicKey": publicKeyValue,
 		"allowedIPs": allowedIPs, "dns": peer.DNS, "disabled": peer.Disabled || user.Disabled,
 		"keepaliveSeconds": keepaliveSeconds,
 	})

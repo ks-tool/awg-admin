@@ -146,7 +146,7 @@ func Run(version string) {
 		log.Fatal().Err(err).Msg("failed to open wgctrl client for metrics")
 	}
 	defer func() { _ = metricsAwg.Close() }()
-	awgProvider, err := awgprovider.New(store, filepath.Join(cfg.DB, "resources", "secrets"), service.NewHandler(store, metricsAwg), version)
+	awgProvider, err := awgprovider.New(store, filepath.Join(cfg.DB, "resources", "secrets"), service.NewHandler(store, metricsAwg), version, resourceStore)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize AWG provider")
 	}

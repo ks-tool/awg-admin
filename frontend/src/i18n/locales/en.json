@@ -594,7 +594,10 @@
     "deactivate": "Deactivate",
     "loadError": "Failed to load provider resources",
     "saveError": "Failed to save resource",
-    "deleteError": "Failed to delete resource"
+    "deleteError": "Failed to delete resource",
+    "actionError": "Action failed",
+    "actionConfirm": "This action changes the resource. Review its arguments and confirm to continue.",
+    "download": "Download"
   },
   "auth": {
     "signInTitle": "Amnezia-WG Admin",
