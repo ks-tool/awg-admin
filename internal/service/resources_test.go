@@ -323,3 +323,42 @@ func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
 		t.Fatalf("legacy credentials survived provider deletion: user=%d interface=%d", len(storedUser.Peers), len(storedInterface.Peers))
 	}
 }
+
+func TestDeleteUserRevokesProviderPeers(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	interfaceID := uuid.New()
+	item := models.Resource{
+		ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "test/v1", Kind: "Interface", Name: "test0", Generation: 1,
+		Spec: json.RawMessage(`{"name":"test0","listen":"0.0.0.0","port":443}`),
+	}
+	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+		t.Fatal(err)
+	}
+	user, err := svc.CreateUser(UserInput{Name: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := svc.AddPeer(user.ID.String(), AddPeerInput{Name: "phone", InterfaceID: interfaceID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resourceName := updated.Peers[0].ResourceName
+	agent.mu.Lock()
+	_, exists := agent.resources["Peer/"+resourceName]
+	agent.mu.Unlock()
+	if !exists {
+		t.Fatal("provider peer was not created on the agent")
+	}
+	if err := svc.DeleteUser(user.ID.String()); err != nil {
+		t.Fatal(err)
+	}
+	agent.mu.Lock()
+	_, exists = agent.resources["Peer/"+resourceName]
+	agent.mu.Unlock()
+	if exists {
+		t.Fatal("provider credentials survived user deletion")
+	}
+	if _, err := svc.store.Users().Get(user.ID); err == nil {
+		t.Fatal("local user survived deletion")
+	}
+}

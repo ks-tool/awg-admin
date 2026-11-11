@@ -40,14 +40,34 @@ func (p *Provider) PrepareLink(_ context.Context, link models.Link, endpoint mod
 		if !ok {
 			return models.LinkOffer{}, errors.New("provider does not support outbound links")
 		}
+		records, err := p.links.list()
+		if err != nil {
+			return models.LinkOffer{}, err
+		}
+		routeID, err := FindRouteID(link.ID, func(candidate string) bool {
+			socksAddress, tunName, _, _ := RouteIdentifiers(candidate)
+			for id, record := range records {
+				if id == link.ID || record.Driver == nil {
+					continue
+				}
+				if record.Driver.SOCKS5 == socksAddress || record.Driver.TUN == tunName {
+					return true
+				}
+			}
+			return false
+		})
+		if err != nil {
+			return models.LinkOffer{}, err
+		}
 		secret, err := p.adapter.NewSecret()
 		if err != nil {
 			return models.LinkOffer{}, err
 		}
-		peer, driver, err := adapter.PrepareLink(interfaceItem.Spec, link, endpoint, secret)
+		peer, driver, err := adapter.PrepareLink(interfaceItem.Spec, link, endpoint, secret, routeID)
 		if err != nil {
 			return models.LinkOffer{}, err
 		}
+		driver.RouteID = routeID
 		peer.Spec.Name = "link-" + link.ID
 		peer.Spec.InterfaceRef = interfaceItem.ID
 		data, err := json.Marshal(driver)

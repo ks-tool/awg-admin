@@ -17,9 +17,11 @@
 package awg
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ks-tool/vpn-agent/internal/resource"
@@ -258,5 +260,78 @@ func TestDistributedLinksShareTransitInterface(t *testing.T) {
 	config, _ = b.store.Get("awg0")
 	if len(config.Peers) != 0 || len(config.PreUp) != 1 || len(config.PostDown) != 1 || config.Table != 0 {
 		t.Fatalf("link artifacts survived final delete: %+v", config)
+	}
+}
+
+func TestDistributedRouteLinkPreparePreservesCommittedState(t *testing.T) {
+	source := newLinkSide(t, "source-server", "source-resource", "192.0.2.1", false)
+	target := newLinkSide(t, "target-server", "target-resource", "192.0.2.2", false)
+	link := models.Link{ID: "route-link", Kind: models.RouteLinkKind, Generation: 1, Source: source.endpoint, Target: target.endpoint}
+
+	committedSource := linkState{LinkID: link.ID, Interface: "awg0", Role: "source", Table: 1234, Priority: 1234, Driver: &models.RouteDriver{TUN: "tun-test"}}
+	if err := source.provider.links.put(link.ID, committedSource); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.provider.PrepareLink(context.Background(), link, source.endpoint); err != nil {
+		t.Fatal(err)
+	}
+	sourceState, err := source.provider.links.get(link.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sourceState.Table != committedSource.Table || sourceState.Driver == nil || sourceState.Driver.TUN != committedSource.Driver.TUN {
+		t.Fatalf("source prepare discarded committed state: %+v", sourceState)
+	}
+
+	firstOffer, err := target.provider.PrepareLink(context.Background(), link, target.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := target.provider.CommitLink(context.Background(), link, target.endpoint, models.LinkOffer{}); err != nil {
+		t.Fatal(err)
+	}
+	committedTarget, err := target.provider.links.get(link.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondOffer, err := target.provider.PrepareLink(context.Background(), link, target.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(firstOffer.Data, secondOffer.Data) {
+		t.Fatal("target prepare generated new credentials")
+	}
+	replayedTarget, err := target.provider.links.get(link.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayedTarget.PeerPublicKey != committedTarget.PeerPublicKey || len(replayedTarget.PreUp) != 1 || len(replayedTarget.PostDown) != 1 {
+		t.Fatalf("target prepare discarded committed state: %+v", replayedTarget)
+	}
+	if err := target.provider.DeleteLink(context.Background(), link, target.endpoint, nil); err != nil {
+		t.Fatal(err)
+	}
+	config, err := target.store.Get("awg0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Peers) != 0 || len(config.PreUp) != 0 || len(config.PostDown) != 0 {
+		t.Fatalf("route artifacts survived prepare and delete: %+v", config)
+	}
+}
+
+func TestRouteLinkRejectsSecondOutgoingRouteOnAWGInterface(t *testing.T) {
+	source := newLinkSide(t, "source-server", "source-resource", "192.0.2.1", false)
+	target := newLinkSide(t, "target-server", "target-resource", "192.0.2.2", false)
+	first := models.Link{ID: "route-first", Kind: models.RouteLinkKind, Source: source.endpoint, Target: target.endpoint}
+	second := models.Link{ID: "route-second", Kind: models.RouteLinkKind, Source: source.endpoint, Target: target.endpoint}
+	if _, err := source.provider.PrepareLink(context.Background(), first, source.endpoint); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.provider.PrepareLink(context.Background(), second, source.endpoint); err == nil || !strings.Contains(err.Error(), "outgoing link") {
+		t.Fatalf("second outgoing route was accepted: %v", err)
+	}
+	if _, err := source.provider.PrepareLink(context.Background(), first, source.endpoint); err != nil {
+		t.Fatalf("idempotent prepare of the first route failed: %v", err)
 	}
 }

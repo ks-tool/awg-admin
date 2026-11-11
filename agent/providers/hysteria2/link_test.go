@@ -27,7 +27,7 @@ func TestPrepareLinkBuildsSOCKSAndTUNConnector(t *testing.T) {
 	spec := json.RawMessage(`{"name":"public","port":443,"serverName":"localhost"}`)
 	link := models.Link{ID: "link-a", Kind: "hysteria2"}
 	endpoint := models.LinkEndpoint{Address: "192.0.2.1"}
-	_, driver, err := (Adapter{}).PrepareLink(spec, link, endpoint, "secret-password")
+	_, driver, err := (Adapter{}).PrepareLink(spec, link, endpoint, "secret-password", link.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

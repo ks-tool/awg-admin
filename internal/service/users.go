@@ -93,5 +93,18 @@ func (s *Service) DeleteUser(id string) error {
 	if err != nil {
 		return err
 	}
+	user, err := s.store.Users().Get(uID)
+	if err != nil {
+		return err
+	}
+	for index := range user.Peers {
+		peer := &user.Peers[index]
+		if len(peer.Provider) == 0 || peer.Provider == "awg" {
+			continue
+		}
+		if _, err := s.deleteProviderPeer(uID, peer); err != nil {
+			return fmt.Errorf("delete provider peer %q: %w", peer.ResourceName, err)
+		}
+	}
 	return s.store.Users().Delete(uID)
 }

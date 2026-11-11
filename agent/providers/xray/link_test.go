@@ -28,7 +28,7 @@ func TestPrepareLinkBuildsSOCKSAndTUNConnector(t *testing.T) {
 	link := models.Link{ID: "link-a", Kind: "xray"}
 	endpoint := models.LinkEndpoint{Address: "192.0.2.1"}
 	secret := "123e4567-e89b-12d3-a456-426614174000"
-	_, driver, err := (Adapter{}).PrepareLink(spec, link, endpoint, secret)
+	_, driver, err := (Adapter{}).PrepareLink(spec, link, endpoint, secret, link.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

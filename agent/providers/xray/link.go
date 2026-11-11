@@ -25,12 +25,12 @@ import (
 	"github.com/ks-tool/vpn-agent/providers/proxy"
 )
 
-func (Adapter) PrepareLink(raw json.RawMessage, link models.Link, endpoint models.LinkEndpoint, secret string) (proxy.Peer, models.RouteDriver, error) {
+func (Adapter) PrepareLink(raw json.RawMessage, _ models.Link, endpoint models.LinkEndpoint, secret, routeID string) (proxy.Peer, models.RouteDriver, error) {
 	spec, err := decodeInterface(raw)
 	if err != nil {
 		return proxy.Peer{}, models.RouteDriver{}, err
 	}
-	socksAddress, tunName, ipv4, ipv6 := proxy.RouteIdentifiers(link.ID)
+	socksAddress, tunName, ipv4, ipv6 := proxy.RouteIdentifiers(routeID)
 	_, socksPort, err := net.SplitHostPort(socksAddress)
 	if err != nil {
 		return proxy.Peer{}, models.RouteDriver{}, err

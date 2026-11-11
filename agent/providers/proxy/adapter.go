@@ -48,7 +48,7 @@ type Route struct {
 }
 
 type LinkAdapter interface {
-	PrepareLink(json.RawMessage, models.Link, models.LinkEndpoint, string) (Peer, models.RouteDriver, error)
+	PrepareLink(json.RawMessage, models.Link, models.LinkEndpoint, string, string) (Peer, models.RouteDriver, error)
 }
 
 type Adapter interface {

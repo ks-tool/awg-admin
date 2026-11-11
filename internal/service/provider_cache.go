@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/internal/config"
@@ -89,52 +90,53 @@ func cacheProviderManifest(manifest *models.Manifest) error {
 	return nil
 }
 
-func cachedProviderManifest(serverID string) (*models.Manifest, error) {
-	root, err := providerCacheRoot()
+func (s *Service) cachedProviderManifest(serverID string) (*models.Manifest, error) {
+	id, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(root)
-	if os.IsNotExist(err) {
-		return nil, os.ErrNotExist
-	}
+	records, err := s.store.Providers().List(id)
 	if err != nil {
 		return nil, err
 	}
-	providers := make(map[string]*models.ProviderDefinition)
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".spec" {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(root, entry.Name()))
-		if err != nil {
-			return nil, err
-		}
-		var definition models.ResourceDefinition
-		if err := json.Unmarshal(data, &definition); err != nil {
-			return nil, err
-		}
-		name := providerFromAPIVersion(definition.APIVersion)
-		if len(name) == 0 {
-			continue
-		}
-		provider := providers[name]
-		if provider == nil {
-			provider = &models.ProviderDefinition{Name: name, Version: "cached"}
-			providers[name] = provider
-		}
-		provider.Resources = append(provider.Resources, definition)
-	}
-	if len(providers) == 0 {
+	if len(records) == 0 {
 		return nil, os.ErrNotExist
 	}
-	manifest := &models.Manifest{ProtocolVersion: models.ProtocolVersion, AgentID: serverID, Providers: make([]models.ProviderDefinition, 0, len(providers))}
-	for _, provider := range providers {
+	manifest := &models.Manifest{ProtocolVersion: models.ProtocolVersion, AgentID: serverID, Providers: make([]models.ProviderDefinition, 0, len(records))}
+	for _, record := range records {
+		provider := record.Definition
 		sort.Slice(provider.Resources, func(i, j int) bool { return provider.Resources[i].Kind < provider.Resources[j].Kind })
-		manifest.Providers = append(manifest.Providers, *provider)
+		manifest.Providers = append(manifest.Providers, provider)
 	}
 	sort.Slice(manifest.Providers, func(i, j int) bool { return manifest.Providers[i].Name < manifest.Providers[j].Name })
 	return manifest, nil
+}
+
+func (s *Service) cacheServerProviderManifest(serverID string, manifest *models.Manifest) error {
+	id, err := uuid.Parse(serverID)
+	if err != nil {
+		return err
+	}
+	desired := make(map[string]bool, len(manifest.Providers))
+	for _, provider := range manifest.Providers {
+		desired[provider.Name] = true
+		if err := s.store.Providers().Set(&models.ProviderRecord{ServerID: serverID, Definition: provider}); err != nil {
+			return err
+		}
+	}
+	existing, err := s.store.Providers().List(id)
+	if err != nil {
+		return err
+	}
+	for _, record := range existing {
+		if desired[record.Definition.Name] {
+			continue
+		}
+		if err := s.store.Providers().Delete(id, record.Definition.Name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) fetchProviderManifest(serverID string) (*models.Manifest, error) {
@@ -148,6 +150,9 @@ func (s *Service) fetchProviderManifest(serverID string) (*models.Manifest, erro
 		return nil, err
 	}
 	if err := cacheProviderManifest(manifest); err != nil {
+		return nil, err
+	}
+	if err := s.cacheServerProviderManifest(serverID, manifest); err != nil {
 		return nil, err
 	}
 	return manifest, nil

@@ -68,7 +68,7 @@ func (r *providerRegistry) store(agentID, version string, definition models.Prov
 }
 
 func (s *Service) GetProviderManifest(serverID string) (*models.Manifest, error) {
-	manifest, err := cachedProviderManifest(serverID)
+	manifest, err := s.cachedProviderManifest(serverID)
 	if err == nil {
 		s.providerRefresh.Add(1)
 		go func() {

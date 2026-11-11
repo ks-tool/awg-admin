@@ -53,7 +53,36 @@ func (p *Provider) prepareRouteLink(_ context.Context, link models.Link, endpoin
 		return models.LinkOffer{}, err
 	}
 	offer := models.LinkOffer{LinkID: link.ID, Endpoint: endpoint, Data: json.RawMessage(`{}`)}
+	previous, stateErr := p.links.get(link.ID)
+	if stateErr == nil {
+		if previous.Interface != spec.Interface || previous.Role != role {
+			return models.LinkOffer{}, errors.New("route link state does not match endpoint")
+		}
+		if role == "source" {
+			return offer, nil
+		}
+		if previous.Driver == nil {
+			return models.LinkOffer{}, errors.New("route link state has no driver")
+		}
+		iface, err := p.store.Get(spec.Interface)
+		if err != nil {
+			return models.LinkOffer{}, err
+		}
+		return preparedRouteLinkOffer(offer, *iface, spec, previous)
+	}
+	if !storage.IsNotFound(stateErr) {
+		return models.LinkOffer{}, stateErr
+	}
+	states, err := p.links.list()
+	if err != nil {
+		return models.LinkOffer{}, err
+	}
 	if role == "source" {
+		for _, state := range states {
+			if state.LinkID != link.ID && state.Interface == spec.Interface && state.Role == "source" {
+				return models.LinkOffer{}, errors.New("AWG interface already has an outgoing link")
+			}
+		}
 		return offer, p.links.put(link.ID, linkState{LinkID: link.ID, Interface: spec.Interface, Role: role})
 	}
 	iface, err := p.store.Get(spec.Interface)
@@ -72,14 +101,33 @@ func (p *Provider) prepareRouteLink(_ context.Context, link models.Link, endpoin
 	remotePeer := models.InterfacePeer{
 		Key: iface.PrivateKey.PublicKey(), Endpoint: routeRemoteEndpoint(endpoint, spec), AllowedIPs: []string{"0.0.0.0/0"}, KeepaliveInterval: 25 * time.Second,
 	}
-	socksAddress, _, _, _ := proxy.RouteIdentifiers(link.ID)
+	routeID, err := proxy.FindRouteID(link.ID, func(candidate string) bool {
+		socksAddress, tunName, _, _ := proxy.RouteIdentifiers(candidate)
+		table := proxy.RouteTable(candidate)
+		for _, state := range states {
+			if state.LinkID == link.ID {
+				continue
+			}
+			if state.Driver != nil && (state.Driver.SOCKS5 == socksAddress || state.Driver.TUN == tunName) {
+				return true
+			}
+			if state.Table != 0 && state.Table == table {
+				return true
+			}
+		}
+		return false
+	})
+	if err != nil {
+		return models.LinkOffer{}, err
+	}
+	socksAddress, _, _, _ := proxy.RouteIdentifiers(routeID)
 	clientConfig := routeClientConfig{PrivateKey: clientKey, Address: clientAddress, Peer: remotePeer, Interface: spec, SOCKS5: socksAddress}
 	configData, err := json.Marshal(clientConfig)
 	if err != nil {
 		return models.LinkOffer{}, err
 	}
 	driver := &models.RouteDriver{
-		Binary: "/usr/local/bin/vpn-provider-awg", Args: []string{"route-client", "--config", "{{config}}"}, Config: configData, SOCKS5: socksAddress,
+		Binary: "/usr/local/bin/vpn-provider-awg", Args: []string{"route-client", "--config", "{{config}}"}, Config: configData, SOCKS5: socksAddress, RouteID: routeID,
 	}
 	remoteSpec := awgLinkOffer{PublicKey: publicKeyString(iface.PrivateKey), Interface: spec, Driver: driver, RoutePeer: &clientPeer}
 	offer.Data, err = json.Marshal(remoteSpec)
@@ -88,6 +136,21 @@ func (p *Provider) prepareRouteLink(_ context.Context, link models.Link, endpoin
 	}
 	state := linkState{LinkID: link.ID, Interface: spec.Interface, Role: role, PeerPublicKey: clientPeer.Key.String(), Driver: driver}
 	return offer, p.links.put(link.ID, state)
+}
+
+func preparedRouteLinkOffer(offer models.LinkOffer, iface models.InterfaceConfig, spec InterfaceSpec, state linkState) (models.LinkOffer, error) {
+	var clientConfig routeClientConfig
+	if err := json.Unmarshal(state.Driver.Config, &clientConfig); err != nil {
+		return models.LinkOffer{}, err
+	}
+	clientPeer := models.InterfacePeer{Key: clientConfig.PrivateKey.PublicKey(), AllowedIPs: []string{clientConfig.Address}}
+	remoteSpec := awgLinkOffer{PublicKey: publicKeyString(iface.PrivateKey), Interface: spec, Driver: state.Driver, RoutePeer: &clientPeer}
+	data, err := json.Marshal(remoteSpec)
+	if err != nil {
+		return models.LinkOffer{}, err
+	}
+	offer.Data = data
+	return offer, nil
 }
 
 func (p *Provider) commitRouteLink(_ context.Context, link models.Link, endpoint models.LinkEndpoint, remote models.LinkOffer) error {
@@ -116,6 +179,20 @@ func (p *Provider) commitRouteLink(_ context.Context, link models.Link, endpoint
 		if err != nil {
 			return err
 		}
+		routeID := driver.RouteID
+		if len(routeID) == 0 {
+			routeID = link.ID
+		}
+		table := proxy.RouteTable(routeID)
+		states, err := p.links.list()
+		if err != nil {
+			return err
+		}
+		for _, state := range states {
+			if state.LinkID != link.ID && state.Table == table {
+				return fmt.Errorf("route table %d is already used by link %s", table, state.LinkID)
+			}
+		}
 		if previous, stateErr := p.links.get(link.ID); stateErr == nil && previous.Driver != nil {
 			_ = p.connectors.Stop(link.ID)
 			removeRoutePolicy(previous.Interface, previous.Table)
@@ -123,7 +200,6 @@ func (p *Provider) commitRouteLink(_ context.Context, link models.Link, endpoint
 		if err := p.connectors.Apply(link.ID, driver); err != nil {
 			return err
 		}
-		table := proxy.RouteTable(link.ID)
 		if err := applyRoutePolicy(spec.Interface, driver.TUN, table); err != nil {
 			_ = p.connectors.Stop(link.ID)
 			return err

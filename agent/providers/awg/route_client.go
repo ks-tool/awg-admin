@@ -194,10 +194,16 @@ func (s *socksServer) handle(ctx context.Context, client net.Conn) {
 		_, _ = io.Copy(client, remote)
 		<-done
 	case 3:
-		if err := writeSocksReply(client, 0); err != nil {
+		listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+		if err != nil {
+			_ = writeSocksReply(client, 1)
 			return
 		}
-		s.serveUDP(ctx, client)
+		defer listener.Close()
+		if err := writeSocksReply(client, 0, listener.LocalAddr()); err != nil {
+			return
+		}
+		s.serveUDP(ctx, client, listener)
 	default:
 		_ = writeSocksReply(client, 7)
 	}
@@ -266,21 +272,36 @@ func readSocksAddress(conn io.Reader, addressType byte) (string, error) {
 	return net.JoinHostPort(host, strconv.Itoa(int(binary.BigEndian.Uint16(portData)))), nil
 }
 
-func writeSocksReply(conn net.Conn, status byte) error {
-	_, err := conn.Write([]byte{5, status, 0, 1, 0, 0, 0, 0, 0, 0})
+func writeSocksReply(conn net.Conn, status byte, addresses ...net.Addr) error {
+	reply := []byte{5, status, 0, 1, 0, 0, 0, 0, 0, 0}
+	if len(addresses) > 0 && addresses[0] != nil {
+		host, portText, err := net.SplitHostPort(addresses[0].String())
+		if err != nil {
+			return err
+		}
+		port, err := strconv.Atoi(portText)
+		if err != nil {
+			return err
+		}
+		ip := net.ParseIP(host)
+		if ipv4 := ip.To4(); ipv4 != nil {
+			copy(reply[4:8], ipv4)
+		} else if ipv6 := ip.To16(); ipv6 != nil {
+			reply = []byte{5, status, 0, 4}
+			reply = append(reply, ipv6...)
+			reply = append(reply, 0, 0)
+		}
+		binary.BigEndian.PutUint16(reply[len(reply)-2:], uint16(port))
+	}
+	_, err := conn.Write(reply)
 	return err
 }
 
-func (s *socksServer) serveUDP(ctx context.Context, client net.Conn) {
+func (s *socksServer) serveUDP(ctx context.Context, client net.Conn, listener *net.UDPConn) {
 	clientAddress, err := net.ResolveUDPAddr("udp", client.RemoteAddr().String())
 	if err != nil {
 		return
 	}
-	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		return
-	}
-	defer listener.Close()
 	go func() {
 		<-ctx.Done()
 		_ = listener.Close()
@@ -345,7 +366,7 @@ func decodeUDPPacket(data []byte) (string, []byte, error) {
 	if len(data) < 4 || data[0] != 0 || data[1] != 0 || data[2] != 0 {
 		return "", nil, errors.New("invalid SOCKS5 UDP packet")
 	}
-	reader := &packetReader{data: data[3:], conn: nil}
+	reader := &packetReader{data: data[4:], conn: nil}
 	address, err := readSocksAddress(reader, data[3])
 	if err != nil {
 		return "", nil, err

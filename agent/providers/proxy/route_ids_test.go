@@ -41,3 +41,36 @@ func TestRouteIdentifiersProduceValidAddresses(t *testing.T) {
 		}
 	}
 }
+
+func TestRouteIdentifiersUseExtendedHashSpace(t *testing.T) {
+	ports := make(map[string]bool)
+	tables := make(map[int]bool)
+	for index := range 512 {
+		id := fmt.Sprintf("link-%d", index)
+		socksAddress, _, _, _ := RouteIdentifiers(id)
+		ports[socksAddress] = true
+		tables[RouteTable(id)] = true
+	}
+	if len(ports) <= 256 || len(tables) <= 256 {
+		t.Fatalf("route identifiers still have a 256-value space: ports=%d tables=%d", len(ports), len(tables))
+	}
+}
+
+func TestFindRouteIDReallocatesCollisions(t *testing.T) {
+	firstSOCKS, firstTUN, _, _ := RouteIdentifiers("link")
+	firstTable := RouteTable("link")
+	routeID, err := FindRouteID("link", func(candidate string) bool {
+		socksAddress, tunName, _, _ := RouteIdentifiers(candidate)
+		return socksAddress == firstSOCKS || tunName == firstTUN || RouteTable(candidate) == firstTable
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if routeID == "link" {
+		t.Fatal("colliding route ID was reused")
+	}
+	socksAddress, tunName, _, _ := RouteIdentifiers(routeID)
+	if socksAddress == firstSOCKS || tunName == firstTUN || RouteTable(routeID) == firstTable {
+		t.Fatalf("replacement route ID still collides: %q", routeID)
+	}
+}

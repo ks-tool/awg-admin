@@ -21,9 +21,10 @@ import "encoding/json"
 const RouteLinkKind = "route"
 
 type RouteDriver struct {
-	Binary string          `json:"binary"`
-	Args   []string        `json:"args"`
-	Config json.RawMessage `json:"config"`
-	SOCKS5 string          `json:"socks5,omitempty"`
-	TUN    string          `json:"tun,omitempty"`
+	Binary  string          `json:"binary"`
+	Args    []string        `json:"args"`
+	Config  json.RawMessage `json:"config"`
+	SOCKS5  string          `json:"socks5,omitempty"`
+	TUN     string          `json:"tun,omitempty"`
+	RouteID string          `json:"routeId,omitempty"`
 }
