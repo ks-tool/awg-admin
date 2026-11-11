@@ -184,6 +184,21 @@ func (h *Handler) topologyConnectionCreate(w http.ResponseWriter, r bunrouter.Re
 	return bunrouter.JSON(w, result)
 }
 
+func (h *Handler) topologyConnectionMove(w http.ResponseWriter, r bunrouter.Request) error {
+	var input struct {
+		SourceID string `json:"sourceId"`
+		TargetID string `json:"targetId"`
+	}
+	if err := decode(r, &input); err != nil {
+		return badRequest(err)
+	}
+	result, err := h.svc.MoveNetworkConnection(r.Param("connectionID"), input.SourceID, input.TargetID)
+	if err != nil {
+		return handleErr(err, topologyFields(r))
+	}
+	return bunrouter.JSON(w, result)
+}
+
 func (h *Handler) topologyConnectionDelete(w http.ResponseWriter, r bunrouter.Request) error {
 	if err := h.svc.DeleteNetworkConnection(r.Param("connectionID")); err != nil {
 		return handleErr(err, topologyFields(r))

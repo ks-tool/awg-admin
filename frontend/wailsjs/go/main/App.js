@@ -314,6 +314,14 @@ export function MigratePeer(arg1, arg2, arg3) {
   return window['go']['main']['App']['MigratePeer'](arg1, arg2, arg3);
 }
 
+export function MoveNetworkConnection(arg1, arg2, arg3) {
+  return window['go']['main']['App']['MoveNetworkConnection'](arg1, arg2, arg3);
+}
+
+export function MoveProviderLink(arg1, arg2, arg3) {
+  return window['go']['main']['App']['MoveProviderLink'](arg1, arg2, arg3);
+}
+
 export function MoveTopologyNodes(arg1) {
   return window['go']['main']['App']['MoveTopologyNodes'](arg1);
 }

@@ -92,6 +92,12 @@ export async function createProviderLink(sourceId: string, targetId: string): Pr
         : unwrap(await post<ProviderLink, {sourceId: string; targetId: string}>('/links', {sourceId, targetId}));
 }
 
+export async function moveProviderLink(id: string, sourceId: string, targetId: string): Promise<ProviderLink> {
+    return isDesktop()
+        ? binding(() => AppBindings.MoveProviderLink(id, sourceId, targetId))
+        : unwrap(await put<ProviderLink, {sourceId: string; targetId: string}>(`/links/${encodeURIComponent(id)}`, {sourceId, targetId}));
+}
+
 export async function applyProviderLink(id: string): Promise<ProviderLink> {
     return isDesktop()
         ? binding(() => AppBindings.ApplyProviderLink(id))

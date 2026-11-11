@@ -6,26 +6,27 @@
 
 [Русская версия](README_ru.md)
 
-**VPN Admin** is a visual control plane for VPN services. It manages servers, users, provider resources and network links
-without tying the core application to a specific VPN protocol. AmneziaWG and WireGuard are supported through the AWG
-provider; additional providers can implement the same resource and manifest API.
+**VPN Admin** is a visual control plane for VPN infrastructure. It combines a geographic server map, a network topology editor,
+user management and settings in one workspace. The core is not tied to a particular VPN protocol: extensions handle service
+configuration and network links.
 
-A single instance can manage multiple servers. The local database is the source of truth, while agents reconcile desired
-provider resources and links on managed hosts.
+> **Installation, operations, plugins and migration:** [docs/GUIDE.md](docs/GUIDE.md)
 
-> **Installation, configuration, migration and the full guide:** [docs/GUIDE.md](docs/GUIDE.md)
+## Features
 
-## Overview
-
-The main workspace combines a server map, tunnel editor, user management and settings. Servers can be grouped by location
-on the map, while provider interfaces are connected into explicit network topologies in the tunnel editor.
-
-Providers describe their resources with JSON schemas. VPN Admin uses those schemas to generate management forms with RJSF,
-instead of hard-coding every provider's configuration model. Links define how compatible provider ports communicate.
-
-The AWG provider supports interface and peer resources, AmneziaWG obfuscation, client configurations and QR codes, metrics,
-and kernel or userspace operation. Agent and provider failures are exposed as resource conditions rather than silently
-removing desired state.
+- **Map.** Servers are positioned from **Location** using a local Data Center Atlas cache, or from manually entered coordinates.
+  Points show agent or VPN service health, while arrows show connections and p95 latency.
+- **Network Graph.** Interfaces can be connected by directed arrows into chains of any length. Port compatibility, duplicates,
+  self-connections and cycles are validated. To reroute an existing connection, select its arrow, press `m`, drag either endpoint
+  and confirm with **Create**.
+- **Agent and providers.** `vpn-agent` can be installed from an OCI release or a local binary. VPN providers are installed and
+  removed independently of the agent. Public GHCR and private OCI registries with saved credentials are supported.
+- **JSON Schema resources.** A provider manifest describes resources, ports and actions. VPN Admin renders forms with RJSF and
+  displays `generation`/`observedGeneration`, phases, conditions, action results and downloadable files.
+- **VPN service plugins.** A separate plugin API models a service as “application + configuration”, passes topology to the plugin
+  and provides independent JSON schemas for configuration and users.
+- **AWG.** Built-in AmneziaWG and WireGuard support includes interfaces and peers, obfuscation, kernel/userspace modes, client
+  configurations and QR codes, `wg-quick`/`awg-quick` import, and system and interface metrics.
 
 VPN Admin is available as a Wails desktop application and as a standalone web server. Both modes share the same data model,
 business logic and frontend.
@@ -34,56 +35,60 @@ business logic and frontend.
 
 ### Admin app
 
-The administrative application stores infrastructure metadata, manages servers and users, renders provider-defined forms,
-and coordinates resource and link reconciliation through remote agents.
+The root Go module contains the desktop/standalone application, HTTP API, BoltDB storage, the agent pack and deployment
+coordination. The React frontend is in `frontend/`.
 
-The root Go module contains the application, API, BoltDB storage and pack definitions. The React frontend is in
-`frontend/`.
+The local `~/.vpn-admin/db` database stores servers, SSH and mTLS material, users and peers, the abstract topology, plugin
+services, provider resources, links, OCI sources and the standalone account. Servers and interfaces migrated from v1 are
+projected into the shared topology with their original UUIDs.
 
 ### Agent and providers
 
-`vpn-agent` is a provider-neutral HTTP service running on each managed server. It maintains desired resource state and
-provider registrations, and exposes the resource API used by VPN Admin. By default it listens on loopback and is reached
-through an SSH tunnel; direct mTLS connections are also supported.
+`vpn-agent` is a provider-neutral HTTP service on each managed host. It stores desired resources and provider registrations,
+runs providers as child processes, restarts them after failures and exposes resource, link, host-info and metrics APIs. Systemd
+manages only `vpn-agent`; separate provider units are unnecessary.
 
-The agent starts each registered provider as a child process, restarts it after an unexpected exit and stops it during
-agent shutdown. Systemd therefore manages only `vpn-agent`, not separate provider units. A registration can contain the
-provider command, arguments, environment, address and manifest-discovery setting.
+By default the agent listens on loopback and is reached through an SSH tunnel; direct mTLS is also supported. With
+`discover: true`, the agent obtains resource definitions and JSON schemas through the provider's `GET /v1/manifest` endpoint.
 
-With `discover: true`, the agent obtains resource definitions and JSON schemas from the provider's `GET /v1/manifest`
-endpoint. Static registrations can embed definitions instead.
-
-The unified `vpn-provider-awg` manages AmneziaWG and WireGuard interfaces. It selects the kernel backend when
-`modinfo amneziawg` or `modinfo wireguard` succeeds and otherwise uses `amneziawg-go`. The `--userspace` flag or
-`VPN_PROVIDER_AWG_USERSPACE=true` forces userspace mode.
-
-Agent and providers use the Go module path `github.com/ks-tool/vpn-agent`. Their sources and independent release workflow
-are being prepared in `agent/` for the separate `github.com/ks-tool/vpn-agent` repository.
-
-### Configuration and releases
-
-All non-admin binaries use `github.com/ks-tool/app-config/go`. Environment variables provide configuration and equivalent
-command-line flags override them. Each binary documents its options through `--help`.
-
-Each component tag builds only that component and publishes a multi-architecture OCI artifact through `oci-packer`:
+The agent and providers live in a separate Go module under `agent/`, with module path `github.com/ks-tool/vpn-agent`. The root
+module uses it through a local `replace`. Releases are published as multi-architecture OCI artifacts:
 
 - `agent/v1.2.3` → `ghcr.io/ks-tool/vpn-agent:v1.2.3`;
 - `providers/awg/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/awg:v1.2.3`.
 
-Installation is performed through `pack` with an OCI-capable target; ansible-target is not used. See
-[pack/README.md](pack/README.md).
+### Two extension layers
 
-### Data storage
+An **agent provider** runs on the managed server and owns protocol-specific resources. Its pack defines dependencies and agent
+registration. The admin coordinates `prepare`/`commit`/`delete` for links between compatible resource ports.
 
-Administrative metadata is stored in BoltDB at `~/.vpn-admin/db`. This includes servers, SSH credentials, users, provider
-resources, interfaces and links. Other application data is kept under `~/.vpn-admin/`: ACME cache, plugins and download
-cache.
+A **deployment plugin** is called by the admin process and receives the service, server, interface and related connections. It
+implements `apply`, `delete`, `status` and service-user CRUD. External plugins are executables using JSON over stdio, not Go
+`.so` files. Manifests are loaded from `~/.vpn-admin/plugins`; `VPN_ADMIN_PLUGINS_DIR` overrides that directory.
 
-The agent stores desired provider state and registrations in its own state directory. Each provider keeps protocol-specific
-runtime state separately; AWG stores interface keys, peers and metrics history under `VPN_PROVIDER_AWG_DB`.
+These mechanisms complement each other: a provider manages resources through the agent API, while a plugin deploys an abstract
+VPN service from the topology model.
 
-The v1-to-v2 migration is manual and reads the v1 database without modifying it. See
-[docs/migrate_v2.md](docs/migrate_v2.md).
+### Deployment through pack
+
+The admin embeds `pack apply` in its own process; neither an external `pack` command nor ansible-target is used. The external
+`host` target is downloaded automatically and supports Debian and Fedora on `amd64` and `arm64`. The agent and each provider are
+applied in independent operations. A provider is optional, not a required part of the agent.
+
+For OCI installation, the target server downloads its platform binary through a temporary loopback OCI proxy. For self-deploy,
+the local agent binary is shipped as pack content. See [pack/README.md](pack/README.md) for details.
+
+### Metrics
+
+The agent collects system metrics and ICMP latency; the AWG provider collects peer traffic and handshakes. Their APIs are
+separate:
+
+- `GET /metrics` and `GET /metrics/history` — system;
+- `GET /metrics/{interface}` and `GET /metrics/{interface}/history` — interface and peers.
+
+Latency is the p95 of successful ICMP probes over a 15-minute sliding window. Map arrows are blue up to 100 ms, yellow between
+100 and 250 ms, and red above 250 ms; arrows remain blue when no measurement is available. Topology metric requests run in
+parallel per source server and do not block graph loading.
 
 ## Building from source
 
@@ -94,19 +99,27 @@ make server       # standalone web server
 make run-server   # local development server through go run
 make desktop      # Wails desktop application
 make agent        # provider-neutral Linux agent
-make provider-awg # unified Linux AWG provider
+make provider-awg # Linux AWG provider
 make migrate      # awg-migrate utility
 make test         # unit tests for both Go modules
 ```
 
-Build artifacts are written to `build/bin/`. Targets that include the UI build the frontend automatically. The desktop
-build uses the Wails CLI through `go tool wails`.
+Build artifacts are written to `build/bin/`. Targets that include the UI build the frontend automatically. Wails CLI is invoked
+through `go tool wails`.
 
 The Docker-based AWG userspace tunnel test is separate and requires Docker with `/dev/net/tun` and `NET_ADMIN`:
 
 ```sh
 make -C agent test-e2e
 ```
+
+## Migration and backups
+
+v1-to-v2 migration is manual through `awg-migrate v2`. It creates a separate database and leaves the source unchanged. See
+[docs/migrate_v2.md](docs/migrate_v2.md) for resource adoption and rollback.
+
+**Settings → Backup** exports a complete JSON dump of the admin database. It contains secrets and must be protected like the
+database itself.
 
 ## License
 

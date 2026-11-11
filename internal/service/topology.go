@@ -685,6 +685,58 @@ func (s *Service) CreateNetworkConnection(sourceID, targetID string) (*models.Ne
 	return &connection, nil
 }
 
+func (s *Service) MoveNetworkConnection(id, sourceID, targetID string) (*models.NetworkConnection, error) {
+	connectionID, err := parseTopologyID(id, "connection id")
+	if err != nil {
+		return nil, err
+	}
+	source, err := parseTopologyID(sourceID, "source interface id")
+	if err != nil {
+		return nil, err
+	}
+	target, err := parseTopologyID(targetID, "target interface id")
+	if err != nil {
+		return nil, err
+	}
+	if source == target {
+		return nil, invalidInput("an interface cannot connect to itself")
+	}
+	s.topologyMu.Lock()
+	defer s.topologyMu.Unlock()
+	topology, err := s.loadTopology()
+	if err != nil {
+		return nil, err
+	}
+	if networkInterfaceIndex(topology, source) < 0 || networkInterfaceIndex(topology, target) < 0 {
+		return nil, invalidInput("both connection interfaces must exist")
+	}
+	connectionIndex := -1
+	remaining := make([]models.NetworkConnection, 0, len(topology.Connections)-1)
+	for index, connection := range topology.Connections {
+		if connection.ID == connectionID {
+			connectionIndex = index
+			continue
+		}
+		if connection.SourceID == source && connection.TargetID == target {
+			return nil, invalidInput("this connection already exists")
+		}
+		remaining = append(remaining, connection)
+	}
+	if connectionIndex < 0 {
+		return nil, invalidInput("network connection not found")
+	}
+	if connectionCreatesCycle(remaining, source, target) {
+		return nil, invalidInput("this connection would create a cycle")
+	}
+	topology.Connections[connectionIndex].SourceID = source
+	topology.Connections[connectionIndex].TargetID = target
+	if err := s.store.Topology().Set(topology); err != nil {
+		return nil, err
+	}
+	connection := topology.Connections[connectionIndex]
+	return &connection, nil
+}
+
 func connectionCreatesCycle(connections []models.NetworkConnection, source, target uuid.UUID) bool {
 	next := make(map[uuid.UUID][]uuid.UUID, len(connections))
 	for _, connection := range connections {

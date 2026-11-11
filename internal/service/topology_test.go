@@ -359,3 +359,38 @@ func TestConnectionCreatesCycle(t *testing.T) {
 		})
 	}
 }
+
+func TestMoveNetworkConnection(t *testing.T) {
+	svc := newTestService(t)
+	for _, name := range []string{"a", "b", "c"} {
+		if _, err := svc.CreateTopologyServer(TopologyServerInput{Name: name, Interfaces: []NetworkInterfaceInput{{Name: "vpn0"}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	topology, err := svc.GetTopology()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b, c := topology.Interfaces[0], topology.Interfaces[1], topology.Interfaces[2]
+	connection, err := svc.CreateNetworkConnection(a.ID.String(), b.ID.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection, err = svc.MoveNetworkConnection(connection.ID.String(), a.ID.String(), c.ID.String())
+	if err != nil {
+		t.Fatalf("move target: %v", err)
+	}
+	if connection.SourceID != a.ID || connection.TargetID != c.ID {
+		t.Fatalf("unexpected target move: %+v", connection)
+	}
+	connection, err = svc.MoveNetworkConnection(connection.ID.String(), b.ID.String(), c.ID.String())
+	if err != nil {
+		t.Fatalf("move source: %v", err)
+	}
+	if connection.SourceID != b.ID || connection.TargetID != c.ID {
+		t.Fatalf("unexpected source move: %+v", connection)
+	}
+	if _, err := svc.MoveNetworkConnection(connection.ID.String(), c.ID.String(), c.ID.String()); err == nil {
+		t.Fatal("self-connection was accepted")
+	}
+}

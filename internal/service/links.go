@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 	"uuid"
 
@@ -40,6 +41,14 @@ func (s *Service) ListProviderLinks() ([]models.Link, error) {
 }
 
 func (s *Service) CreateProviderLink(sourceID, targetID string) (*models.Link, error) {
+	existing, err := s.store.Links().List()
+	if err != nil {
+		return nil, err
+	}
+	return s.createProviderLink(sourceID, targetID, existing)
+}
+
+func (s *Service) createProviderLink(sourceID, targetID string, existing []models.Link) (*models.Link, error) {
 	source, err := s.resolveEndpoint(sourceID)
 	if err != nil {
 		return nil, err
@@ -49,10 +58,6 @@ func (s *Service) CreateProviderLink(sourceID, targetID string) (*models.Link, e
 		return nil, err
 	}
 	kind, err := compatibleLinkKind(source, target)
-	if err != nil {
-		return nil, err
-	}
-	existing, err := s.store.Links().List()
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +73,42 @@ func (s *Service) CreateProviderLink(sourceID, targetID string) (*models.Link, e
 		return nil, err
 	}
 	return link, s.coordinateLink(link, source, target)
+}
+
+func (s *Service) MoveProviderLink(id, sourceID, targetID string) (*models.Link, error) {
+	previous, err := s.store.Links().Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if previous.Source.ResourceID == sourceID && previous.Target.ResourceID == targetID {
+		return nil, invalidInput("choose a different source or target interface")
+	}
+	existing, err := s.store.Links().List()
+	if err != nil {
+		return nil, err
+	}
+	remaining := make([]models.Link, 0, len(existing)-1)
+	for _, link := range existing {
+		if link.ID != id {
+			remaining = append(remaining, link)
+		}
+	}
+	replacement, err := s.createProviderLink(sourceID, targetID, remaining)
+	if err != nil {
+		if replacement != nil {
+			if cleanupErr := s.DeleteProviderLink(replacement.ID); cleanupErr != nil {
+				return nil, errors.Join(err, fmt.Errorf("clean up replacement link: %w", cleanupErr))
+			}
+		}
+		return nil, err
+	}
+	if err := s.DeleteProviderLink(id); err != nil {
+		if rollbackErr := s.DeleteProviderLink(replacement.ID); rollbackErr != nil {
+			return nil, errors.Join(fmt.Errorf("remove previous link: %w", err), fmt.Errorf("roll back replacement link: %w", rollbackErr))
+		}
+		return nil, fmt.Errorf("remove previous link; replacement was rolled back: %w", err)
+	}
+	return replacement, nil
 }
 
 func (s *Service) ApplyProviderLink(id string) (*models.Link, error) {

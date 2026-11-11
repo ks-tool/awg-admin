@@ -96,6 +96,7 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 		gr.PUT("/services/:serviceID/users/*userID", h.topologyUserUpdate)
 		gr.DELETE("/services/:serviceID/users/*userID", h.topologyUserDelete)
 		gr.POST("/connections", h.topologyConnectionCreate)
+		gr.PUT("/connections/:connectionID", h.topologyConnectionMove)
 		gr.DELETE("/connections/:connectionID", h.topologyConnectionDelete)
 		gr.PUT("/positions", h.topologyPositionsUpdate)
 	})
@@ -138,6 +139,7 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 		gr.GET("", h.providerLinkList)
 		gr.POST("", h.providerLinkCreate)
 		gr.POST("/:linkID/apply", h.providerLinkApply)
+		gr.PUT("/:linkID", h.providerLinkMove)
 		gr.DELETE("/:linkID", h.providerLinkDelete)
 	})
 

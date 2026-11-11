@@ -169,9 +169,15 @@ export async function createNetworkConnection(sourceId: string, targetId: string
         : unwrap(await post<NetworkConnection, {sourceId: string; targetId: string}>('/topology/connections', {sourceId, targetId}));
 }
 
+export async function moveNetworkConnection(id: string, sourceId: string, targetId: string): Promise<NetworkConnection> {
+    return isDesktop()
+        ? binding(() => AppBindings.MoveNetworkConnection(id, sourceId, targetId)) as Promise<NetworkConnection>
+        : unwrap(await put<NetworkConnection, {sourceId: string; targetId: string}>(`/topology/connections/${encodeURIComponent(id)}`, {sourceId, targetId}));
+}
+
 export async function deleteNetworkConnection(id: string): Promise<void> {
     if (isDesktop()) return binding(() => AppBindings.DeleteNetworkConnection(id));
-    unwrap(await remove<void>(`/topology/connections/${id}`));
+    unwrap(await remove<void>(`/topology/connections/${encodeURIComponent(id)}`));
 }
 
 export async function moveTopologyNodes(positions: NodePosition[]): Promise<void> {

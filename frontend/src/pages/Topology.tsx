@@ -53,9 +53,10 @@ import {
     getTopology,
     getTunnelMetrics,
     listVPNPlugins,
+    moveNetworkConnection,
     moveTopologyNodes,
 } from '@/services/topology';
-import {createProviderLink, deleteProviderLink, listProviderLinks} from '@/services/resources';
+import {createProviderLink, deleteProviderLink, listProviderLinks, moveProviderLink} from '@/services/resources';
 import {getServerAgentStatus, type AgentStatus} from '@/services/servers';
 import {useAppStore} from '@/store';
 import {useAutoRefresh} from '@/hooks/useAutoRefresh';
@@ -85,6 +86,9 @@ export default function Topology() {
     const [metricsModalServerId, setMetricsModalServerId] = useState<string | null>(null);
     const [connectionToCreate, setConnectionToCreate] = useState<{source: string; target: string} | null>(null);
     const [creatingConnection, setCreatingConnection] = useState(false);
+    const [connectionToMove, setConnectionToMove] = useState<{edge: Edge; source: string; target: string} | null>(null);
+    const [movingConnection, setMovingConnection] = useState(false);
+    const [moveMode, setMoveMode] = useState(false);
     const [connectionToDelete, setConnectionToDelete] = useState<Edge | null>(null);
     const [deletingConnection, setDeletingConnection] = useState(false);
     const [nodes, setNodes, onNodesChange] = useNodesState<TopologyNode>([]);
@@ -167,10 +171,18 @@ export default function Topology() {
         })));
     }, [graphConnections, setEdges]);
 
+    const selectedConnection = edges.find(edge => edge.selected && !edge.id.startsWith('tunnel:'));
     const canConnect = useCallback((connection: {source: string | null; target: string | null}) => {
         if (!connection.source || !connection.target) return false;
         return canCreateTopologyConnection(graphConnections, connection.source, connection.target);
     }, [graphConnections]);
+    const canMoveConnection = useCallback((connection: {source: string | null; target: string | null}, edge: Edge) => {
+        if (!connection.source || !connection.target) return false;
+        return canCreateTopologyConnection(graphConnections.filter(item => item.id !== edge.id), connection.source, connection.target);
+    }, [graphConnections]);
+    const isValidConnection = useCallback((connection: {source: string | null; target: string | null}) => {
+        return moveMode && selectedConnection ? canMoveConnection(connection, selectedConnection) : canConnect(connection);
+    }, [canConnect, canMoveConnection, moveMode, selectedConnection]);
     const handleConnect = useCallback((connection: Connection) => {
         if (!connection.source || !connection.target) return;
         if (!canConnect(connection)) {
@@ -204,6 +216,39 @@ export default function Topology() {
             setCreatingConnection(false);
         }
     }, [canConnect, connectionToCreate, refresh, t, topology.interfaces]);
+    const handleReconnect = useCallback((edge: Edge, connection: Connection) => {
+        if (!moveMode || selectedConnection?.id !== edge.id || !connection.source || !connection.target) return;
+        setMoveMode(false);
+        if (edge.source === connection.source && edge.target === connection.target) return;
+        if (!canMoveConnection(connection, edge)) {
+            toast.error(t('topology.connectionCycle'));
+            return;
+        }
+        setConnectionToMove({edge, source: connection.source, target: connection.target});
+    }, [canMoveConnection, moveMode, selectedConnection, t]);
+    const confirmMoveConnection = useCallback(async () => {
+        if (!connectionToMove) return;
+        setMovingConnection(true);
+        try {
+            if (!canMoveConnection(connectionToMove, connectionToMove.edge)) {
+                toast.error(t('topology.connectionCycle'));
+                setConnectionToMove(null);
+                return;
+            }
+            if (connectionToMove.edge.id.startsWith('link:')) {
+                await moveProviderLink(connectionToMove.edge.id.slice(5), connectionToMove.source, connectionToMove.target);
+            } else {
+                await moveNetworkConnection(connectionToMove.edge.id, connectionToMove.source, connectionToMove.target);
+            }
+            await refresh();
+            setConnectionToMove(null);
+            toast.success(t('topology.connectionMoved'));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t('topology.saveError'));
+        } finally {
+            setMovingConnection(false);
+        }
+    }, [canMoveConnection, connectionToMove, refresh, t]);
     const connectionLabel = useCallback((id: string) => {
         const iface = topology.interfaces.find(item => item.id === id);
         const server = topology.servers.find(item => item.id === iface?.serverId);
@@ -211,18 +256,27 @@ export default function Topology() {
         return `${server ? `${server.name}[${server.address || '—'}]` : '—'} / ${iface.name}`;
     }, [topology.interfaces, topology.servers]);
 
-    const selectedConnection = edges.find(edge => edge.selected && !edge.id.startsWith('tunnel:'));
     useEffect(() => {
-        if (!selectedConnection || connectionToCreate || connectionToDelete) return;
+        if (!selectedConnection || connectionToCreate || connectionToMove || connectionToDelete) return;
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== 'Delete' && event.key !== 'Backspace') return;
             if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+            if (event.key.toLowerCase() === 'm') {
+                event.preventDefault();
+                setMoveMode(current => !current);
+                return;
+            }
+            if (event.key === 'Escape') {
+                setMoveMode(false);
+                return;
+            }
+            if (event.key !== 'Delete' && event.key !== 'Backspace') return;
             event.preventDefault();
+            setMoveMode(false);
             setConnectionToDelete(selectedConnection);
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedConnection, connectionToCreate, connectionToDelete]);
+    }, [selectedConnection, connectionToCreate, connectionToMove, connectionToDelete]);
     const confirmDeleteConnection = useCallback(async () => {
         if (!connectionToDelete) return;
         setDeletingConnection(true);
@@ -286,14 +340,19 @@ export default function Topology() {
                                 onNodesChange={onNodesChange}
                                 onEdgesChange={onEdgesChange}
                                 onConnect={handleConnect}
+                                onReconnect={handleReconnect}
+                                edgesReconnectable={moveMode && !!selectedConnection && !connectionToMove}
                                 connectionMode={ConnectionMode.Strict}
-                                isValidConnection={canConnect}
+                                isValidConnection={isValidConnection}
                                 onNodeDragStop={(_, node: Node) => {
                                     void moveTopologyNodes([{id: node.id, x: node.position.x, y: node.position.y}]).catch(error => {
                                         toast.error(error instanceof Error ? error.message : t('topology.saveError'));
                                     });
                                 }}
-                                onPaneClick={() => setSelection(null)}
+                                onPaneClick={() => {
+                                    setSelection(null);
+                                    setMoveMode(false);
+                                }}
                                 deleteKeyCode={null}
                                 fitView
                                 minZoom={0.25}
@@ -304,8 +363,8 @@ export default function Topology() {
                                 <Controls />
                                 <MiniMap pannable zoomable />
                             </ReactFlow>
-                            <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border bg-card/95 px-4 py-2 text-center text-xs text-muted-foreground shadow-sm">
-                                {t('topology.canvasHint')}
+                            <div className={`pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-sm ${moveMode ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400' : 'border-border bg-card/95 text-muted-foreground'}`}>
+                                {t(moveMode ? 'topology.moveCanvasHint' : 'topology.canvasHint')}
                             </div>
                         </>
                     ) : (
@@ -344,6 +403,25 @@ export default function Topology() {
                     <div className="flex justify-end gap-2">
                         <button type="button" onClick={() => setConnectionToCreate(null)} disabled={creatingConnection} className={buttons.secondary}>{t('common.cancel')}</button>
                         <button type="button" onClick={() => void confirmCreateConnection()} disabled={creatingConnection} className={buttons.primary}>{t('common.create')}</button>
+                    </div>
+                </Modal>
+            )}
+            {connectionToMove && (
+                <Modal title={t('topology.moveConnection')} onClose={() => setConnectionToMove(null)} loading={movingConnection}>
+                    <p className="mb-4 text-sm text-muted-foreground">{t('topology.confirmMoveConnection')}</p>
+                    <div className="mb-3 flex items-center gap-3 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+                        <span className="min-w-0 flex-1 break-words">{connectionLabel(connectionToMove.edge.source)}</span>
+                        <ArrowRight className="shrink-0" size={16} />
+                        <span className="min-w-0 flex-1 break-words text-right">{connectionLabel(connectionToMove.edge.target)}</span>
+                    </div>
+                    <div className="mb-6 flex items-center gap-3 rounded-lg bg-muted p-4 text-sm">
+                        <span className="min-w-0 flex-1 break-words">{connectionLabel(connectionToMove.source)}</span>
+                        <ArrowRight className="shrink-0 text-sky-500" size={20} />
+                        <span className="min-w-0 flex-1 break-words text-right">{connectionLabel(connectionToMove.target)}</span>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setConnectionToMove(null)} disabled={movingConnection} className={buttons.secondary}>{t('common.cancel')}</button>
+                        <button type="button" onClick={() => void confirmMoveConnection()} disabled={movingConnection} className={buttons.primary}>{t('common.create')}</button>
                     </div>
                 </Modal>
             )}

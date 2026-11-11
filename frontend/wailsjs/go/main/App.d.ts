@@ -160,6 +160,10 @@ export function Login(arg1:string,arg2:string):Promise<void>;
 
 export function MigratePeer(arg1:string,arg2:string,arg3:string):Promise<models.User>;
 
+export function MoveNetworkConnection(arg1:string,arg2:string,arg3:string):Promise<models.NetworkConnection>;
+
+export function MoveProviderLink(arg1:string,arg2:string,arg3:string):Promise<models.Link>;
+
 export function MoveTopologyNodes(arg1:Array<models.NodePosition>):Promise<void>;
 
 export function PreviewImport(arg1:string,arg2:string,arg3:string):Promise<models.ImportPreview>;

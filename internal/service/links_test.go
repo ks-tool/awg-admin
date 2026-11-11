@@ -168,3 +168,49 @@ func TestDeleteProviderLinkClearsMigratedLegacyTunnel(t *testing.T) {
 		}
 	}
 }
+
+func TestMoveProviderLink(t *testing.T) {
+	svc := newTestService(t)
+	serverA, _ := newLinkTestServer(t, svc, "a")
+	serverB, _ := newLinkTestServer(t, svc, "b")
+	serverC, agentC := newLinkTestServer(t, svc, "c")
+	resourceA := newLinkTestResource(t, svc, serverA)
+	resourceB := newLinkTestResource(t, svc, serverB)
+	resourceC := newLinkTestResource(t, svc, serverC)
+
+	original, err := svc.CreateProviderLink(resourceA.ID, resourceB.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	movedTarget, err := svc.MoveProviderLink(original.ID, resourceA.ID, resourceC.ID)
+	if err != nil {
+		t.Fatalf("move target: %v", err)
+	}
+	if movedTarget.Source.ResourceID != resourceA.ID || movedTarget.Target.ResourceID != resourceC.ID || movedTarget.Status.Phase != models.LinkReady {
+		t.Fatalf("unexpected target move: %+v", movedTarget)
+	}
+	movedSource, err := svc.MoveProviderLink(movedTarget.ID, resourceB.ID, resourceC.ID)
+	if err != nil {
+		t.Fatalf("move source: %v", err)
+	}
+	if movedSource.Source.ResourceID != resourceB.ID || movedSource.Target.ResourceID != resourceC.ID || movedSource.Status.Phase != models.LinkReady {
+		t.Fatalf("unexpected source move: %+v", movedSource)
+	}
+
+	agentC.mu.Lock()
+	agentC.failCommit = true
+	agentC.mu.Unlock()
+	if _, err := svc.MoveProviderLink(movedSource.ID, resourceA.ID, resourceC.ID); err == nil {
+		t.Fatal("failed replacement was accepted")
+	}
+	agentC.mu.Lock()
+	agentC.failCommit = false
+	agentC.mu.Unlock()
+	links, err := svc.ListProviderLinks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 1 || links[0].ID != movedSource.ID || links[0].Source.ResourceID != resourceB.ID || links[0].Target.ResourceID != resourceC.ID {
+		t.Fatalf("previous link was not preserved after failed move: %+v", links)
+	}
+}

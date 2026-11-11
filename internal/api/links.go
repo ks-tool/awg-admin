@@ -46,6 +46,21 @@ func (h *Handler) providerLinkCreate(w http.ResponseWriter, r bunrouter.Request)
 	return bunrouter.JSON(w, link)
 }
 
+func (h *Handler) providerLinkMove(w http.ResponseWriter, r bunrouter.Request) error {
+	var input struct {
+		SourceID string `json:"sourceId"`
+		TargetID string `json:"targetId"`
+	}
+	if err := decode(r, &input); err != nil {
+		return badRequest(err)
+	}
+	link, err := h.svc.MoveProviderLink(r.Param("linkID"), input.SourceID, input.TargetID)
+	if err != nil {
+		return handleErr(err, resourceFields(r))
+	}
+	return bunrouter.JSON(w, link)
+}
+
 func (h *Handler) providerLinkApply(w http.ResponseWriter, r bunrouter.Request) error {
 	link, err := h.svc.ApplyProviderLink(r.Param("linkID"))
 	if err != nil {
