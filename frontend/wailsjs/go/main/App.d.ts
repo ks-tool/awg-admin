@@ -30,7 +30,7 @@ export function CreateNetworkInterface(arg1:string,arg2:service.NetworkInterface
 
 export function CreateProviderLink(arg1:string,arg2:string):Promise<models.Link>;
 
-export function CreateRegistrySource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean):Promise<models.RegistrySource>;
+export function CreateRegistrySource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:boolean):Promise<models.RegistrySource>;
 
 export function CreateServer(arg1:service.ServerInput):Promise<models.Server>;
 
@@ -224,7 +224,7 @@ export function UpdateInterfaceConfig(arg1:string,arg2:string,arg3:models.Interf
 
 export function UpdateNetworkInterface(arg1:string,arg2:service.NetworkInterfaceInput):Promise<models.Topology>;
 
-export function UpdateRegistrySource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean):Promise<models.RegistrySource>;
+export function UpdateRegistrySource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string,arg8:boolean):Promise<models.RegistrySource>;
 
 export function UpdateServer(arg1:string,arg2:service.ServerInput):Promise<models.Server>;
 

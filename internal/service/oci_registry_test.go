@@ -80,23 +80,26 @@ func TestRegistrySourceLifecycleKeepsPasswordOutOfList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(initialized) != 1 || initialized[0].AgentRepository != officialAgentRepository || initialized[0].ProviderRepository != officialProviderRepository {
+		t.Fatalf("default source repositories = %#v", initialized)
+	}
 	for _, source := range initialized {
 		if err := svc.DeleteRegistrySource(source.ID.String()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	source, err := svc.CreateRegistrySource("private", "registry.example:5000/", "reader", "secret", true)
+	source, err := svc.CreateRegistrySource("private", "registry.example:5000/", "oci://registry.example:5000/team/agent", "oci://registry.example:5000/team/providers", "reader", "secret", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if source.URL != "oci://registry.example:5000" || !source.HasPassword || source.Password != "" {
+	if source.URL != "oci://registry.example:5000" || source.AgentRepository != "oci://registry.example:5000/team/agent" || source.ProviderRepository != "oci://registry.example:5000/team/providers" || !source.HasPassword || source.Password != "" {
 		t.Fatalf("created source = %#v", source)
 	}
 	list, err := svc.ListRegistrySources()
 	if err != nil || len(list) != 1 || list[0].Password != "" || !list[0].HasPassword {
 		t.Fatalf("sources = %#v, %v", list, err)
 	}
-	updated, err := svc.UpdateRegistrySource(source.ID.String(), "private", source.URL, "reader", "", false)
+	updated, err := svc.UpdateRegistrySource(source.ID.String(), "private", source.URL, source.AgentRepository, source.ProviderRepository, "reader", "", false)
 	if err != nil || !updated.HasPassword || updated.PlainHTTP {
 		t.Fatalf("updated source = %#v, %v", updated, err)
 	}
@@ -104,7 +107,7 @@ func TestRegistrySourceLifecycleKeepsPasswordOutOfList(t *testing.T) {
 	if err != nil || resolved.Password != "secret" || resolved.PlainHTTP {
 		t.Fatalf("resolved registry = %#v, %v", resolved, err)
 	}
-	cleared, err := svc.UpdateRegistrySource(source.ID.String(), "private", source.URL, "", "", false)
+	cleared, err := svc.UpdateRegistrySource(source.ID.String(), "private", source.URL, source.AgentRepository, source.ProviderRepository, "", "", false)
 	if err != nil || cleared.HasPassword {
 		t.Fatalf("cleared source = %#v, %v", cleared, err)
 	}

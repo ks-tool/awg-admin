@@ -87,7 +87,7 @@ func TestManualMigrationPreservesSourceAndMarksServersUnmanaged(t *testing.T) {
 		t.Fatalf("auth changed: %+v, %v", auth, err)
 	}
 	registrySources, err := db.RegistrySources().List()
-	if err != nil || len(registrySources) != 1 || registrySources[0].URL != "oci://ghcr.io" {
+	if err != nil || len(registrySources) != 1 || registrySources[0].URL != "oci://ghcr.io" || registrySources[0].AgentRepository != "oci://ghcr.io/ks-tool/vpn-agent" || registrySources[0].ProviderRepository != "oci://ghcr.io/ks-tool/vpn-providers" {
 		t.Fatalf("default OCI registry was not initialized during migration: %+v, %v", registrySources, err)
 	}
 	if err := db.RegistrySources().Delete(registrySources[0].ID); err != nil {

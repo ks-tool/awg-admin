@@ -33,16 +33,18 @@ func (h *Handler) registrySourceList(w http.ResponseWriter, _ bunrouter.Request)
 
 func (h *Handler) registrySourceCreate(w http.ResponseWriter, r bunrouter.Request) error {
 	var req struct {
-		Name      string `json:"name"`
-		URL       string `json:"url"`
-		Username  string `json:"username"`
-		Password  string `json:"password"`
-		PlainHTTP bool   `json:"plainHttp"`
+		Name               string `json:"name"`
+		URL                string `json:"url"`
+		AgentRepository    string `json:"agentRepository"`
+		ProviderRepository string `json:"providerRepository"`
+		Username           string `json:"username"`
+		Password           string `json:"password"`
+		PlainHTTP          bool   `json:"plainHttp"`
 	}
 	if err := decode(r, &req); err != nil {
 		return badRequest(err)
 	}
-	source, err := h.svc.CreateRegistrySource(req.Name, req.URL, req.Username, req.Password, req.PlainHTTP)
+	source, err := h.svc.CreateRegistrySource(req.Name, req.URL, req.AgentRepository, req.ProviderRepository, req.Username, req.Password, req.PlainHTTP)
 	if err != nil {
 		return badRequest(err)
 	}
@@ -52,16 +54,18 @@ func (h *Handler) registrySourceCreate(w http.ResponseWriter, r bunrouter.Reques
 
 func (h *Handler) registrySourceUpdate(w http.ResponseWriter, r bunrouter.Request) error {
 	var req struct {
-		Name      string `json:"name"`
-		URL       string `json:"url"`
-		Username  string `json:"username"`
-		Password  string `json:"password"`
-		PlainHTTP bool   `json:"plainHttp"`
+		Name               string `json:"name"`
+		URL                string `json:"url"`
+		AgentRepository    string `json:"agentRepository"`
+		ProviderRepository string `json:"providerRepository"`
+		Username           string `json:"username"`
+		Password           string `json:"password"`
+		PlainHTTP          bool   `json:"plainHttp"`
 	}
 	if err := decode(r, &req); err != nil {
 		return badRequest(err)
 	}
-	source, err := h.svc.UpdateRegistrySource(r.Param("sourceID"), req.Name, req.URL, req.Username, req.Password, req.PlainHTTP)
+	source, err := h.svc.UpdateRegistrySource(r.Param("sourceID"), req.Name, req.URL, req.AgentRepository, req.ProviderRepository, req.Username, req.Password, req.PlainHTTP)
 	if err != nil {
 		return handleErr(err, map[string]any{"method": r.Method, "path": r.URL.Path})
 	}

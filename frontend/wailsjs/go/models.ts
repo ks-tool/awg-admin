@@ -1229,6 +1229,8 @@ export namespace models {
 	    id: number[];
 	    name: string;
 	    url: string;
+	    agentRepository: string;
+	    providerRepository: string;
 	    username?: string;
 	    password?: string;
 	    hasPassword?: boolean;
@@ -1243,6 +1245,8 @@ export namespace models {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.url = source["url"];
+	        this.agentRepository = source["agentRepository"];
+	        this.providerRepository = source["providerRepository"];
 	        this.username = source["username"];
 	        this.password = source["password"];
 	        this.hasPassword = source["hasPassword"];

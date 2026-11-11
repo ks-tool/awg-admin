@@ -23,6 +23,7 @@ import { Modal } from '@/components/common/Modal';
 import { buttons, inputs } from '@/components/common/controls';
 import { FormField } from '@/components/common/FormField';
 import { CopyButton } from '@/components/common/CopyButton';
+import { RegistrySourcesSection } from '@/components/settings/RegistrySourcesSection';
 import { useAuth } from '@/contexts/AuthContext';
 import { changeCredentials, getCurrentUser, setBasicAuthEnabled } from '@/services/auth';
 import { getLogs, saveLogs, debugLoggingEnabled, setDebugLogging } from '@/services/logs';
@@ -361,6 +362,7 @@ export default function Settings() {
                     </div>
                 </div>
 
+                <RegistrySourcesSection />
                 <BackupSection />
                 {isDesktop && <LogsSection />}
                 {authEnabled && <BasicAuthSection />}

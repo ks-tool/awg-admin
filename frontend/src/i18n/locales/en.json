@@ -270,6 +270,7 @@
     "registryFieldsRequired": "Registry name and address are required",
     "registrySaveError": "Failed to save OCI registry",
     "registrySources": "OCI registries",
+    "registrySettingsHint": "Manage sources and repositories in the application settings.",
     "confirmDeleteRegistry": "Remove this saved OCI registry? Deployed agents and providers will not be affected.",
     "deployAgent": "Deploy agent",
     "deployProvider": "Install provider",
@@ -624,6 +625,13 @@
     "createBackup": "Save backup",
     "backupHint": "Download a full snapshot of the admin database (servers, users, peers, credentials) as a JSON file. Restore it with the awg-migrate tool.",
     "backupSaved": "Backup saved",
+    "registrySources": "Agent and provider sources",
+    "registrySourcesHint": "OCI registries, the agent repository and provider catalog available when deploying to servers.",
+    "addRegistrySource": "Add source",
+    "noRegistrySources": "No sources configured",
+    "agentArtifacts": "Agent",
+    "providerArtifacts": "Providers",
+    "repositoryDefaultsHint": "Leave empty to derive the paths automatically from the registry address.",
     "version": "Version"
   },
   "resources": {

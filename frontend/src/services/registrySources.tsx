@@ -43,14 +43,14 @@ export async function listRegistrySources(): Promise<RegistrySource[]> {
 
 export async function createRegistrySource(input: Omit<RegistrySource, 'id' | 'hasPassword'>): Promise<RegistrySource> {
     if (isDesktop()) {
-        return binding(async () => await AppBindings.CreateRegistrySource(input.name, input.url, input.username ?? '', input.password ?? '', input.plainHttp ?? false) as unknown as RegistrySource);
+        return binding(async () => await AppBindings.CreateRegistrySource(input.name, input.url, input.agentRepository, input.providerRepository, input.username ?? '', input.password ?? '', input.plainHttp ?? false) as unknown as RegistrySource);
     }
     return unwrap(await post<RegistrySource, typeof input>('/registry-sources', input));
 }
 
 export async function updateRegistrySource(id: string, input: Omit<RegistrySource, 'id' | 'hasPassword'>): Promise<RegistrySource> {
     if (isDesktop()) {
-        return binding(async () => await AppBindings.UpdateRegistrySource(id, input.name, input.url, input.username ?? '', input.password ?? '', input.plainHttp ?? false) as unknown as RegistrySource);
+        return binding(async () => await AppBindings.UpdateRegistrySource(id, input.name, input.url, input.agentRepository, input.providerRepository, input.username ?? '', input.password ?? '', input.plainHttp ?? false) as unknown as RegistrySource);
     }
     return unwrap(await put<RegistrySource, typeof input>(`/registry-sources/${encodeURIComponent(id)}`, input));
 }

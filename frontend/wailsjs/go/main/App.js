@@ -54,8 +54,8 @@ export function CreateProviderLink(arg1, arg2) {
   return window['go']['main']['App']['CreateProviderLink'](arg1, arg2);
 }
 
-export function CreateRegistrySource(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['CreateRegistrySource'](arg1, arg2, arg3, arg4, arg5);
+export function CreateRegistrySource(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['CreateRegistrySource'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function CreateServer(arg1) {
@@ -442,8 +442,8 @@ export function UpdateNetworkInterface(arg1, arg2) {
   return window['go']['main']['App']['UpdateNetworkInterface'](arg1, arg2);
 }
 
-export function UpdateRegistrySource(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['main']['App']['UpdateRegistrySource'](arg1, arg2, arg3, arg4, arg5, arg6);
+export function UpdateRegistrySource(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
+  return window['go']['main']['App']['UpdateRegistrySource'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
 export function UpdateServer(arg1, arg2) {

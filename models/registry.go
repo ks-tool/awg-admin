@@ -27,16 +27,19 @@ type Registry struct {
 	PlainHTTP bool   `json:"plainHttp,omitempty"`
 }
 
-// RegistrySource is a reusable private OCI registry. Password is stored in the
-// admin database, but list and get responses clear it and expose HasPassword.
+// RegistrySource is a reusable OCI registry and its artifact repositories.
+// Password is stored in the admin database, but list and get responses clear
+// it and expose HasPassword.
 type RegistrySource struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	URL         string    `json:"url"`
-	Username    string    `json:"username,omitempty"`
-	Password    string    `json:"password,omitempty"`
-	HasPassword bool      `json:"hasPassword,omitempty"`
-	PlainHTTP   bool      `json:"plainHttp,omitempty"`
+	ID                 uuid.UUID `json:"id"`
+	Name               string    `json:"name"`
+	URL                string    `json:"url"`
+	AgentRepository    string    `json:"agentRepository"`
+	ProviderRepository string    `json:"providerRepository"`
+	Username           string    `json:"username,omitempty"`
+	Password           string    `json:"password,omitempty"`
+	HasPassword        bool      `json:"hasPassword,omitempty"`
+	PlainHTTP          bool      `json:"plainHttp,omitempty"`
 }
 
 // RegistryRequest identifies an untagged OCI repository or repository prefix.

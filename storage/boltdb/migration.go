@@ -97,7 +97,10 @@ func initializeSchema(tx *bolt.Tx) error {
 	}
 	meta := tx.Bucket(bktMeta)
 	if meta.Get(registrySourcesInitializeKey) == nil {
-		source := &models.RegistrySource{ID: uuid.New(), Name: "GitHub Container Registry", URL: "oci://ghcr.io"}
+		source := &models.RegistrySource{
+			ID: uuid.New(), Name: "GitHub Container Registry", URL: "oci://ghcr.io",
+			AgentRepository: "oci://ghcr.io/ks-tool/vpn-agent", ProviderRepository: "oci://ghcr.io/ks-tool/vpn-providers",
+		}
 		if err := put(tx.Bucket(bktRegistrySources), idKey(source.ID), source); err != nil {
 			return err
 		}

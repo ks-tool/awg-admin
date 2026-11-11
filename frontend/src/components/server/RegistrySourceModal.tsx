@@ -32,6 +32,8 @@ export function RegistrySourceModal({source, onClose, onSaved}: {
     const {t} = useTranslation();
     const [name, setName] = useState(source?.name ?? '');
     const [url, setUrl] = useState(source?.url ?? '');
+    const [agentRepository, setAgentRepository] = useState(source?.agentRepository ?? '');
+    const [providerRepository, setProviderRepository] = useState(source?.providerRepository ?? '');
     const [username, setUsername] = useState(source?.username ?? '');
     const [password, setPassword] = useState('');
     const [plainHttp, setPlainHttp] = useState(source?.plainHttp ?? false);
@@ -44,7 +46,10 @@ export function RegistrySourceModal({source, onClose, onSaved}: {
         }
         setSaving(true);
         try {
-            const input = {name: name.trim(), url: url.trim(), username: username.trim(), password, plainHttp};
+            const input = {
+                name: name.trim(), url: url.trim(), agentRepository: agentRepository.trim(),
+                providerRepository: providerRepository.trim(), username: username.trim(), password, plainHttp,
+            };
             const saved = source
                 ? await updateRegistrySource(source.id, input)
                 : await createRegistrySource(input);
@@ -57,13 +62,22 @@ export function RegistrySourceModal({source, onClose, onSaved}: {
     };
 
     return (
-        <Modal title={source ? t('servers.editRegistryTitle') : t('servers.addRegistryTitle')} onClose={onClose} loading={saving} dimmed={false}>
+        <Modal title={source ? t('servers.editRegistryTitle') : t('servers.addRegistryTitle')} onClose={onClose} loading={saving}>
             <div className="space-y-4">
                 <FormField label={t('servers.sourceName')}>
                     <input value={name} onChange={event => setName(event.target.value)} disabled={saving} className={inputs.primary} placeholder="Private OCI" />
                 </FormField>
                 <FormField label={t('servers.registryAddress')}>
                     <input value={url} onChange={event => setUrl(event.target.value)} disabled={saving} className={cn(inputs.primary, 'font-mono text-xs')} placeholder="oci://registry.example:5000" />
+                </FormField>
+                <FormField label={t('servers.agentRepository')}>
+                    <input value={agentRepository} onChange={event => setAgentRepository(event.target.value)} disabled={saving} className={cn(inputs.primary, 'font-mono text-xs')} placeholder="oci://ghcr.io/ks-tool/vpn-agent" />
+                </FormField>
+                <FormField label={t('servers.providerCatalog')}>
+                    <>
+                        <input value={providerRepository} onChange={event => setProviderRepository(event.target.value)} disabled={saving} className={cn(inputs.primary, 'font-mono text-xs')} placeholder="oci://ghcr.io/ks-tool/vpn-providers" />
+                        <p className="text-xs text-muted-foreground">{t('settings.repositoryDefaultsHint')}</p>
+                    </>
                 </FormField>
                 <div className="grid grid-cols-2 gap-3">
                     <FormField label={t('servers.registryUsername')}>

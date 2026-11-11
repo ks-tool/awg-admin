@@ -24,19 +24,26 @@ import (
 	"github.com/ks-tool/vpn-admin/models"
 )
 
+const officialAgentRepository = "oci://ghcr.io/ks-tool/vpn-agent"
+
 func (s *Service) ListRegistrySources() ([]models.RegistrySource, error) {
 	sources, err := s.store.RegistrySources().List()
 	if err != nil {
 		return nil, err
 	}
 	for i := range sources {
+		setDefaultSourceRepositories(&sources[i])
 		scrubRegistrySource(&sources[i])
 	}
 	return sources, nil
 }
 
-func (s *Service) CreateRegistrySource(name, address, username, password string, plainHTTP bool) (*models.RegistrySource, error) {
+func (s *Service) CreateRegistrySource(name, address, agentRepository, providerRepository, username, password string, plainHTTP bool) (*models.RegistrySource, error) {
 	address, err := normalizeRegistryAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	agentRepository, providerRepository, err = normalizeSourceRepositories(address, agentRepository, providerRepository)
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +55,7 @@ func (s *Service) CreateRegistrySource(name, address, username, password string,
 	}
 	source := &models.RegistrySource{
 		ID: uuid.New(), Name: strings.TrimSpace(name), URL: address,
+		AgentRepository: agentRepository, ProviderRepository: providerRepository,
 		Username: strings.TrimSpace(username), Password: password, PlainHTTP: plainHTTP,
 	}
 	if err := s.store.RegistrySources().Set(source); err != nil {
@@ -56,7 +64,7 @@ func (s *Service) CreateRegistrySource(name, address, username, password string,
 	return publicRegistrySource(source), nil
 }
 
-func (s *Service) UpdateRegistrySource(id, name, address, username, password string, plainHTTP bool) (*models.RegistrySource, error) {
+func (s *Service) UpdateRegistrySource(id, name, address, agentRepository, providerRepository, username, password string, plainHTTP bool) (*models.RegistrySource, error) {
 	sourceID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err
@@ -66,6 +74,10 @@ func (s *Service) UpdateRegistrySource(id, name, address, username, password str
 		return nil, err
 	}
 	address, err = normalizeRegistryAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	agentRepository, providerRepository, err = normalizeSourceRepositories(address, agentRepository, providerRepository)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +93,7 @@ func (s *Service) UpdateRegistrySource(id, name, address, username, password str
 	}
 	updated := &models.RegistrySource{
 		ID: sourceID, Name: strings.TrimSpace(name), URL: address,
+		AgentRepository: agentRepository, ProviderRepository: providerRepository,
 		Username: username, Password: password, PlainHTTP: plainHTTP,
 	}
 	if err := s.store.RegistrySources().Set(updated); err != nil {
@@ -136,6 +149,52 @@ func normalizeRegistryAddress(address string) (string, error) {
 		return "", fmt.Errorf("registry address must be a host with an optional port, without a repository path")
 	}
 	return "oci://" + address, nil
+}
+
+func normalizeSourceRepositories(address, agentRepository, providerRepository string) (string, string, error) {
+	defaultAgent, defaultProvider := defaultSourceRepositories(address)
+	var err error
+	agentRepository, err = normalizeSourceRepository(address, agentRepository, defaultAgent)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid agent repository: %w", err)
+	}
+	providerRepository, err = normalizeSourceRepository(address, providerRepository, defaultProvider)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid provider repository: %w", err)
+	}
+	return agentRepository, providerRepository, nil
+}
+
+func normalizeSourceRepository(address, repository, fallback string) (string, error) {
+	repository = strings.TrimSpace(repository)
+	if len(repository) == 0 {
+		repository = fallback
+	}
+	ref, err := parseOCIRepository(repository)
+	if err != nil {
+		return "", err
+	}
+	if !strings.EqualFold(ref.host, strings.TrimPrefix(address, "oci://")) {
+		return "", fmt.Errorf("repository registry %q does not match source %q", ref.host, address)
+	}
+	return ref.withoutTag(), nil
+}
+
+func defaultSourceRepositories(address string) (string, string) {
+	if strings.EqualFold(address, "oci://ghcr.io") {
+		return officialAgentRepository, officialProviderRepository
+	}
+	return address + "/ks-tool/vpn-agent", address + "/vpn-providers"
+}
+
+func setDefaultSourceRepositories(source *models.RegistrySource) {
+	agentRepository, providerRepository := defaultSourceRepositories(source.URL)
+	if len(source.AgentRepository) == 0 {
+		source.AgentRepository = agentRepository
+	}
+	if len(source.ProviderRepository) == 0 {
+		source.ProviderRepository = providerRepository
+	}
 }
 
 func validateRegistryCredentials(username, password string) error {
