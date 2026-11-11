@@ -23,6 +23,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -104,6 +105,69 @@ func TestExternalProviderLifecycleCrashAndRestart(t *testing.T) {
 	core.Start(context.Background())
 	defer core.Close()
 	waitRemoteStatus(t, core, "offline", models.ResourceReady)
+}
+
+func TestRemoteDeleteReportsPhysicalDeletionFailure(t *testing.T) {
+	definition := models.ProviderDefinition{Name: "example", Version: "1"}
+	statusCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v1/manifest":
+			_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion, Providers: []models.ProviderDefinition{definition}})
+		case r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/status"):
+			statusCalls++
+			_ = json.NewEncoder(w).Encode(models.ResourceStatus{Phase: models.ResourceDegraded, Conditions: []models.Condition{{Message: "physical deletion failed"}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	provider, err := NewProvider(server.URL, definition, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := models.Resource{Kind: "Endpoint", Name: "test"}
+	if err := provider.Delete(context.Background(), item); err == nil || !strings.Contains(err.Error(), "physical deletion failed") {
+		t.Fatalf("accepted DELETE hid physical deletion failure: %v", err)
+	}
+	if statusCalls == 0 {
+		t.Fatal("remote DELETE was treated as synchronous")
+	}
+}
+
+func TestRemoteDeleteWaitsUntilResourceDisappears(t *testing.T) {
+	definition := models.ProviderDefinition{Name: "example", Version: "1"}
+	statusCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v1/manifest":
+			_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion, Providers: []models.ProviderDefinition{definition}})
+		case r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/status"):
+			statusCalls++
+			if statusCalls == 1 {
+				_ = json.NewEncoder(w).Encode(models.ResourceStatus{Phase: models.ResourceDeleting})
+				return
+			}
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	provider, err := NewProvider(server.URL, definition, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := provider.Delete(context.Background(), models.Resource{Kind: "Endpoint", Name: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if statusCalls != 2 {
+		t.Fatalf("status calls = %d, want 2", statusCalls)
+	}
 }
 
 func TestLoadProviderRegistry(t *testing.T) {

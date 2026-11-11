@@ -162,7 +162,7 @@ func createProviderInterface(t *testing.T, admin *adminservice.Service, server *
 	case "hysteria2":
 		apiVersion, name = "hysteria2.ks-tool.dev/v1", "hy2"
 		port += 2
-		spec = map[string]any{"name": name, "listen": "0.0.0.0", "port": port, "serverName": "localhost"}
+		spec = map[string]any{"name": name, "listen": "0.0.0.0", "port": port, "serverName": "localhost", "insecure": true}
 	case "awg":
 		apiVersion, name = "awg.ks-tool.dev/v1", "awg0"
 		port += 3

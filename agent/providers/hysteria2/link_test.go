@@ -34,7 +34,10 @@ func TestPrepareLinkBuildsSOCKSAndTUNConnector(t *testing.T) {
 	var document struct {
 		Server string `json:"server"`
 		Auth   string `json:"auth"`
-		Socks  struct {
+		TLS    struct {
+			Insecure bool `json:"insecure"`
+		} `json:"tls"`
+		Socks struct {
 			Listen string `json:"listen"`
 		} `json:"socks5"`
 		Tun struct {
@@ -46,6 +49,9 @@ func TestPrepareLinkBuildsSOCKSAndTUNConnector(t *testing.T) {
 	}
 	if document.Server != "192.0.2.1:443" || document.Auth != "link-link-a:secret-password" {
 		t.Fatalf("unexpected client config: %+v", document)
+	}
+	if document.TLS.Insecure {
+		t.Fatal("connector disabled TLS verification without explicit opt-in")
 	}
 	if document.Socks.Listen != driver.SOCKS5 || document.Tun.Name != driver.TUN {
 		t.Fatalf("connector mismatch: %+v", driver)

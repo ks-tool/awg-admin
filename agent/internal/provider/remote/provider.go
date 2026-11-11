@@ -41,6 +41,13 @@ type Provider struct {
 	protocolValidated bool
 }
 
+type httpError struct {
+	statusCode int
+	message    string
+}
+
+func (e *httpError) Error() string { return e.message }
+
 func NewProvider(address string, definition models.ProviderDefinition, client *http.Client) (*Provider, error) {
 	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
 		return nil, errors.New("remote provider address must use HTTP or HTTPS")
@@ -94,7 +101,33 @@ func (p *Provider) Reconcile(ctx context.Context, item models.Resource) (json.Ra
 }
 
 func (p *Provider) Delete(ctx context.Context, item models.Resource) error {
-	return p.do(ctx, http.MethodDelete, resourcePath(p.definition.Name, item.Kind, item.Name), nil, nil)
+	path := resourcePath(p.definition.Name, item.Kind, item.Name)
+	if err := p.do(ctx, http.MethodDelete, path, nil, nil); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var status models.ResourceStatus
+		err := p.do(ctx, http.MethodGet, path+"/status", nil, &status)
+		if err != nil {
+			var responseErr *httpError
+			if errors.As(err, &responseErr) && responseErr.statusCode == http.StatusNotFound {
+				return nil
+			}
+			return err
+		}
+		if status.Phase == models.ResourceDegraded {
+			return errors.New(statusMessage(status))
+		}
+		if time.Now().After(deadline) {
+			return errors.New("remote provider deletion timed out")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }
 
 func (p *Provider) Action(ctx context.Context, item models.Resource, action string, arguments json.RawMessage) (models.ActionResult, error) {
@@ -153,7 +186,7 @@ func (p *Provider) do(ctx context.Context, method, path string, input, output an
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		message, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("remote provider %s returned %s: %s", p.definition.Name, resp.Status, strings.TrimSpace(string(message)))
+		return &httpError{statusCode: resp.StatusCode, message: fmt.Sprintf("remote provider %s returned %s: %s", p.definition.Name, resp.Status, strings.TrimSpace(string(message)))}
 	}
 	if output == nil || resp.StatusCode == http.StatusNoContent {
 		return nil

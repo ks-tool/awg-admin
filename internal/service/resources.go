@@ -325,9 +325,34 @@ func (s *Service) DeleteProviderResource(serverID, provider, kind, name string) 
 	}
 	var selected *models.Resource
 	for index := range local {
-		if local[index].Kind == kind && local[index].Name == name {
+		if local[index].Kind == kind && local[index].Name == name && providerFromAPIVersion(local[index].APIVersion) == provider {
 			selected = &local[index]
 			break
+		}
+	}
+	if selected != nil && kind == "Interface" {
+		links, err := s.store.Links().List()
+		if err != nil {
+			return err
+		}
+		for _, link := range links {
+			if link.Source.ResourceID == selected.ID || link.Target.ResourceID == selected.ID {
+				return invalidInput("remove provider links attached to interface %q first", name)
+			}
+		}
+		for _, item := range local {
+			if item.Kind != "Peer" {
+				continue
+			}
+			var spec struct {
+				InterfaceRef string `json:"interfaceRef"`
+			}
+			if err := json.Unmarshal(item.Spec, &spec); err != nil {
+				return err
+			}
+			if spec.InterfaceRef == selected.ID {
+				return invalidInput("remove peers attached to interface %q first", name)
+			}
 		}
 	}
 	if selected != nil {

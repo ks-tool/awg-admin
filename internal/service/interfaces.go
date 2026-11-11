@@ -312,12 +312,12 @@ func (s *Service) DeleteInterface(serverID, ifaceID string) error {
 				return err
 			}
 			if spec.InterfaceRef == ifaceID {
-				if err := s.DeleteProviderResource(serverID, "awg", peer.Kind, peer.Name); err != nil {
+				if err := s.DeleteProviderResource(serverID, providerFromAPIVersion(peer.APIVersion), peer.Kind, peer.Name); err != nil {
 					return err
 				}
 			}
 		}
-		return s.DeleteProviderResource(serverID, "awg", item.Kind, item.Name)
+		return s.DeleteProviderResource(serverID, providerFromAPIVersion(item.APIVersion), item.Kind, item.Name)
 	}
 
 	ifaces := s.store.Servers().Interfaces(sID)

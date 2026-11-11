@@ -18,6 +18,7 @@ package xray
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -59,5 +60,30 @@ func TestVLESSConfigAndClientURI(t *testing.T) {
 	uri, err := (Adapter{}).RenderClient(spec, peer, "192.0.2.1:443")
 	if err != nil || !strings.HasPrefix(uri, "vless://") || !strings.Contains(uri, peer.Secret) {
 		t.Fatalf("unexpected client URI %q: %v", uri, err)
+	}
+}
+
+func TestClientTLSVerificationRequiresExplicitInsecureOptIn(t *testing.T) {
+	peer := proxy.Peer{Spec: proxy.PeerSpec{Name: "alice"}, Secret: "123e4567-e89b-12d3-a456-426614174000"}
+	secureSpec := json.RawMessage(`{"name":"public","port":443,"network":"tcp","tls":true,"serverName":"vpn.example.com"}`)
+	uri, err := (Adapter{}).RenderClient(secureSpec, peer, "192.0.2.1:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Query().Has("allowInsecure") {
+		t.Fatalf("TLS verification was disabled by default: %q", uri)
+	}
+	insecureSpec := json.RawMessage(`{"name":"public","port":443,"network":"tcp","tls":true,"serverName":"vpn.example.com","insecure":true}`)
+	uri, err = (Adapter{}).RenderClient(insecureSpec, peer, "192.0.2.1:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, _ = url.Parse(uri)
+	if parsed.Query().Get("allowInsecure") != "1" {
+		t.Fatalf("explicit insecure mode was not applied: %q", uri)
 	}
 }

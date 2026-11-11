@@ -18,6 +18,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"uuid"
@@ -360,5 +361,122 @@ func TestDeleteUserRevokesProviderPeers(t *testing.T) {
 	}
 	if _, err := svc.store.Users().Get(user.ID); err == nil {
 		t.Fatal("local user survived deletion")
+	}
+}
+
+func TestDeleteUserRevokesAdoptedAWGPeer(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	privateKey, err := agentmodels.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := svc.CreateUser(UserInput{Name: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	interfaceID := uuid.New()
+	iface := &models.Interface{ID: interfaceID, InterfaceConfig: agentmodels.InterfaceConfig{Interface: "awg0", Address: "10.0.0.1/24", PrivateKey: privateKey}}
+	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
+		t.Fatal(err)
+	}
+	peer := &models.Peer{Name: "laptop", PrivateKey: privateKey, InterfaceId: interfaceID}
+	if err := svc.store.Users().Peers(user.ID).Set(peer); err != nil {
+		t.Fatal(err)
+	}
+	publicKey := privateKey.PublicKey()
+	spec, _ := json.Marshal(map[string]any{"interfaceRef": interfaceID.String(), "userRef": user.ID.String(), "publicKey": publicKey.String()})
+	item := models.Resource{ID: uuid.New().String(), ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Peer", Name: "alice-laptop", Generation: 1, Spec: spec}
+	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+		t.Fatal(err)
+	}
+	agent.mu.Lock()
+	agent.resources["Peer/"+item.Name] = item
+	agent.mu.Unlock()
+	if err := svc.DeleteUser(user.ID.String()); err != nil {
+		t.Fatal(err)
+	}
+	agent.mu.Lock()
+	_, exists := agent.resources["Peer/"+item.Name]
+	agent.mu.Unlock()
+	if exists {
+		t.Fatal("adopted AWG credentials survived user deletion")
+	}
+	if _, err := svc.store.Resources(server.ID).Get(item.ID); err == nil {
+		t.Fatal("adopted AWG resource survived user deletion")
+	}
+}
+
+func TestGenericLegacyMutationsUseResourceProvider(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	interfaceID := uuid.New()
+	item := models.Resource{ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "test/v1", Kind: "Interface", Name: "test0", Generation: 1, Spec: json.RawMessage(`{"name":"test0","listen":"0.0.0.0","port":443,"custom":"preserved"}`)}
+	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+		t.Fatal(err)
+	}
+	iface, err := svc.store.Servers().Interfaces(server.ID).Get(interfaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	iface.Interface = "renamed"
+	handled, err := svc.pushProviderInterface(server.ID, iface)
+	if err != nil || !handled {
+		t.Fatalf("pushProviderInterface: handled=%v, %v", handled, err)
+	}
+	agent.mu.Lock()
+	putProviders := append([]string(nil), agent.putProviders...)
+	updated := agent.resources["Interface/"+item.Name]
+	agent.mu.Unlock()
+	if len(putProviders) == 0 || putProviders[len(putProviders)-1] != "test" {
+		t.Fatalf("generic update was sent to the wrong provider: %v", putProviders)
+	}
+	var spec map[string]any
+	if err := json.Unmarshal(updated.Spec, &spec); err != nil || spec["custom"] != "preserved" || spec["name"] != "renamed" {
+		t.Fatalf("generic spec was replaced by AWG projection: %+v, %v", spec, err)
+	}
+	if err := svc.DeleteInterface(server.ID.String(), interfaceID.String()); err != nil {
+		t.Fatal(err)
+	}
+	agent.mu.Lock()
+	deleteProviders := append([]string(nil), agent.deleteProviders...)
+	agent.mu.Unlock()
+	if len(deleteProviders) == 0 || deleteProviders[len(deleteProviders)-1] != "test" {
+		t.Fatalf("generic delete was sent to the wrong provider: %v", deleteProviders)
+	}
+}
+
+func TestDeleteProviderInterfaceRejectsDependencies(t *testing.T) {
+	svc, server, _ := newTestServerWithAgent(t)
+	interfaceID := uuid.New()
+	item := models.Resource{ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "test/v1", Kind: "Interface", Name: "test0", Generation: 1, Spec: json.RawMessage(`{"name":"test0"}`)}
+	peer := models.Resource{ID: uuid.New().String(), ServerID: server.ID.String(), APIVersion: "test/v1", Kind: "Peer", Name: "peer", Generation: 1, Spec: json.RawMessage(fmt.Sprintf(`{"interfaceRef":%q}`, interfaceID.String()))}
+	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.saveProviderResource(server.ID.String(), peer); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DeleteProviderResource(server.ID.String(), "test", "Interface", item.Name); err == nil || !strings.Contains(err.Error(), "remove peers") {
+		t.Fatalf("interface with peer was deleted: %v", err)
+	}
+	if err := svc.store.Resources(server.ID).Delete(peer.ID); err != nil {
+		t.Fatal(err)
+	}
+	link := &models.Link{ID: uuid.New().String(), Source: models.LinkEndpoint{ResourceID: interfaceID.String()}, Target: models.LinkEndpoint{ResourceID: uuid.New().String()}}
+	if err := svc.store.Links().Set(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DeleteProviderResource(server.ID.String(), "test", "Interface", item.Name); err == nil || !strings.Contains(err.Error(), "remove provider links") {
+		t.Fatalf("interface with link was deleted: %v", err)
+	}
+}
+
+func TestServerStatusDoesNotRequireLegacyAWGAPI(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	agent.mu.Lock()
+	agent.legacyDisabled = true
+	agent.mu.Unlock()
+	status, err := svc.ServerAgentStatus(server.ID.String())
+	if err != nil || status != models.AgentStatusOK {
+		t.Fatalf("provider-only agent status = %q, %v", status, err)
 	}
 }

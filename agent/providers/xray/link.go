@@ -48,7 +48,7 @@ func (Adapter) PrepareLink(raw json.RawMessage, _ models.Link, endpoint models.L
 	}
 	if spec.TLS {
 		stream["security"] = "tls"
-		stream["tlsSettings"] = map[string]any{"serverName": spec.ServerName, "allowInsecure": true}
+		stream["tlsSettings"] = map[string]any{"serverName": spec.ServerName, "allowInsecure": spec.Insecure}
 	}
 	document := map[string]any{
 		"log": map[string]any{"loglevel": "warning"},

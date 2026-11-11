@@ -459,7 +459,7 @@ func (s *Service) DeleteServer(id string) error {
 	for _, kind := range []string{"Peer", "Interface"} {
 		for _, item := range resources {
 			if item.Kind == kind {
-				if err := s.DeleteProviderResource(id, "awg", item.Kind, item.Name); err != nil {
+				if err := s.DeleteProviderResource(id, providerFromAPIVersion(item.APIVersion), item.Kind, item.Name); err != nil {
 					return err
 				}
 			}

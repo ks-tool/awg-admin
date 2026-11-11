@@ -99,10 +99,12 @@ func Run(version string) {
 
 	remoteProviders, err := providerremote.LoadDir(providerDir, providerConfig, nil)
 	if err != nil {
+		supervisor.Close()
 		log.Fatal().Err(err).Msg("failed to load external providers")
 	}
 	for _, provider := range remoteProviders {
 		if err := resourceRuntime.Register(provider); err != nil {
+			supervisor.Close()
 			log.Fatal().Err(err).Msg("failed to register external provider")
 		}
 	}

@@ -21,6 +21,7 @@ import (
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 )
 
 func (s *Service) ListUsers() ([]models.User, error) {
@@ -99,10 +100,7 @@ func (s *Service) DeleteUser(id string) error {
 	}
 	for index := range user.Peers {
 		peer := &user.Peers[index]
-		if len(peer.Provider) == 0 || peer.Provider == "awg" {
-			continue
-		}
-		if _, err := s.deleteProviderPeer(uID, peer); err != nil {
+		if _, err := s.deleteProviderPeer(uID, peer); err != nil && !storage.IsNotFound(err) {
 			return fmt.Errorf("delete provider peer %q: %w", peer.ResourceName, err)
 		}
 	}

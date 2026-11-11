@@ -103,9 +103,20 @@ func (s *Service) addProviderPeer(userID uuid.UUID, in AddPeerInput, server *mod
 func (s *Service) deleteProviderPeer(userID uuid.UUID, peer *models.Peer) (*models.User, error) {
 	server, err := s.findServerByInterface(peer.InterfaceId)
 	if err != nil {
+		if len(peer.Provider) == 0 && len(peer.ResourceName) == 0 {
+			return nil, storage.ErrNotFound
+		}
 		return nil, err
 	}
-	if err := s.DeleteProviderResource(server.ID.String(), peer.Provider, "Peer", peer.ResourceName); err != nil {
+	provider, resourceName := peer.Provider, peer.ResourceName
+	if len(provider) == 0 || len(resourceName) == 0 {
+		resource := s.findProviderPeer(server.ID, peer.InterfaceId, peerPublicKey(peer))
+		if resource == nil {
+			return nil, storage.ErrNotFound
+		}
+		provider, resourceName = providerFromAPIVersion(resource.APIVersion), resource.Name
+	}
+	if err := s.DeleteProviderResource(server.ID.String(), provider, "Peer", resourceName); err != nil {
 		return nil, err
 	}
 	user, err := s.store.Users().Get(userID)

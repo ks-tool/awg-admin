@@ -175,13 +175,11 @@ func tunnelDroppedHard(err error) bool {
 }
 
 // pingAgent confirms srv's agent HTTP daemon actually answers, used by
-// ServerAgentStatus. It uses the lightest call — List (GET /interfaces/), which
-// has no metrics-collector dependency (unlike /metrics, which 503s when the
-// collector was never created) — and goes through callAgent so a stale SSH
-// tunnel is reopened-and-retried first.
+// ServerAgentStatus. The provider-neutral manifest endpoint works whether or
+// not the legacy AWG API is configured and has no metrics-collector dependency.
 func (s *Service) pingAgent(srv *models.Server) error {
 	return s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
-		_, err := c.List(ctx)
+		_, err := c.Manifest(ctx)
 		return err
 	})
 }

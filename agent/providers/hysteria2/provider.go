@@ -43,6 +43,7 @@ type InterfaceSpec struct {
 	Listen          string `json:"listen,omitempty"`
 	Port            int    `json:"port" jsonschema:"required,minimum=1,maximum=65535"`
 	ServerName      string `json:"serverName" jsonschema:"required,minLength=1"`
+	Insecure        bool   `json:"insecure,omitempty"`
 	CertificateFile string `json:"certificateFile,omitempty"`
 	PrivateKeyFile  string `json:"privateKeyFile,omitempty"`
 	UpMbps          int    `json:"upMbps,omitempty" jsonschema:"minimum=0"`
@@ -60,7 +61,7 @@ func (Adapter) APIVersion() string       { return APIVersion }
 func (Adapter) FirewallProtocol() string { return "udp" }
 func (Adapter) InterfaceSchema() any     { return InterfaceSpec{} }
 func (Adapter) InterfaceUISchema() json.RawMessage {
-	return json.RawMessage(`{"ui:order":["name","listen","port","serverName","certificateFile","privateKeyFile","upMbps","downMbps","masqueradeURL","disabled"]}`)
+	return json.RawMessage(`{"ui:order":["name","listen","port","serverName","insecure","certificateFile","privateKeyFile","upMbps","downMbps","masqueradeURL","disabled"]}`)
 }
 
 func (Adapter) NewSecret() (string, error) {
@@ -182,7 +183,9 @@ func (Adapter) RenderClient(raw json.RawMessage, peer proxy.Peer, endpoint strin
 	}
 	query := url.Values{}
 	query.Set("sni", spec.ServerName)
-	query.Set("insecure", "1")
+	if spec.Insecure {
+		query.Set("insecure", "1")
+	}
 	uri := url.URL{Scheme: "hysteria2", User: url.UserPassword(peer.Spec.Name, peer.Secret), Host: endpoint, RawQuery: query.Encode(), Fragment: peer.Spec.Name}
 	return uri.String(), nil
 }

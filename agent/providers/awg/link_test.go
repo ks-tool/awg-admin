@@ -19,13 +19,16 @@ package awg
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/ks-tool/vpn-agent/internal/resource"
 	"github.com/ks-tool/vpn-agent/models"
+	"github.com/ks-tool/vpn-agent/providers/proxy"
 	"github.com/ks-tool/vpn-agent/storage/fs"
 )
 
@@ -333,5 +336,42 @@ func TestRouteLinkRejectsSecondOutgoingRouteOnAWGInterface(t *testing.T) {
 	}
 	if _, err := source.provider.PrepareLink(context.Background(), first, source.endpoint); err != nil {
 		t.Fatalf("idempotent prepare of the first route failed: %v", err)
+	}
+}
+
+func TestDistributedLinkReallocatesCollidingRouteTable(t *testing.T) {
+	source := newLinkSide(t, "source-server", "source-resource", "192.0.2.1", false)
+	target := newLinkSide(t, "target-server", "target-resource", "192.0.2.2", false)
+	linkID := ""
+	collision := 0
+	for index := 0; index < 1000000; index++ {
+		candidate := fmt.Sprintf("collision-%d", index)
+		sum := sha256.Sum256([]byte(candidate))
+		table := 100 + int(sum[0])
+		if table == proxy.RouteTable(candidate) {
+			linkID, collision = candidate, table
+			break
+		}
+	}
+	if len(linkID) == 0 {
+		t.Fatal("failed to construct route table collision")
+	}
+	if err := source.provider.links.put("existing", linkState{LinkID: "existing", Interface: "awg0", Role: "source", Table: collision, Priority: collision}); err != nil {
+		t.Fatal(err)
+	}
+	link := models.Link{ID: linkID, Kind: "awg", Generation: 1, Source: source.endpoint, Target: target.endpoint}
+	offer, err := target.provider.PrepareLink(context.Background(), link, target.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := source.provider.CommitLink(context.Background(), link, source.endpoint, offer); err != nil {
+		t.Fatal(err)
+	}
+	config, err := source.store.Get("awg0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Table == collision {
+		t.Fatalf("colliding routing table %d was not reallocated", collision)
 	}
 }

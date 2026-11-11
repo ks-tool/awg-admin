@@ -24,7 +24,7 @@ import (
 )
 
 func TestPrepareLinkBuildsSOCKSAndTUNConnector(t *testing.T) {
-	spec := json.RawMessage(`{"name":"public","port":443,"network":"tcp","tls":false}`)
+	spec := json.RawMessage(`{"name":"public","port":443,"network":"tcp","tls":true,"serverName":"vpn.example.com"}`)
 	link := models.Link{ID: "link-a", Kind: "xray"}
 	endpoint := models.LinkEndpoint{Address: "192.0.2.1"}
 	secret := "123e4567-e89b-12d3-a456-426614174000"
@@ -40,6 +40,11 @@ func TestPrepareLinkBuildsSOCKSAndTUNConnector(t *testing.T) {
 			Protocol string `json:"protocol"`
 		} `json:"inbounds"`
 		Outbounds []struct {
+			Stream struct {
+				TLS struct {
+					AllowInsecure bool `json:"allowInsecure"`
+				} `json:"tlsSettings"`
+			} `json:"streamSettings"`
 			Settings struct {
 				Next []struct {
 					Address string `json:"address"`
@@ -55,6 +60,9 @@ func TestPrepareLinkBuildsSOCKSAndTUNConnector(t *testing.T) {
 	}
 	if len(document.Inbounds) != 2 || document.Inbounds[0].Protocol != "socks" || document.Inbounds[1].Protocol != "tun" {
 		t.Fatalf("unexpected inbounds: %+v", document.Inbounds)
+	}
+	if document.Outbounds[0].Stream.TLS.AllowInsecure {
+		t.Fatal("connector disabled TLS verification without explicit opt-in")
 	}
 	next := document.Outbounds[0].Settings.Next[0]
 	if next.Address != endpoint.Address || next.Users[0].ID != secret {

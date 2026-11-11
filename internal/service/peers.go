@@ -192,8 +192,10 @@ func (s *Service) DeletePeer(userID string, key string) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(peer.Provider) > 0 && peer.Provider != "awg" {
-		return s.deleteProviderPeer(uID, peer)
+	if updated, providerErr := s.deleteProviderPeer(uID, peer); providerErr == nil {
+		return updated, nil
+	} else if !storage.IsNotFound(providerErr) {
+		return nil, providerErr
 	}
 	ifaceID := peer.InterfaceId
 

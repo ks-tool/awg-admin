@@ -70,6 +70,68 @@ func TestPackOwnsDependenciesAndRegistration(t *testing.T) {
 	}
 }
 
+func TestKernelPackages(t *testing.T) {
+	deployment := models.ProviderDeployment{Name: "awg", Artifact: "oci://ghcr.io/ks-tool/vpn-providers/awg:v1"}
+	pack, _, err := New(deployment, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		os       string
+		headers  string
+		packages int
+	}{
+		{os: "debian", headers: "linux-headers-${os:kernel}", packages: 1},
+		{os: "fedora", headers: "kernel-devel-${os:kernel}", packages: 2},
+	} {
+		t.Run(test.os, func(t *testing.T) {
+			packages := pack.PackRoot().Packages[test.os]
+			foundHeaders := false
+			for _, dependency := range packages.Prepare {
+				foundHeaders = foundHeaders || dependency == test.headers
+				if dependency == "software-properties-common" || dependency == "python3-launchpadlib" {
+					t.Errorf("unused repository helper %s is installed", dependency)
+				}
+			}
+			if !foundHeaders {
+				t.Errorf("running kernel headers are missing: %#v", packages.Prepare)
+			}
+			if len(packages.Names) != test.packages {
+				t.Errorf("kernel packages = %#v", packages.Names)
+			}
+			if len(packages.Repo) == 0 {
+				t.Error("Amnezia repository is not configured")
+			}
+			if len(packages.Commands) != 1 || len(packages.Commands[0]) != 2 || packages.Commands[0][0] != "modprobe" || packages.Commands[0][1] != "amneziawg" {
+				t.Errorf("kernel module is not loaded: %#v", packages.Commands)
+			}
+			if len(packages.Content) != 3 || packages.Content[2].Path != "/etc/modules-load.d/amneziawg.conf" ||
+				packages.Content[2].Values != "files/kernelModule" || packages.Content[2].Format != "text" {
+				t.Errorf("kernel module is not loaded at boot: %#v", packages.Content)
+			}
+		})
+	}
+}
+
+func TestUserspacePackagesSkipKernel(t *testing.T) {
+	deployment := models.ProviderDeployment{
+		Name: "awg", Artifact: "oci://ghcr.io/ks-tool/vpn-providers/awg:v1", Options: map[string]any{"userspace": true},
+	}
+	pack, _, err := New(deployment, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, os := range []string{"debian", "fedora"} {
+		packages := pack.PackRoot().Packages[os]
+		if len(packages.Names) != 0 || len(packages.Repo) != 0 || len(packages.Commands) != 0 || len(packages.Content) != 2 {
+			t.Errorf("%s userspace pack installs a kernel module: %#v", os, packages)
+		}
+	}
+	if err := sdk.Generate(t.TempDir(), pack); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestUserspaceOption(t *testing.T) {
 	deployment := models.ProviderDeployment{Name: "awg", Artifact: "oci://ghcr.io/ks-tool/vpn-providers/awg:v1", Options: map[string]any{"userspace": true}}
 	_, values, err := New(deployment, t.TempDir())

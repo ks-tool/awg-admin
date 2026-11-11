@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ks-tool/vpn-agent/models"
+	"github.com/ks-tool/vpn-agent/providers/proxy"
 	"github.com/ks-tool/vpn-agent/storage"
 )
 
@@ -108,9 +109,25 @@ func (p *Provider) CommitLink(_ context.Context, link models.Link, endpoint mode
 		}
 	}
 
+	states, err := p.links.list()
+	if err != nil {
+		return err
+	}
+	routeID, err := proxy.FindRouteID(link.ID, func(candidate string) bool {
+		table := proxy.RouteTable(candidate)
+		for _, state := range states {
+			if state.LinkID != link.ID && state.Table == table {
+				return true
+			}
+		}
+		return false
+	})
+	if err != nil {
+		return err
+	}
 	sum := sha256.Sum256([]byte(link.ID))
-	table := 100 + int(sum[0])%20000
-	state := linkState{Interface: spec.Interface, Role: role, PeerPublicKey: remoteSpec.PublicKey, Table: table, Priority: table}
+	table := proxy.RouteTable(routeID)
+	state := linkState{LinkID: link.ID, Interface: spec.Interface, Role: role, PeerPublicKey: remoteSpec.PublicKey, Table: table, Priority: table}
 	peer := models.InterfacePeer{Key: remotePublicKey, Endpoint: remoteEndpoint(remote), KeepaliveInterval: 25 * time.Second}
 	if role == "source" {
 		remoteIP, _, err := net.ParseCIDR(remoteSpec.Interface.Address)

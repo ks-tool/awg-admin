@@ -18,6 +18,7 @@ package hysteria2
 
 import (
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,5 +54,21 @@ func TestHysteriaConfigAndClientURI(t *testing.T) {
 	uri, err := (Adapter{}).RenderClient(spec, peer, "192.0.2.1:443")
 	if err != nil || !strings.HasPrefix(uri, "hysteria2://alice:test-password-123@") || !strings.Contains(uri, "sni=vpn.example.com") {
 		t.Fatalf("unexpected client URI %q: %v", uri, err)
+	}
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Query().Has("insecure") {
+		t.Fatalf("TLS verification was disabled by default: %q", uri)
+	}
+	insecureSpec := json.RawMessage(`{"name":"public","port":443,"serverName":"vpn.example.com","insecure":true}`)
+	uri, err = (Adapter{}).RenderClient(insecureSpec, peer, "192.0.2.1:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, _ = url.Parse(uri)
+	if parsed.Query().Get("insecure") != "1" {
+		t.Fatalf("explicit insecure mode was not applied: %q", uri)
 	}
 }

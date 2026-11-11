@@ -44,6 +44,7 @@ type InterfaceSpec struct {
 	Path            string `json:"path,omitempty"`
 	TLS             bool   `json:"tls,omitempty"`
 	ServerName      string `json:"serverName,omitempty"`
+	Insecure        bool   `json:"insecure,omitempty"`
 	CertificateFile string `json:"certificateFile,omitempty"`
 	PrivateKeyFile  string `json:"privateKeyFile,omitempty"`
 	Disabled        bool   `json:"disabled,omitempty"`
@@ -58,7 +59,7 @@ func (Adapter) APIVersion() string       { return APIVersion }
 func (Adapter) FirewallProtocol() string { return "tcp" }
 func (Adapter) InterfaceSchema() any     { return InterfaceSpec{} }
 func (Adapter) InterfaceUISchema() json.RawMessage {
-	return json.RawMessage(`{"ui:order":["name","listen","port","network","path","tls","serverName","certificateFile","privateKeyFile","disabled"]}`)
+	return json.RawMessage(`{"ui:order":["name","listen","port","network","path","tls","serverName","insecure","certificateFile","privateKeyFile","disabled"]}`)
 }
 
 func (Adapter) NewSecret() (string, error) { return uuid.NewString(), nil }
@@ -174,7 +175,9 @@ func (Adapter) RenderClient(raw json.RawMessage, peer proxy.Peer, endpoint strin
 	if spec.TLS {
 		query.Set("security", "tls")
 		query.Set("sni", spec.ServerName)
-		query.Set("allowInsecure", "1")
+		if spec.Insecure {
+			query.Set("allowInsecure", "1")
+		}
 	} else {
 		query.Set("security", "none")
 	}

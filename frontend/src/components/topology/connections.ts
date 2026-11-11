@@ -19,7 +19,7 @@ import type {NetworkConnection, ProviderLink} from '@/types';
 export function mergeProviderLinks(connections: NetworkConnection[], links: ProviderLink[]): NetworkConnection[] {
     const providerConnections = links.map(link => ({id: `link:${link.id}`, sourceId: link.source.resourceId, targetId: link.target.resourceId}));
     const seen = new Set<string>();
-    return [...connections, ...providerConnections].filter(connection => {
+    return [...providerConnections, ...connections].filter(connection => {
         const key = `${connection.sourceId}:${connection.targetId}`;
         if (seen.has(key)) return false;
         seen.add(key);

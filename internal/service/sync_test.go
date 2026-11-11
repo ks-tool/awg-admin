@@ -38,18 +38,21 @@ import (
 // directly (no SSH tunnel). It tracks every config it was asked to Set, so
 // tests can assert pushes actually happened.
 type fakeAgentTLS struct {
-	mu           sync.Mutex
-	store        map[string]agentmodels.InterfaceConfig
-	replacePeers map[string]bool
-	metrics      map[string]agentmodels.InterfaceSnapshot
-	resources    map[string]models.Resource
-	schemaCalls  int
-	actionCalls  int
-	putOrder     []string
-	commitCalls  int
-	deleteCalls  int
-	failCommit   bool
-	awg          bool
+	mu              sync.Mutex
+	store           map[string]agentmodels.InterfaceConfig
+	replacePeers    map[string]bool
+	metrics         map[string]agentmodels.InterfaceSnapshot
+	resources       map[string]models.Resource
+	schemaCalls     int
+	actionCalls     int
+	putOrder        []string
+	putProviders    []string
+	deleteProviders []string
+	commitCalls     int
+	deleteCalls     int
+	failCommit      bool
+	awg             bool
+	legacyDisabled  bool
 
 	// Discovery/import inputs (see the wg-quick import tests): live devices the
 	// agent has no config for, the conf files "on disk" by interface name, and
@@ -128,6 +131,11 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 	})
 	mux.HandleFunc("GET /interfaces/", func(w http.ResponseWriter, r *http.Request) {
 		fa.mu.Lock()
+		if fa.legacyDisabled {
+			fa.mu.Unlock()
+			http.NotFound(w, r)
+			return
+		}
 		out := make([]agentmodels.InterfaceConfig, 0, len(fa.store))
 		for _, cfg := range fa.store {
 			out = append(out, cfg)
@@ -191,6 +199,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 			return
 		}
 		fa.mu.Lock()
+		fa.putProviders = append(fa.putProviders, r.PathValue("provider"))
 		key := r.PathValue("kind") + "/" + r.PathValue("name")
 		previous, exists := fa.resources[key]
 		if !exists {
@@ -225,6 +234,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 	})
 	mux.HandleFunc("DELETE /v1/providers/{provider}/resources/{kind}/{name}", func(w http.ResponseWriter, r *http.Request) {
 		fa.mu.Lock()
+		fa.deleteProviders = append(fa.deleteProviders, r.PathValue("provider"))
 		delete(fa.resources, r.PathValue("kind")+"/"+r.PathValue("name"))
 		fa.mu.Unlock()
 		w.WriteHeader(http.StatusAccepted)

@@ -34,7 +34,7 @@ func (Adapter) PrepareLink(raw json.RawMessage, link models.Link, endpoint model
 	document := map[string]any{
 		"server": net.JoinHostPort(endpoint.Address, strconv.Itoa(spec.Port)),
 		"auth":   "link-" + link.ID + ":" + secret,
-		"tls":    map[string]any{"sni": spec.ServerName, "insecure": true},
+		"tls":    map[string]any{"sni": spec.ServerName, "insecure": spec.Insecure},
 		"socks5": map[string]any{"listen": socksAddress},
 		"tun": map[string]any{
 			"name": tunName, "mtu": 1380,

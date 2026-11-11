@@ -95,11 +95,29 @@ func (s *Service) pushProviderInterface(serverID uuid.UUID, iface *models.Interf
 		}
 	}
 
+	provider := providerFromAPIVersion(local.APIVersion)
+	if provider != "awg" {
+		var spec map[string]any
+		if err := json.Unmarshal(local.Spec, &spec); err != nil {
+			return true, err
+		}
+		spec["name"] = iface.Interface
+		spec["listen"] = iface.Address
+		spec["port"] = iface.ListenPort
+		spec["disabled"] = iface.Disabled
+		raw, err := json.Marshal(spec)
+		if err != nil {
+			return true, err
+		}
+		_, err = s.PutProviderResource(serverID.String(), provider, "Interface", local.Name, raw)
+		return true, err
+	}
+
 	spec, err := legacyInterfaceSpec(iface)
 	if err != nil {
 		return true, err
 	}
-	if _, err := s.PutProviderResource(serverID.String(), "awg", "Interface", local.Name, spec); err != nil {
+	if _, err := s.PutProviderResource(serverID.String(), provider, "Interface", local.Name, spec); err != nil {
 		return true, err
 	}
 	users, err := s.store.Users().List()
