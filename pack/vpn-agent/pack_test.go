@@ -23,10 +23,25 @@ import (
 )
 
 func TestPackGenerates(t *testing.T) {
-	if _, err := sdk.Schema(&Config{}); err != nil {
+	config := &Config{}
+	config.SetDefaults()
+	if _, err := sdk.Schema(config); err != nil {
 		t.Fatal(err)
 	}
-	if err := sdk.Generate(t.TempDir(), &Config{}); err != nil {
+	if err := sdk.Generate(t.TempDir(), config); err != nil {
 		t.Fatal(err)
 	}
+	for _, file := range config.PackRoot().Packages["debian"].Content {
+		if file.Path != "/etc/systemd/system/vpn-agent.service" {
+			continue
+		}
+		if file.Values != "unit" || file.Format != "text" || file.Template != "" {
+			t.Fatalf("systemd unit must use the embedded value: %+v", file)
+		}
+		if config.Unit != systemdUnit {
+			t.Fatal("systemd unit default is not embedded in the pack config")
+		}
+		return
+	}
+	t.Fatal("systemd unit is missing from pack content")
 }

@@ -21,10 +21,28 @@ import (
 	"github.com/horchestra/pack/sdk/packschema"
 )
 
+const systemdUnit = `[Unit]
+Description=VPN Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/vpn-agent/vpn-agent.env
+ExecStart=/usr/local/bin/vpn-agent
+Restart=on-failure
+RestartSec=3
+StateDirectory=vpn-agent
+
+[Install]
+WantedBy=multi-user.target
+`
+
 type Config struct {
 	Artifact string            `json:"artifact" jsonschema:"required,format=uri"`
 	Env      map[string]string `json:"env,omitempty"`
 	TLS      TLS               `json:"tls,omitempty"`
+	Unit     string            `json:"unit"`
 }
 
 type TLS struct {
@@ -40,6 +58,7 @@ func (c *Config) SetDefaults() {
 		"VPN_AGENT_ADDR":         "127.0.0.1:8080",
 		"VPN_AGENT_LEGACY_PROXY": "http://127.0.0.1:9091",
 	}
+	c.Unit = systemdUnit
 }
 
 func (*Config) Meta() sdk.Meta {
@@ -73,7 +92,7 @@ fi`},
 				Prepare: []string{"ca-certificates"},
 				Content: []packschema.File{
 					{Path: "/usr/local/bin/vpn-agent", URL: "{{ .artifact }}", Mode: "0755"},
-					{Path: "/etc/systemd/system/vpn-agent.service", Template: "vpn-agent.service", Mode: "0644"},
+					{Path: "/etc/systemd/system/vpn-agent.service", Values: "unit", Format: "text", Mode: "0644"},
 					{Path: "/etc/vpn-agent/vpn-agent.env", Values: "env", Format: "env", Mode: "0600"},
 					{Path: "/etc/vpn-agent/ca.pem", Values: "tls/ca", Format: "text", Mode: "0600"},
 					{Path: "/etc/vpn-agent/server.pem", Values: "tls/certificate", Format: "text", Mode: "0600"},

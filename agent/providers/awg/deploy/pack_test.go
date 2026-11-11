@@ -44,8 +44,18 @@ func TestPackOwnsDependenciesAndRegistration(t *testing.T) {
 			t.Errorf("dependency %s is missing: %#v", name, packages.Prepare)
 		}
 	}
-	if values["registrationPath"] != filepath.Join(agentDB, "providers.d", "awg.conf") {
+	registrationPath := filepath.Join(agentDB, "providers.d", "awg.conf")
+	if values["registrationPath"] != registrationPath {
 		t.Fatalf("registration path = %q", values["registrationPath"])
+	}
+	foundRegistration := false
+	for _, file := range packages.Content {
+		if file.Values == "registry" && file.Path == registrationPath {
+			foundRegistration = true
+		}
+	}
+	if !foundRegistration {
+		t.Fatalf("registration content does not use absolute path %q: %#v", registrationPath, packages.Content)
 	}
 	registry := values["registry"].(map[string]any)
 	provider := registry["providers"].([]any)[0].(map[string]any)

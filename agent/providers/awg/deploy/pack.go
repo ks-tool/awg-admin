@@ -40,7 +40,7 @@ func (*Config) Meta() sdk.Meta {
 	return sdk.Meta{Name: "vpn-provider-awg", Version: "2.0.0", Description: "AmneziaWG and WireGuard provider", License: "Apache-2.0"}
 }
 
-func (*Config) PackRoot() packschema.Root {
+func (c *Config) PackRoot() packschema.Root {
 	return packschema.Root{
 		Ports:     map[string]int{"provider": 9091},
 		Data:      map[string]packschema.Volume{"state": {MountPath: "/var/lib/vpn-provider-awg", Size: "100Mi"}},
@@ -51,7 +51,7 @@ func (*Config) PackRoot() packschema.Root {
 				Sysctls: map[string]string{"net.ipv4.ip_forward": "1"},
 				Content: []packschema.File{
 					{Path: "/usr/local/bin/vpn-provider-awg", URL: "{{ .artifact }}", Mode: "0755"},
-					{Path: "{{ .registrationPath }}", Values: "registry", Format: "json", Mode: "0600"},
+					{Path: c.RegistrationPath, Values: "registry", Format: "json", Mode: "0600"},
 				},
 				Services: []string{"vpn-agent"},
 			},
@@ -91,9 +91,10 @@ func New(provider models.ProviderDeployment, agentDB string) (sdk.Pack, map[stri
 	}
 	config := &Config{}
 	config.SetDefaults()
+	config.RegistrationPath = filepath.Join(agentDB, "providers.d", "awg.conf")
 	values := map[string]any{
 		"artifact":         provider.Artifact,
-		"registrationPath": filepath.Join(agentDB, "providers.d", "awg.conf"),
+		"registrationPath": config.RegistrationPath,
 		"registry": map[string]any{
 			"protocolVersion": models.ProtocolVersion,
 			"providers":       []any{registration},
