@@ -18,7 +18,7 @@
 
 package main
 
-import awgprovider "github.com/ks-tool/vpn-agent/internal/provider/awg"
+import awgprovider "github.com/ks-tool/vpn-agent/providers/awg"
 
 var version = "dev"
 

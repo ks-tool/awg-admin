@@ -61,6 +61,13 @@ type config struct {
 }
 
 func Run(version string) {
+	if len(os.Args) > 1 && os.Args[1] == "firewall" {
+		if err := runFirewallCommand(context.Background(), os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
 
 	var cfg config

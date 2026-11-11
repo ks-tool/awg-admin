@@ -1217,6 +1217,22 @@ export namespace models {
 	}
 	
 	
+	export class ProviderDeployment {
+	    name: string;
+	    artifact: string;
+	    options?: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderDeployment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.artifact = source["artifact"];
+	        this.options = source["options"];
+	    }
+	}
 	export class ResourceStatus {
 	    observedGeneration: number;
 	    phase: string;

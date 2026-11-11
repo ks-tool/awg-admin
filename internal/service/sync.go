@@ -38,6 +38,9 @@ const pushTimeout = 15 * time.Second
 func (s *Service) pushInterface(serverID uuid.UUID, iface *models.Interface) {
 	if handled, err := s.pushProviderInterface(serverID, iface); handled {
 		s.recordSyncResult(serverID, iface, err)
+		if err == nil {
+			s.scheduleFirewallSync(serverID)
+		}
 		return
 	}
 

@@ -15,7 +15,7 @@ build:
 .PHONY: build-provider-awg
 build-provider-awg:
 	@echo 'Build AWG provider (automatic kernel/userspace backend) ...'
-	@CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS)vpn-provider-awg ./cmd/vpn-provider-awg
+	@CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS)vpn-provider-awg ./providers/awg/cmd
 
 .PHONY: test
 test:

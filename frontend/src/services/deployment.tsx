@@ -18,16 +18,7 @@ import * as AppBindings from '../../wailsjs/go/main/App';
 import {get, post} from './api';
 import {getCurrentApiMode} from './apiMode';
 import {throwIfPassphraseRequired, throwIfSudoPasswordRequired} from './sshErrors';
-import type {AgentSource, DeployStatus} from '@/types';
-
-export interface AgentSourceInput {
-    name: string;
-    url: string;
-    path: string;
-    image: string;
-    cacheLocally: boolean;
-    userspace: boolean;
-}
+import type {DeployStatus, ProviderDeployment} from '@/types';
 
 const isDesktop = () => getCurrentApiMode() === 'bindings';
 
@@ -51,32 +42,26 @@ function unwrap<T>(response: {data: T; error?: string}): T {
     return response.data;
 }
 
-export async function listAgentSources(): Promise<AgentSource[]> {
-    const result = isDesktop()
-        ? await binding(async () => await AppBindings.ListAgentSources() as unknown as AgentSource[])
-        : unwrap(await get<AgentSource[]>('/agent-sources/'));
-    return result ?? [];
-}
-
-export async function createAgentSource(input: AgentSourceInput): Promise<AgentSource> {
-    return isDesktop()
-        ? binding(async () => await AppBindings.CreateAgentSource(
-            input.name,
-            input.url,
-            input.path,
-            input.image,
-            input.cacheLocally,
-            input.userspace,
-        ) as unknown as AgentSource)
-        : unwrap(await post<AgentSource, AgentSourceInput>('/agent-sources', input));
-}
-
-export async function deployAgent(serverId: string, agentSourceId: string): Promise<void> {
+export async function deployAgentPack(serverId: string, agentArtifact: string): Promise<void> {
     if (isDesktop()) {
-        await binding(() => AppBindings.DeployAgent(serverId, agentSourceId));
+        await binding(() => AppBindings.DeployAgentPack(serverId, agentArtifact));
         return;
     }
-    unwrap(await post<void, {agentSourceId: string}>(`/servers/${encodeURIComponent(serverId)}/deploy`, {agentSourceId}));
+    unwrap(await post<void, {agentArtifact: string}>(
+        `/servers/${encodeURIComponent(serverId)}/deploy/pack`,
+        {agentArtifact},
+    ));
+}
+
+export async function deployProvider(serverId: string, provider: ProviderDeployment): Promise<void> {
+    if (isDesktop()) {
+        await binding(() => AppBindings.DeployProvider(serverId, provider));
+        return;
+    }
+    unwrap(await post<void, ProviderDeployment>(
+        `/servers/${encodeURIComponent(serverId)}/deploy/provider`,
+        provider,
+    ));
 }
 
 export async function getDeployStatus(serverId: string): Promise<DeployStatus> {

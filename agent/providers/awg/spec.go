@@ -61,3 +61,14 @@ func (s InterfaceSpec) config() models.InterfaceConfig {
 		I1: s.I1, I2: s.I2, I3: s.I3, I4: s.I4, I5: s.I5,
 	}
 }
+
+func interfaceSpecFromConfig(cfg models.InterfaceConfig) InterfaceSpec {
+	return InterfaceSpec{
+		Interface: cfg.Interface, ListenPort: cfg.ListenPort, Address: cfg.Address,
+		MTU: cfg.MTU, DNS: cfg.DNS, Disabled: cfg.Disabled, Table: cfg.Table, FirewallMark: cfg.FirewallMark,
+		Jc: cfg.Jc, Jmin: cfg.Jmin, Jmax: cfg.Jmax,
+		S1: cfg.S1, S2: cfg.S2, S3: cfg.S3, S4: cfg.S4,
+		H1: cfg.H1, H2: cfg.H2, H3: cfg.H3, H4: cfg.H4,
+		I1: cfg.I1, I2: cfg.I2, I3: cfg.I3, I4: cfg.I4, I5: cfg.I5,
+	}
+}

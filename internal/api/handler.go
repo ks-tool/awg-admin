@@ -144,6 +144,8 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 			gr.DELETE("", h.serverDelete)
 			gr.POST("/tls", h.serverGenerateTLS)
 			gr.POST("/deploy", h.serverDeployAgent)
+			gr.POST("/deploy/pack", h.serverDeployAgentPack)
+			gr.POST("/deploy/provider", h.serverDeployProvider)
 			gr.GET("/deploy/status", h.serverDeployStatus)
 			gr.POST("/sync", h.serverSync)
 			gr.GET("/reconcile", h.serverReconcile)

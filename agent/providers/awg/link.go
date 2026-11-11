@@ -49,7 +49,7 @@ func (p *Provider) PrepareLink(_ context.Context, link models.Link, endpoint mod
 	if err != nil {
 		return models.LinkOffer{}, err
 	}
-	data, err := json.Marshal(awgLinkOffer{PublicKey: publicKeyString(iface.PrivateKey), Interface: spec})
+	data, err := json.Marshal(awgLinkOffer{PublicKey: publicKeyString(iface.PrivateKey), Interface: interfaceSpecFromConfig(*iface)})
 	if err != nil {
 		return models.LinkOffer{}, err
 	}
@@ -91,7 +91,13 @@ func (p *Provider) CommitLink(_ context.Context, link models.Link, endpoint mode
 	} else if !storage.IsNotFound(stateErr) {
 		return stateErr
 	} else {
-		removeLegacyLinkArtifacts(&cfg, remoteSpec.PublicKey)
+		shared, err := p.links.has(spec.Interface)
+		if err != nil {
+			return err
+		}
+		if !shared {
+			removeLegacyLinkArtifacts(&cfg, remoteSpec.PublicKey)
+		}
 	}
 
 	sum := sha256.Sum256([]byte(link.ID))
@@ -99,35 +105,33 @@ func (p *Provider) CommitLink(_ context.Context, link models.Link, endpoint mode
 	state := linkState{Interface: spec.Interface, Role: role, PeerPublicKey: remoteSpec.PublicKey, Table: table, Priority: table}
 	peer := models.InterfacePeer{Key: remotePublicKey, Endpoint: remoteEndpoint(remote), KeepaliveInterval: 25 * time.Second}
 	if role == "source" {
-		peer.AllowedIPs = []string{"0.0.0.0/0"}
+		remoteIP, _, err := net.ParseCIDR(remoteSpec.Interface.Address)
+		if err != nil {
+			return fmt.Errorf("remote interface address: %w", err)
+		}
+		peer.AllowedIPs = []string{"0.0.0.0/0", remoteIP.String() + "/32"}
 		cfg.Table = table
 		state.PreUp = []string{
-			"sysctl -w net.ipv4.ip_forward=1",
 			fmt.Sprintf("ip rule del iif %%i table %d priority %d 2>/dev/null; ip rule add iif %%i table %d priority %d", table, table, table, table),
 			fmt.Sprintf("ip route replace default dev %%i table %d", table),
+			firewallHook("transit", "add", 0, ""),
 		}
 		state.PostDown = []string{
 			fmt.Sprintf("ip route del default dev %%i table %d 2>/dev/null || true", table),
 			fmt.Sprintf("ip rule del iif %%i table %d priority %d 2>/dev/null || true", table, table),
+			firewallHook("transit", "remove", 0, ""),
 		}
 	} else {
-		_, subnet, err := net.ParseCIDR(remoteSpec.Interface.Address)
+		remoteIP, _, err := net.ParseCIDR(remoteSpec.Interface.Address)
 		if err != nil {
 			return fmt.Errorf("remote interface address: %w", err)
 		}
-		peer.AllowedIPs = []string{subnet.String()}
+		peer.AllowedIPs = []string{remoteIP.String() + "/32"}
 		cfg.Table = 0
 		copyLinkObfuscation(&cfg, remoteSpec.Interface.config())
 		state.Mark = "0x" + hex.EncodeToString(sum[:4])
-		state.PreUp = []string{
-			"sysctl -w net.ipv4.ip_forward=1",
-			fmt.Sprintf("iptables -t mangle -C PREROUTING -i %%i -j MARK --set-mark %s 2>/dev/null || iptables -t mangle -A PREROUTING -i %%i -j MARK --set-mark %s", state.Mark, state.Mark),
-			"iptables -t nat -C POSTROUTING ! -o %i -m mark --mark " + state.Mark + " 2>/dev/null || iptables -t nat -A POSTROUTING ! -o %i -m mark --mark " + state.Mark + " -j MASQUERADE",
-		}
-		state.PostDown = []string{
-			"iptables -t mangle -D PREROUTING -i %i -j MARK --set-mark " + state.Mark + " 2>/dev/null || true",
-			"iptables -t nat -D POSTROUTING ! -o %i -m mark --mark " + state.Mark + " -j MASQUERADE 2>/dev/null || true",
-		}
+		state.PreUp = []string{firewallHook("exit", "add", 0, state.Mark)}
+		state.PostDown = []string{firewallHook("exit", "remove", 0, state.Mark)}
 	}
 	cfg.PreUp = append(cfg.PreUp, state.PreUp...)
 	cfg.PostDown = append(cfg.PostDown, state.PostDown...)

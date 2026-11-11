@@ -144,6 +144,46 @@ func (h *Handler) serverDeployAgent(w http.ResponseWriter, r bunrouter.Request) 
 	return nil
 }
 
+func (h *Handler) serverDeployAgentPack(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+
+	var req struct {
+		AgentArtifact string `json:"agentArtifact"`
+	}
+	if err := decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	if err := h.svc.DeployAgentPack(sID, req.AgentArtifact); err != nil {
+		return handleErr(err, fields)
+	}
+	w.WriteHeader(http.StatusAccepted)
+	return nil
+}
+
+func (h *Handler) serverDeployProvider(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+
+	var req models.ProviderDeployment
+	if err := decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	if err := h.svc.DeployProvider(sID, req); err != nil {
+		return handleErr(err, fields)
+	}
+	w.WriteHeader(http.StatusAccepted)
+	return nil
+}
+
 func (h *Handler) serverDeployStatus(w http.ResponseWriter, r bunrouter.Request) error {
 	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
 

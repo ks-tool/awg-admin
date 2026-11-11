@@ -82,7 +82,7 @@ func TestDistributedLinkPrepareCommitRetryAndDelete(t *testing.T) {
 	}
 	sourceConfig, _ = source.store.Get("awg0")
 	targetConfig, _ = target.store.Get("awg0")
-	if len(sourceConfig.Peers) != 2 || len(targetConfig.Peers) != 1 || len(sourceConfig.PreUp) != 3 || len(targetConfig.PreUp) != 3 {
+	if len(sourceConfig.Peers) != 2 || len(targetConfig.Peers) != 1 || len(sourceConfig.PreUp) != 3 || len(targetConfig.PreUp) != 1 {
 		t.Fatalf("repeated commit duplicated artifacts: source peers=%d target peers=%d source hooks=%v target hooks=%v", len(sourceConfig.Peers), len(targetConfig.Peers), sourceConfig.PreUp, targetConfig.PreUp)
 	}
 
@@ -172,5 +172,91 @@ func TestDeleteMigratedLegacyLinkWithoutState(t *testing.T) {
 	}
 	if updated.Table != 0 || len(updated.PreUp) != 0 || len(updated.PostDown) != 0 {
 		t.Fatalf("legacy artifacts survived delete: %+v", updated)
+	}
+}
+
+func TestDistributedLinksShareTransitInterface(t *testing.T) {
+	a := newLinkSide(t, "a", "a-resource", "192.0.2.1", true)
+	b := newLinkSide(t, "b", "b-resource", "192.0.2.2", false)
+	c := newLinkSide(t, "c", "c-resource", "192.0.2.3", false)
+	ab := models.Link{ID: "ab", Kind: "awg", Generation: 1, Source: a.endpoint, Target: b.endpoint}
+	bc := models.Link{ID: "bc", Kind: "awg", Generation: 1, Source: b.endpoint, Target: c.endpoint}
+
+	aOffer, err := a.provider.PrepareLink(context.Background(), ab, a.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bOfferAB, err := b.provider.PrepareLink(context.Background(), ab, b.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.provider.CommitLink(context.Background(), ab, a.endpoint, bOfferAB); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.provider.CommitLink(context.Background(), ab, b.endpoint, aOffer); err != nil {
+		t.Fatal(err)
+	}
+
+	bOfferBC, err := b.provider.PrepareLink(context.Background(), bc, b.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cOffer, err := c.provider.PrepareLink(context.Background(), bc, c.endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.provider.CommitLink(context.Background(), bc, b.endpoint, cOffer); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.provider.CommitLink(context.Background(), bc, c.endpoint, bOfferBC); err != nil {
+		t.Fatal(err)
+	}
+
+	config, _ := b.store.Get("awg0")
+	if len(config.Peers) != 2 || len(config.PreUp) != 4 || len(config.PostDown) != 4 || config.Table == 0 {
+		t.Fatalf("transit links did not compose on one interface: %+v", config)
+	}
+	if len(config.Peers[0].AllowedIPs) != 1 || config.Peers[0].AllowedIPs[0] != "10.0.0.1/32" {
+		t.Fatalf("incoming peer is not limited to its immediate neighbor: %+v", config.Peers[0].AllowedIPs)
+	}
+	if len(config.Peers[1].AllowedIPs) != 2 || config.Peers[1].AllowedIPs[1] != "10.0.0.1/32" {
+		t.Fatalf("outgoing peer has no host-specific route: %+v", config.Peers[1].AllowedIPs)
+	}
+	if config.PreUp[3] != firewallHook("transit", "add", 0, "") {
+		t.Fatalf("transit traffic has no SNAT: %+v", config.PreUp)
+	}
+	configC, _ := c.store.Get("awg0")
+	if configC.Jc == nil || config.Jc == nil || *configC.Jc != *config.Jc {
+		t.Fatalf("outgoing link did not use live obfuscation: B=%v C=%v", config.Jc, configC.Jc)
+	}
+	rawSpec, _ := json.Marshal(InterfaceSpec{Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820})
+	if _, err := b.provider.Reconcile(context.Background(), models.Resource{ID: "b-resource", Kind: "Interface", Spec: rawSpec}); err != nil {
+		t.Fatal(err)
+	}
+	reconciled, _ := b.store.Get("awg0")
+	if reconciled.Table != config.Table || reconciled.Jc == nil || config.Jc == nil || *reconciled.Jc != *config.Jc {
+		t.Fatalf("reconcile replaced link-owned fields: before=%+v after=%+v", config, reconciled)
+	}
+	if err := b.provider.CommitLink(context.Background(), bc, b.endpoint, cOffer); err != nil {
+		t.Fatal(err)
+	}
+	config, _ = b.store.Get("awg0")
+	if len(config.Peers) != 2 || len(config.PreUp) != 5 || len(config.PostDown) != 5 {
+		t.Fatalf("repeated commit duplicated transit artifacts: %+v", config)
+	}
+
+	if err := b.provider.DeleteLink(context.Background(), ab, b.endpoint, nil); err != nil {
+		t.Fatal(err)
+	}
+	config, _ = b.store.Get("awg0")
+	if len(config.Peers) != 1 || len(config.PreUp) != 4 || len(config.PostDown) != 4 || config.Table == 0 {
+		t.Fatalf("deleting incoming link damaged outgoing link: %+v", config)
+	}
+	if err := b.provider.DeleteLink(context.Background(), bc, b.endpoint, nil); err != nil {
+		t.Fatal(err)
+	}
+	config, _ = b.store.Get("awg0")
+	if len(config.Peers) != 0 || len(config.PreUp) != 1 || len(config.PostDown) != 1 || config.Table != 0 {
+		t.Fatalf("link artifacts survived final delete: %+v", config)
 	}
 }

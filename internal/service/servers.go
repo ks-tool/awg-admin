@@ -334,6 +334,34 @@ func (s *Service) GenerateAgentTLS(id string) (*models.Server, error) {
 	return srv, s.store.Servers().Set(srv)
 }
 
+func (s *Service) serverUDPPorts(id uuid.UUID) []uint16 {
+	var ports []uint16
+	ifaces, err := s.store.Servers().Interfaces(id).List()
+	if err != nil {
+		return nil
+	}
+	for i := range ifaces {
+		if ifaces[i].ListenPort > 0 {
+			ports = append(ports, ifaces[i].ListenPort)
+		}
+	}
+	return ports
+}
+
+func (s *Service) serverInterfaceNames(id uuid.UUID) []string {
+	ifaces, err := s.store.Servers().Interfaces(id).List()
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(ifaces))
+	for i := range ifaces {
+		if ifaces[i].Interface != "" {
+			names = append(names, ifaces[i].Interface)
+		}
+	}
+	return names
+}
+
 // DeployAgent starts installing and starting the vpn-agent service on the
 // server's host over SSH, using its currently stored SSH credentials,
 // agent address and (if generated) mTLS certificates, returning as soon as
@@ -364,17 +392,7 @@ func (s *Service) DeployAgent(id string, agentSourceID string) error {
 		return fmt.Errorf("agent source: %w", err)
 	}
 
-	// The docker deploy publishes each interface's WireGuard ListenPort as a UDP
-	// port on the container; gather them from the desired state we already have.
-	// (Ignored by the systemd deploy, which runs on the host network directly.)
-	var udpPorts []uint16
-	if ifaces, e := s.store.Servers().Interfaces(sID).List(); e == nil {
-		for i := range ifaces {
-			if ifaces[i].ListenPort > 0 {
-				udpPorts = append(udpPorts, ifaces[i].ListenPort)
-			}
-		}
-	}
+	udpPorts := s.serverUDPPorts(sID)
 
 	s.deployStatus.start(sID)
 	go func() {

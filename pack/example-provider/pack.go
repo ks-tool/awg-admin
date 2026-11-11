@@ -68,7 +68,7 @@ func (*Config) PackRoot() packschema.Root {
 		Ports:     map[string]int{"provider": 9090},
 		Data:      map[string]packschema.Volume{"state": {MountPath: "/var/lib/example-provider", Size: "100Mi"}},
 		Readiness: &packschema.Readiness{HTTP: "provider/v1/manifest"},
-		Packages: map[string]packschema.OSPackages{
+		Packages: map[string]packschema.OSInstall{
 			"debian": {
 				Prepare: []string{"ca-certificates"},
 				Content: []packschema.File{

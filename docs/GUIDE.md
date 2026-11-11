@@ -247,13 +247,24 @@ the **gear** button on each dashboard row. The top of the dialog shows the agent
 
 ### Deploying the agent
 
-The **Deploy agent** action in the agent dialog installs and starts the agent over SSH in a single step: a
-cross-compiled Linux binary is uploaded and launched automatically. After a deployment, the application re-pushes every
-interface for that server so the host comes up in the desired state. A live status area reports progress and any
-failure.
+The **Agent** tab in Manage panel deploys the agent and optional providers as independent operations through pack over SSH.
+Deploy the agent first, then install only the providers required on that node. The default releases are
+`oci://ghcr.io/ks-tool/vpn-agent:v2.0.0-alpha.1` and
+`oci://ghcr.io/ks-tool/vpn-providers/awg:v1.0.0-alpha.1`; the OCI references can be changed to pin another release.
+Each provider's own pack defines its dependencies and registration, while the agent only runs registered providers.
+After either deployment, the application re-pushes every interface for that server so the host comes up in the desired state.
+A live status area reports progress and any failure.
 
-In the desktop application, a local agent binary may also be selected from disk through a native file picker instead of
-relying on a downloaded one.
+The external `host` target currently supports Debian and Fedora on `amd64` and `arm64`. The admin calls `pack apply`
+in its own process and downloads the target with `pack refresh`; no external `pack` command is used.
+The target opens a separate SSH connection for the deployment and runs a temporary host agent and OCI proxy on the
+server. The server downloads each required binary for its platform from GHCR through that loopback proxy. The AWG pack
+persists `net.ipv4.ip_forward=1`; during provider deployment, the target accepts input on every stored VPN interface
+through firewalld, ufw or iptables (for example, `iptables -A INPUT -i awg0 -j ACCEPT`). After an interface is successfully
+created or updated through the AWG provider, a separate lightweight pack adds its interface rule without downloading the provider
+again or restarting the agent. SSH key authentication is required, and a non-root SSH user needs passwordless sudo.
+Pack state, the target and cached bundles
+are stored under `~/.vpn-admin/cache`.
 
 #### Server prerequisites
 
@@ -268,22 +279,6 @@ kernel module. For the AWG provider:
 Versions must match: an AmneziaWG 1.0 kernel module rejects 2.0-style obfuscation parameters (`H1–H4` ranges, `I1–I5`).
 Upgrade the module to 2.0, use userspace mode, or deactivate the interface to keep its configuration without applying it.
 The provider reports its selected backend and supported interface kinds through `/info`.
-
-### Agent sources (deploy presets)
-
-An **agent source** is a reusable, named preset that describes where to obtain the agent binary (for example, a release
-URL), optionally cached locally so that repeated deployments do not download it again. Agent sources are managed from
-the
-source dropdown in the deployment section of the agent dialog: **Add new…** opens a small form to create one, and each
-saved entry provides an **edit** (pencil) action to view and change its URL, path, image, and options, along with
-cache-refresh and remove actions. This is useful when deploying to many servers or when pinning a specific agent
-version.
-
-A source is one of three kinds — a **URL**, a **local file path**, or a **Docker image** (the last deploys the userspace
-agent as a container). If the agent has already reported that the server has no usable Docker, image sources are not
-offered for it: they are hidden from the dropdown and the **Docker image** option is removed from the creation form,
-because the container deployment cannot run there. Before the first deployment the server capabilities are unknown, so
-all options are offered and the deployment's own Docker pre-check serves as the backstop.
 
 ### Sync
 

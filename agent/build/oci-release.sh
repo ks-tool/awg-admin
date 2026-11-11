@@ -18,14 +18,14 @@ case "$tag" in
         ;;
     providers/awg/v*)
         binary=vpn-provider-awg
-        package=./cmd/vpn-provider-awg
+        package=./providers/awg/cmd
         repository=vpn-providers/awg
         version=${tag#providers/awg/}
         artifact_type=application/vnd.ks-tool.vpn-provider-awg.v1
         ;;
     providers/example/v*)
         binary=example-provider
-        package=./cmd/example-provider
+        package=./providers/example/cmd
         repository=vpn-providers/example
         version=${tag#providers/example/}
         artifact_type=application/vnd.ks-tool.vpn-provider-example.v1
@@ -54,8 +54,13 @@ for arch in amd64 arm64; do
     )
 done
 
+registry=${OCI_REGISTRY:-oci://ghcr.io/ks-tool}
+destination="${registry%/}/$repository:$version"
+pack_repository=${destination#oci://}
+pack_repository=${pack_repository#*/}
+
 cat > "$out/pack.yaml" <<EOF
-repository: $repository:$version
+repository: $pack_repository
 type: $artifact_type
 annotations:
   org.opencontainers.image.source: https://github.com/ks-tool/vpn-agent
@@ -70,8 +75,6 @@ items:
     annotations:
       org.opencontainers.image.title: $binary
 EOF
-
-registry=${OCI_REGISTRY:-oci://ghcr.io/ks-tool}
 options=()
 if [[ ${OCI_PLAIN_HTTP:-} == 1 ]]; then
     options+=(--plain-http)
@@ -81,5 +84,5 @@ if [[ -n ${OCI_LOGIN:-} ]]; then
 fi
 (
     cd "$out"
-    "${OCI_PACKER:-oci-packer}" "$registry" -f pack.yaml "${options[@]}"
+    "${OCI_PACKER:-oci-packer}" "$destination" -f pack.yaml "${options[@]}"
 )

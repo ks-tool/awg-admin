@@ -61,6 +61,30 @@ func (s *linkStore) get(linkID string) (linkState, error) {
 	return state, nil
 }
 
+func (s *linkStore) has(interfaceName string) (bool, error) {
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".link" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(s.root, entry.Name()))
+		if err != nil {
+			return false, err
+		}
+		var state linkState
+		if err := json.Unmarshal(data, &state); err != nil {
+			return false, err
+		}
+		if state.Interface == interfaceName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *linkStore) put(linkID string, state linkState) error {
 	data, err := json.Marshal(state)
 	if err != nil {

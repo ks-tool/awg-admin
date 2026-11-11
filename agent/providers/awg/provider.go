@@ -185,7 +185,16 @@ func (p *Provider) reconcileInterface(_ context.Context, resource models.Resourc
 		cfg.Peers = previous.Peers
 		cfg.PreUp, cfg.PostUp = previous.PreUp, previous.PostUp
 		cfg.PreDown, cfg.PostDown = previous.PreDown, previous.PostDown
+		linked, err := p.links.has(spec.Interface)
+		if err != nil {
+			return nil, err
+		}
+		if linked {
+			cfg.Table = previous.Table
+			copyLinkObfuscation(&cfg, *previous)
+		}
 	}
+	replaceInterfaceFirewallHooks(&cfg)
 	if models.IsEmpty(cfg.PrivateKey) && stateErr == nil {
 		cfg.PrivateKey = state.PrivateKey
 	}

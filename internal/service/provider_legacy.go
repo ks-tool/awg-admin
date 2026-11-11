@@ -42,7 +42,7 @@ func legacyInterfaceSpec(iface *models.Interface) (json.RawMessage, error) {
 	return json.Marshal(spec)
 }
 
-func legacyPeerSpec(user *models.User, peer *models.Peer, iface *models.Interface) (json.RawMessage, agentmodels.InterfacePeer, error) {
+func (s *Service) legacyPeerSpec(user *models.User, peer *models.Peer, iface *models.Interface) (json.RawMessage, agentmodels.InterfacePeer, error) {
 	publicKey := peerPublicKey(peer)
 	var configured agentmodels.InterfacePeer
 	for _, candidate := range iface.Peers {
@@ -51,11 +51,22 @@ func legacyPeerSpec(user *models.User, peer *models.Peer, iface *models.Interfac
 			break
 		}
 	}
-	spec, err := json.Marshal(map[string]any{
+	if len(configured.AllowedIPs) == 0 {
+		ip, err := s.nextFreeIP(iface.ID)
+		if err != nil {
+			return nil, configured, err
+		}
+		configured.AllowedIPs = []string{fmt.Sprintf("%s/32", ip.String())}
+	}
+	values := map[string]any{
 		"name": peer.Name, "interfaceRef": iface.ID.String(), "userRef": user.ID.String(), "publicKey": publicKey,
-		"allowedIPs": configured.AllowedIPs, "dns": peer.DNS, "disabled": peer.Disabled || user.Disabled,
+		"allowedIPs": configured.AllowedIPs, "disabled": peer.Disabled || user.Disabled,
 		"keepaliveSeconds": int(configured.KeepaliveInterval.Seconds()),
-	})
+	}
+	if len(peer.DNS) > 0 {
+		values["dns"] = peer.DNS
+	}
+	spec, err := json.Marshal(values)
 	return spec, configured, err
 }
 
@@ -103,7 +114,7 @@ func (s *Service) pushProviderInterface(serverID uuid.UUID, iface *models.Interf
 			if peer.InterfaceId != iface.ID {
 				continue
 			}
-			spec, configured, err := legacyPeerSpec(user, peer, iface)
+			spec, configured, err := s.legacyPeerSpec(user, peer, iface)
 			if err != nil {
 				return true, err
 			}

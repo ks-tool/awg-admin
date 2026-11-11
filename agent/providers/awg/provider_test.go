@@ -97,8 +97,9 @@ func TestInterfaceSchemaAndGenericLifecycle(t *testing.T) {
 	if models.IsEmpty(network.config.PrivateKey) {
 		t.Fatal("agent did not generate a private key")
 	}
-	if len(network.config.Peers) != 0 || len(network.config.PreUp) != 0 {
-		t.Fatalf("unexpected peers or hooks in new interface: %+v", network.config)
+	up, down := interfaceFirewallHooks(network.config)
+	if len(network.config.Peers) != 0 || len(network.config.PreUp) != 1 || network.config.PreUp[0] != up || len(network.config.PostDown) != 1 || network.config.PostDown[0] != down {
+		t.Fatalf("unexpected peers or firewall hooks in new interface: %+v", network.config)
 	}
 	current, err := runtime.Get("awg", "Interface", "office")
 	if err != nil {
@@ -174,7 +175,7 @@ func TestReconcilePreservesLegacySecretsPeersAndHooks(t *testing.T) {
 	if network.previous == nil || network.config.PrivateKey != privateKey || len(network.config.Peers) != 1 {
 		t.Fatalf("legacy config was not preserved: %+v", network.config)
 	}
-	if len(network.config.PreUp) != 1 || len(network.config.PostDown) != 1 {
+	if len(network.config.PreUp) != 2 || network.config.PreUp[1] != "pre-up" || len(network.config.PostDown) != 2 || network.config.PostDown[1] != "post-down" {
 		t.Fatalf("legacy hooks were not preserved: %+v", network.config)
 	}
 	if strings.Contains(string(status), privateKey.String()) {
@@ -262,7 +263,7 @@ func TestInterfaceSecretMigrationPreservesKeysHooksAndZeroListenPort(t *testing.
 	if _, err := provider.Reconcile(context.Background(), item); err != nil {
 		t.Fatal(err)
 	}
-	if network.config.PrivateKey != privateKey || len(network.config.PreUp) != 1 {
+	if network.config.PrivateKey != privateKey || len(network.config.PreUp) != 2 || network.config.PreUp[1] != "pre-up" {
 		t.Fatal("reconcile discarded imported state")
 	}
 }

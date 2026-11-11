@@ -1,0 +1,81 @@
+/*
+  Copyright © 2026 Alexey Shulutkov <github@shulutkov.ru>
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  	http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+package providerdeploy
+
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/horchestra/pack/sdk"
+	"github.com/ks-tool/vpn-agent/models"
+)
+
+func TestPackOwnsDependenciesAndRegistration(t *testing.T) {
+	agentDB := t.TempDir()
+	deployment := models.ProviderDeployment{Name: "awg", Artifact: "oci://ghcr.io/ks-tool/vpn-providers/awg:v1"}
+	pack, values, err := New(deployment, agentDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packages := pack.PackRoot().Packages["debian"]
+	if packages.Sysctls["net.ipv4.ip_forward"] != "1" {
+		t.Fatalf("AWG sysctls = %#v", packages.Sysctls)
+	}
+	for _, name := range []string{"ca-certificates", "iproute2", "procps"} {
+		found := false
+		for _, dependency := range packages.Prepare {
+			found = found || dependency == name
+		}
+		if !found {
+			t.Errorf("dependency %s is missing: %#v", name, packages.Prepare)
+		}
+	}
+	if values["registrationPath"] != filepath.Join(agentDB, "providers.d", "awg.conf") {
+		t.Fatalf("registration path = %q", values["registrationPath"])
+	}
+	registry := values["registry"].(map[string]any)
+	provider := registry["providers"].([]any)[0].(map[string]any)
+	if provider["command"] != "/usr/local/bin/vpn-provider-awg" || provider["address"] != "http://127.0.0.1:9091" {
+		t.Fatalf("unexpected registration: %#v", provider)
+	}
+	if _, forced := provider["args"]; forced {
+		t.Fatalf("AWG must select its backend automatically: %#v", provider)
+	}
+	if err := sdk.Generate(t.TempDir(), pack); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUserspaceOption(t *testing.T) {
+	deployment := models.ProviderDeployment{Name: "awg", Artifact: "oci://ghcr.io/ks-tool/vpn-providers/awg:v1", Options: map[string]any{"userspace": true}}
+	_, values, err := New(deployment, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := values["registry"].(map[string]any)
+	provider := registry["providers"].([]any)[0].(map[string]any)
+	args := provider["args"].([]any)
+	if len(args) != 1 || args[0] != "--userspace" {
+		t.Fatalf("unexpected userspace registration: %#v", provider)
+	}
+	for _, options := range []map[string]any{{"userspace": "yes"}, {"unknown": true}} {
+		deployment.Options = options
+		if _, _, err := New(deployment, t.TempDir()); err == nil {
+			t.Fatalf("invalid options were accepted: %#v", options)
+		}
+	}
+}

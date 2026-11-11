@@ -72,6 +72,10 @@ export function DeleteVPNServiceUser(arg1:string,arg2:string):Promise<void>;
 
 export function DeployAgent(arg1:string,arg2:string):Promise<void>;
 
+export function DeployAgentPack(arg1:string,arg2:string):Promise<void>;
+
+export function DeployProvider(arg1:string,arg2:models.ProviderDeployment):Promise<void>;
+
 export function ForceReplaceInterfacePeers(arg1:string,arg2:string):Promise<void>;
 
 export function GenerateAgentTLS(arg1:string):Promise<models.Server>;

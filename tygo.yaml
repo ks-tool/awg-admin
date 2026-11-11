@@ -9,6 +9,9 @@ type_mappings:
 packages:
   - path: github.com/ks-tool/vpn-agent/models
     output_path: ./frontend/src/types/agent.ts
+    exclude_files:
+      - resources.go
+      - unmanaged.go
     frontmatter: |
       /*
         Copyright © 2026 Alexey Shulutkov <github@shulutkov.ru>
@@ -27,6 +30,9 @@ packages:
        */
   - path: github.com/ks-tool/vpn-admin/models
     output_path: ./frontend/src/types/admin.ts
+    exclude_files:
+      - resources.go
+      - packdeployment.go
     frontmatter: |
       /*
         Copyright © 2026 Alexey Shulutkov <github@shulutkov.ru>

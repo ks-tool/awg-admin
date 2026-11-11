@@ -17,16 +17,24 @@
 package e2e
 
 import (
-	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ks-tool/vpn-admin/internal/pki"
+	adminservice "github.com/ks-tool/vpn-admin/internal/service"
+	adminmodels "github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage/boltdb"
 	agentmodels "github.com/ks-tool/vpn-agent/models"
 
 	"github.com/moby/moby/api/types/container"
@@ -35,22 +43,25 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// TestUserspaceTunnel brings up two userspace AWG provider containers, configures
-// each as the other's AmneziaWG peer through the provider HTTP API (with a shared,
-// generated set of obfuscation params), and asserts traffic flows across the
-// resulting tunnel — an end-to-end check that the userspace provider (amneziawg-go
-// compiled in, no external process) builds a working, obfuscated WireGuard
-// tunnel: TUN creation, wgctrl/UAPI configuration, obfuscation params and the
-// data plane.
+// TestUserspaceTunnel uses the admin service to build A → B → C → D → E through
+// four provider links. B, C and D each terminate two links on one interface.
+// Every path is checked with bare iptables, UFW and firewalld after a firewall
+// reload, covering both live and persistent rules.
 //
 // Needs Docker with /dev/net/tun and NET_ADMIN available to containers. Gated
-// behind AWG_E2E=1 so a plain `go test` never requires Docker; run with:
+// behind AWG_E2E=1 so a plain go test never requires Docker; run with:
 //
-//	cd agent/e2e && GOWORK=off AWG_E2E=1 go test -run TestUserspaceTunnel -v .
+//	cd agent/e2e && GOWORK=off AWG_E2E=1 go test -count=1 -run TestUserspaceTunnel -v .
 func TestUserspaceTunnel(t *testing.T) {
 	if os.Getenv("AWG_E2E") == "" {
 		t.Skip("set AWG_E2E=1 to run (needs Docker with /dev/net/tun + NET_ADMIN)")
 	}
+	for _, backend := range []string{"iptables", "ufw", "firewalld"} {
+		t.Run(backend, func(t *testing.T) { testUserspaceTunnel(t, backend) })
+	}
+}
+
+func testUserspaceTunnel(t *testing.T, backend string) {
 	ctx := context.Background()
 
 	nw, err := network.New(ctx)
@@ -59,66 +70,112 @@ func TestUserspaceTunnel(t *testing.T) {
 	}
 	testcontainers.CleanupNetwork(t, nw)
 
-	a, apiA, ipA := startAgent(ctx, t, nw.Name, "peer-a")
-	b, apiB, ipB := startAgent(ctx, t, nw.Name, "peer-b")
-
-	// A keypair per end.
-	aPriv, err := agentmodels.GeneratePrivateKey()
-	if err != nil {
-		t.Fatalf("generate key a: %v", err)
-	}
-	bPriv, err := agentmodels.GeneratePrivateKey()
-	if err != nil {
-		t.Fatalf("generate key b: %v", err)
+	names := []string{"a", "b", "c", "d", "e"}
+	nodes := make([]agentNode, len(names))
+	for i, name := range names {
+		nodes[i] = startAgent(ctx, t, nw.Name, "peer-"+name, backend)
 	}
 
-	// One shared set of AmneziaWG obfuscation params — both peers must use the
-	// same values to talk to each other. This is the app's real generator
-	// (AmneziaWG 2.0: s1–s4 and h1–h4 as ranges, i1); the userspace agent is
-	// built against amneziawg-go v0.2.19 (the 2.0 line), which accepts it.
-	var amz agentmodels.InterfaceConfig
-	agentmodels.GenerateAmneziaParams(&amz)
+	store, err := boltdb.Open(filepath.Join(t.TempDir(), "admin.db"))
+	if err != nil {
+		t.Fatalf("open admin storage: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	admin := adminservice.New(store)
+	interfaces := make([]*adminmodels.Interface, len(nodes))
+	for i, name := range names {
+		server := addAdminServer(t, admin, name, nodes[i])
+		address := fmt.Sprintf("10.10.0.%d/24", i+1)
+		interfaces[i] = createAdminInterface(t, admin, server, "awg0", address, uint16(51820+i))
+	}
 
-	const port = 51820
-	cfgA := ifaceConfig("awg0", "10.10.0.1/24", port, aPriv, bPriv.PublicKey(), "10.10.0.2/32", fmt.Sprintf("%s:%d", ipB, port), amz)
-	cfgB := ifaceConfig("awg0", "10.10.0.2/24", port, bPriv, aPriv.PublicKey(), "10.10.0.1/32", fmt.Sprintf("%s:%d", ipA, port), amz)
+	for i := 0; i < len(interfaces)-1; i++ {
+		link, err := admin.CreateProviderLink(interfaces[i].ID.String(), interfaces[i+1].ID.String())
+		if err != nil {
+			dumpTunnelState(ctx, t, nodes)
+			t.Fatalf("create provider link %s → %s: %v", names[i], names[i+1], err)
+		}
+		if link.Status.Phase != adminmodels.LinkReady {
+			t.Fatalf("link %s is not ready: %+v", link.ID, link.Status)
+		}
+	}
 
-	putInterface(ctx, t, a, apiA, cfgA)
-	putInterface(ctx, t, b, apiB, cfgB)
-
-	// The real assertion: the data plane works — ping B's tunnel address from A.
-	if out, ok := pingWithin(ctx, t, a, "10.10.0.2", 45*time.Second); !ok {
-		dumpAgentLogs(ctx, t, a, "peer-a")
-		dumpAgentLogs(ctx, t, b, "peer-b")
-		t.Fatalf("no connectivity across the userspace tunnel within timeout; last ping output:\n%s", out)
+	reloadFirewall(ctx, t, backend, nodes)
+	for i := 0; i < len(nodes)-1; i++ {
+		target := fmt.Sprintf("10.10.0.%d", i+2)
+		if out, ok := pingWithin(ctx, t, nodes[i].container, target, 20*time.Second); !ok {
+			dumpTunnelState(ctx, t, nodes[i:i+2])
+			t.Fatalf("no connectivity through admin-built tunnel %s → %s after %s reload; last ping output:\n%s", names[i], names[i+1], backend, out)
+		}
+	}
+	for hops := 2; hops < len(nodes); hops++ {
+		for i := 0; i+hops < len(nodes); i++ {
+			target := fmt.Sprintf("10.10.0.%d", i+hops+1)
+			if out, ok := pingWithin(ctx, t, nodes[i].container, target, 30*time.Second); !ok {
+				dumpTunnelState(ctx, t, nodes)
+				t.Fatalf("no connectivity from %s through %d admin-built tunnels to %s after %s reload; last ping output:\n%s", names[i], hops, names[i+hops], backend, out)
+			}
+		}
 	}
 }
 
-// startAgent builds (once, cached) and starts an vpn-provider-awg container
-// on netName with the given alias, returning it, the base URL of its
-// /interfaces API (host-mapped) and its IP on the network.
-func startAgent(ctx context.Context, t *testing.T, netName, alias string) (testcontainers.Container, string, string) {
+func reloadFirewall(ctx context.Context, t *testing.T, backend string, nodes []agentNode) {
 	t.Helper()
+	if backend == "iptables" {
+		return
+	}
+	command := []string{"ufw", "reload"}
+	if backend == "firewalld" {
+		command = []string{"firewall-cmd", "--reload"}
+	}
+	for _, node := range nodes {
+		code, output, err := node.container.Exec(ctx, command)
+		data, _ := io.ReadAll(output)
+		if err != nil || code != 0 {
+			dumpAgentLogs(ctx, t, node.container, backend)
+			t.Fatalf("reload %s: code=%d err=%v output=%s", backend, code, err, data)
+		}
+	}
+}
+
+type agentNode struct {
+	container   testcontainers.Container
+	address     string
+	ip          string
+	tlsMaterial *adminmodels.AgentTLS
+}
+
+func startAgent(ctx context.Context, t *testing.T, netName, alias, backend string) agentNode {
+	t.Helper()
+	tlsMaterial, err := pki.IssueAgentTLS(alias, []net.IP{net.ParseIP("127.0.0.1")}, []string{"localhost"})
+	if err != nil {
+		t.Fatalf("issue TLS for %s: %v", alias, err)
+	}
+	clientTLS := clientTLSConfig(t, tlsMaterial)
 	req := testcontainers.ContainerRequest{
-		FromDockerfile: testcontainers.FromDockerfile{
-			Context:    "..", // the agent module root
-			Dockerfile: "e2e/Dockerfile",
-			Repo:       "vpn-provider-awg-e2e",
-			Tag:        "latest",
-			KeepImage:  true,
-		},
+		Context:        "..",
+		Dockerfile:     "e2e/Dockerfile",
+		Repo:           "vpn-provider-awg-e2e",
+		Tag:            "latest",
+		KeepImage:      true,
 		ExposedPorts:   []string{"8080/tcp"},
 		Networks:       []string{netName},
 		NetworkAliases: map[string][]string{netName: {alias}},
-		WaitingFor:     wait.ForHTTP("/interfaces/").WithPort("8080/tcp").WithStartupTimeout(120 * time.Second),
-		// The exact, narrow privileges the production deploy grants
-		// (internal/deploy/docker.go) — no --privileged, mirroring how
-		// e.g. linuxserver/docker-wireguard runs a userspace WireGuard:
-		// CAP_NET_ADMIN + /dev/net/tun for the TUN, NET_RAW for the iptables
-		// lifecycle hooks. (No ip_forward here — that's only for gateway/NAT
-		// routing between interfaces, not an endpoint-to-endpoint ping.)
+		Env: map[string]string{
+			"AWG_E2E_FIREWALL":               backend,
+			"VPN_PROVIDER_AWG_TLS_CERT":      "/tls/server.pem",
+			"VPN_PROVIDER_AWG_TLS_KEY":       "/tls/server-key.pem",
+			"VPN_PROVIDER_AWG_TLS_CLIENT_CA": "/tls/ca.pem",
+		},
+		Files: []testcontainers.ContainerFile{
+			{Reader: strings.NewReader(tlsMaterial.CA.Certificate), ContainerFilePath: "/tls/ca.pem", FileMode: 0o600},
+			{Reader: strings.NewReader(tlsMaterial.Server.Certificate), ContainerFilePath: "/tls/server.pem", FileMode: 0o600},
+			{Reader: strings.NewReader(tlsMaterial.Server.PrivateKey), ContainerFilePath: "/tls/server-key.pem", FileMode: 0o600},
+		},
+		WaitingFor: wait.ForHTTP("/interfaces/").WithPort("8080/tcp").WithTLS(true, clientTLS).WithStartupTimeout(120 * time.Second),
 		HostConfigModifier: func(hc *container.HostConfig) {
 			hc.CapAdd = append(hc.CapAdd, "NET_ADMIN", "NET_RAW")
+			hc.Sysctls = map[string]string{"net.ipv4.ip_forward": "1"}
 			hc.Devices = append(hc.Devices, container.DeviceMapping{
 				PathOnHost:        "/dev/net/tun",
 				PathInContainer:   "/dev/net/tun",
@@ -135,10 +192,6 @@ func startAgent(ctx context.Context, t *testing.T, netName, alias string) (testc
 		t.Fatalf("start %s: %v", alias, err)
 	}
 
-	host, err := c.Host(ctx)
-	if err != nil {
-		t.Fatalf("host %s: %v", alias, err)
-	}
 	mapped, err := c.MappedPort(ctx, "8080/tcp")
 	if err != nil {
 		t.Fatalf("mapped port %s: %v", alias, err)
@@ -147,57 +200,52 @@ func startAgent(ctx context.Context, t *testing.T, netName, alias string) (testc
 	if err != nil {
 		t.Fatalf("container ip %s: %v", alias, err)
 	}
-	return c, fmt.Sprintf("http://%s:%s/interfaces", host, mapped.Port()), ip
+	return agentNode{container: c, address: net.JoinHostPort("localhost", mapped.Port()), ip: ip, tlsMaterial: tlsMaterial}
 }
 
-// ifaceConfig builds an InterfaceConfig for one end of the tunnel, with a single
-// peer (the other end) and the shared obfuscation params from amz.
-func ifaceConfig(name, addr string, listen uint16, priv, peerPub agentmodels.Key, peerAllowed, peerEndpoint string, amz agentmodels.InterfaceConfig) agentmodels.InterfaceConfig {
-	cfg := agentmodels.InterfaceConfig{
-		Interface:  name,
-		PrivateKey: priv,
-		ListenPort: listen,
-		Address:    addr,
-		Peers: []agentmodels.InterfacePeer{{
-			Key:               peerPub,
-			AllowedIPs:        []string{peerAllowed},
-			Endpoint:          peerEndpoint,
-			KeepaliveInterval: 15 * time.Second,
-		}},
-	}
-	cfg.Jc, cfg.Jmin, cfg.Jmax = amz.Jc, amz.Jmin, amz.Jmax
-	cfg.S1, cfg.S2, cfg.S3, cfg.S4 = amz.S1, amz.S2, amz.S3, amz.S4
-	cfg.H1, cfg.H2, cfg.H3, cfg.H4 = amz.H1, amz.H2, amz.H3, amz.H4
-	cfg.I1, cfg.I2, cfg.I3, cfg.I4, cfg.I5 = amz.I1, amz.I2, amz.I3, amz.I4, amz.I5
-	return cfg
-}
-
-// putInterface applies cfg to a provider via PUT /interfaces.
-func putInterface(ctx context.Context, t *testing.T, c testcontainers.Container, apiURL string, cfg agentmodels.InterfaceConfig) {
+func clientTLSConfig(t *testing.T, material *adminmodels.AgentTLS) *tls.Config {
 	t.Helper()
-	body, err := json.Marshal(cfg)
+	certificate, err := tls.X509KeyPair([]byte(material.Client.Certificate), []byte(material.Client.PrivateKey))
 	if err != nil {
-		t.Fatalf("marshal config: %v", err)
+		t.Fatalf("load admin client certificate: %v", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, apiURL, bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("new request: %v", err)
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM([]byte(material.CA.Certificate)) {
+		t.Fatal("parse agent CA")
 	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("PUT %s: %v", apiURL, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusCreated {
-		b, _ := io.ReadAll(resp.Body)
-		dumpAgentLogs(ctx, t, c, "put-interface")
-		t.Fatalf("PUT %s: status %d: %s", apiURL, resp.StatusCode, bytes.TrimSpace(b))
-	}
+	return &tls.Config{Certificates: []tls.Certificate{certificate}, RootCAs: roots, ServerName: "localhost", MinVersion: tls.VersionTLS12}
 }
 
-// pingWithin repeatedly pings target from inside c until it succeeds or timeout
-// elapses, returning the last ping output and whether it ever succeeded.
+func addAdminServer(t *testing.T, admin *adminservice.Service, name string, node agentNode) *adminmodels.Server {
+	t.Helper()
+	server, err := admin.CreateServer(adminservice.ServerInput{
+		Name: name,
+		SSH:  adminmodels.SSHConfig{Host: node.ip, User: "root", Password: "unused-by-e2e"},
+		Agent: adminmodels.Agent{
+			Address: node.address,
+			TLS:     node.tlsMaterial,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create admin server %s: %v", name, err)
+	}
+	return server
+}
+
+func createAdminInterface(t *testing.T, admin *adminservice.Service, server *adminmodels.Server, name, address string, listenPort uint16) *adminmodels.Interface {
+	t.Helper()
+	cfg := agentmodels.InterfaceConfig{Interface: name, Address: address, ListenPort: listenPort}
+	agentmodels.GenerateAmneziaParams(&cfg)
+	iface, err := admin.CreateInterface(server.ID.String(), cfg)
+	if err != nil {
+		t.Fatalf("create interface %s on %s through admin: %v", name, server.Name, err)
+	}
+	if !iface.InSync {
+		t.Fatalf("interface %s on %s is not synced: %s", name, server.Name, iface.LastSyncError)
+	}
+	return iface
+}
+
 func pingWithin(ctx context.Context, t *testing.T, c testcontainers.Container, target string, timeout time.Duration) (string, bool) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -214,6 +262,52 @@ func pingWithin(ctx context.Context, t *testing.T, c testcontainers.Container, t
 		time.Sleep(2 * time.Second)
 	}
 	return last, false
+}
+
+func dumpTunnelState(ctx context.Context, t *testing.T, nodes []agentNode) {
+	t.Helper()
+	for _, node := range nodes {
+		dumpLiveInterfaces(t, node)
+		dumpNetworkState(ctx, t, node.container, node.container.GetContainerID())
+		dumpAgentLogs(ctx, t, node.container, node.container.GetContainerID())
+	}
+}
+
+func dumpLiveInterfaces(t *testing.T, node agentNode) {
+	t.Helper()
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLSConfig(t, node.tlsMaterial)}, Timeout: 5 * time.Second}
+	response, err := client.Get("https://" + node.address + "/interfaces/")
+	if err != nil {
+		t.Logf("read live interfaces: %v", err)
+		return
+	}
+	defer func() { _ = response.Body.Close() }()
+	var configs []agentmodels.InterfaceConfig
+	if err := json.NewDecoder(response.Body).Decode(&configs); err != nil {
+		t.Logf("decode live interfaces: %v", err)
+		return
+	}
+	for index := range configs {
+		configs[index].PrivateKey = agentmodels.Key{}
+	}
+	data, err := json.Marshal(configs)
+	if err != nil {
+		t.Logf("encode live interfaces: %v", err)
+		return
+	}
+	t.Logf("=== %s live interfaces ===\n%s", node.ip, data)
+}
+
+func dumpNetworkState(ctx context.Context, t *testing.T, c testcontainers.Container, name string) {
+	t.Helper()
+	for _, command := range [][]string{{"ip", "address"}, {"ip", "route", "show", "table", "all"}, {"ip", "rule"}, {"iptables", "-t", "nat", "-S"}, {"iptables", "-t", "mangle", "-S"}, {"ufw", "status", "verbose"}, {"firewall-cmd", "--direct", "--get-all-rules"}, {"firewall-cmd", "--permanent", "--direct", "--get-all-rules"}} {
+		_, output, err := c.Exec(ctx, command)
+		if err != nil {
+			continue
+		}
+		data, _ := io.ReadAll(output)
+		t.Logf("=== %s: %s ===\n%s", name, strings.Join(command, " "), data)
+	}
 }
 
 func dumpAgentLogs(ctx context.Context, t *testing.T, c testcontainers.Container, name string) {

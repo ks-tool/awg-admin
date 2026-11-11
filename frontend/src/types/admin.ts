@@ -146,18 +146,13 @@ export interface AuthCredentials {
 // source: deploystatus.go
 
 /**
- * DeployStatus reports the progress of an in-flight (or just-finished)
- * Service.DeployAgent call for one server, polled by the frontend (see
- * Service.GetDeployStatus) to show step-by-step progress instead of a
- * plain spinner.
+ * DeployStatus reports an agent or provider deployment for one server, polled
+ * by the frontend through Service.GetDeployStatus.
  */
 export interface DeployStatus {
   /**
-   * Step is one of internal/deploy.ToAgent's step-name keys ("connect",
-   * "upload_binary", "upload_unit", "upload_env", "upload_tls",
-   * "start_service") — deliberately not human-readable text, so the
-   * frontend localizes it itself rather than displaying whatever
-   * language the backend happens to log in.
+   * Step is a machine-readable deployment key such as "install_agent" or
+   * "install_provider_awg"; the frontend localizes it.
    */
   step: string;
   done: boolean;

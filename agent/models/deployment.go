@@ -5,7 +5,7 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+  	http://www.apache.org/licenses/LICENSE-2.0
 
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,13 +14,14 @@
   limitations under the License.
 */
 
-package main
+package models
 
-import (
-	"github.com/horchestra/pack/sdk"
-	"github.com/ks-tool/vpn-admin/pack/providers/awg"
-)
-
-func main() {
-	sdk.Run(&awg.Config{})
+// ProviderDeployment selects a provider and its OCI binary release. The
+// provider's own pack defines dependencies, values and runtime registration.
+type ProviderDeployment struct {
+	Name     string `json:"name"`
+	Artifact string `json:"artifact"`
+	// Options contains provider-specific installation settings interpreted by
+	// that provider's pack, for example {"userspace": true} for AWG.
+	Options map[string]any `json:"options,omitempty"`
 }

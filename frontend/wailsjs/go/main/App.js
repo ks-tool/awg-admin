@@ -138,6 +138,14 @@ export function DeployAgent(arg1, arg2) {
   return window['go']['main']['App']['DeployAgent'](arg1, arg2);
 }
 
+export function DeployAgentPack(arg1, arg2) {
+  return window['go']['main']['App']['DeployAgentPack'](arg1, arg2);
+}
+
+export function DeployProvider(arg1, arg2) {
+  return window['go']['main']['App']['DeployProvider'](arg1, arg2);
+}
+
 export function ForceReplaceInterfacePeers(arg1, arg2) {
   return window['go']['main']['App']['ForceReplaceInterfacePeers'](arg1, arg2);
 }

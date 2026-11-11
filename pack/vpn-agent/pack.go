@@ -28,13 +28,13 @@ type Config struct {
 }
 
 type TLS struct {
-	CA          packschema.Secret `json:"ca,omitempty"`
-	Certificate packschema.Secret `json:"certificate,omitempty"`
-	PrivateKey  packschema.Secret `json:"privateKey,omitempty"`
+	CA          packschema.Secret `json:"ca" jsonschema:"required"`
+	Certificate packschema.Secret `json:"certificate" jsonschema:"required"`
+	PrivateKey  packschema.Secret `json:"privateKey" jsonschema:"required"`
 }
 
 func (c *Config) SetDefaults() {
-	c.Artifact = "oci://ghcr.io/ks-tool/vpn-agent:v2.0.0"
+	c.Artifact = "oci://ghcr.io/ks-tool/vpn-agent:v2.0.0-alpha.1"
 	c.Env = map[string]string{
 		"VPN_AGENT_DB":           "/var/lib/vpn-agent",
 		"VPN_AGENT_ADDR":         "127.0.0.1:8080",
@@ -51,16 +51,33 @@ func (*Config) PackRoot() packschema.Root {
 		Ports:     map[string]int{"agent": 8080},
 		Data:      map[string]packschema.Volume{"state": {MountPath: "/var/lib/vpn-agent", Size: "100Mi"}},
 		Readiness: &packschema.Readiness{HTTP: "agent/v1/manifest"},
-		Packages: map[string]packschema.OSPackages{
+		Hooks: []packschema.Hook{
+			{
+				Name: "stop-legacy-agent", Phase: packschema.PreInstall, Idempotent: true, Timeout: "30s",
+				Command: []string{"sh", "-c", `if systemctl cat awg-agent.service >/dev/null 2>&1; then systemctl disable --now awg-agent.service; fi`},
+			},
+			{
+				Name: "remove-legacy-agent", Phase: packschema.PostInstall, Idempotent: true, Timeout: "30s",
+				Command: []string{"sh", "-c", `legacy_unit=$(systemctl show --property FragmentPath --value awg-agent.service 2>/dev/null || true)
+if [ -n "$legacy_unit" ] || [ -e /usr/local/bin/awg-agent ]; then
+	systemctl disable --now awg-agent.service 2>/dev/null || true
+	if [ -n "$legacy_unit" ]; then rm -f "$legacy_unit"; fi
+	rm -f /usr/local/bin/awg-agent
+	systemctl daemon-reload
+	systemctl reset-failed awg-agent.service 2>/dev/null || true
+fi`},
+			},
+		},
+		Packages: map[string]packschema.OSInstall{
 			"debian": {
 				Prepare: []string{"ca-certificates"},
 				Content: []packschema.File{
 					{Path: "/usr/local/bin/vpn-agent", URL: "{{ .artifact }}", Mode: "0755"},
 					{Path: "/etc/systemd/system/vpn-agent.service", Template: "vpn-agent.service", Mode: "0644"},
 					{Path: "/etc/vpn-agent/vpn-agent.env", Values: "env", Format: "env", Mode: "0600"},
-					{Path: "/etc/vpn-agent/ca.pem", Values: "tls.ca", Format: "secret", Mode: "0600"},
-					{Path: "/etc/vpn-agent/server.pem", Values: "tls.certificate", Format: "secret", Mode: "0600"},
-					{Path: "/etc/vpn-agent/server-key.pem", Values: "tls.privateKey", Format: "secret", Mode: "0600"},
+					{Path: "/etc/vpn-agent/ca.pem", Values: "tls/ca", Format: "text", Mode: "0600"},
+					{Path: "/etc/vpn-agent/server.pem", Values: "tls/certificate", Format: "text", Mode: "0600"},
+					{Path: "/etc/vpn-agent/server-key.pem", Values: "tls/privateKey", Format: "text", Mode: "0600"},
 				},
 				Services: []string{"vpn-agent"},
 			},

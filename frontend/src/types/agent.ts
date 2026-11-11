@@ -24,6 +24,23 @@ export interface AgentInfo {
 }
 
 //////////
+// source: deployment.go
+
+/**
+ * ProviderDeployment selects a provider and its OCI binary release. The
+ * provider's own pack defines dependencies, values and runtime registration.
+ */
+export interface ProviderDeployment {
+  name: string;
+  artifact: string;
+  /**
+   * Options contains provider-specific installation settings interpreted by
+   * that provider's pack, for example {"userspace": true} for AWG.
+   */
+  options?: { [key: string]: any};
+}
+
+//////////
 // source: host.go
 
 /**
@@ -35,8 +52,8 @@ export interface AgentInfo {
  */
 export interface HostInfo {
   /**
-   * Backend identifies which link backend this agent build drives: "kernel"
-   * (amneziawg-dkms over netlink) or "userspace" (in-process amneziawg-go).
+   * Backend identifies the link backend reported by a provider: "kernel",
+   * "userspace", or "external" for the provider-neutral agent.
    */
   backend: string;
   /**

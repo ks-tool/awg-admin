@@ -17,10 +17,13 @@
 package service
 
 import (
+	"context"
 	"sync"
 
+	"github.com/ks-tool/vpn-admin/internal/deploy"
 	"github.com/ks-tool/vpn-admin/internal/plugin"
 	"github.com/ks-tool/vpn-admin/internal/sshclient"
+	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
 
 	"github.com/rs/zerolog"
@@ -78,6 +81,11 @@ type Service struct {
 	providerRegistry *providerRegistry
 	geocoder         locationGeocoder
 	topologyMu       sync.Mutex
+	firewallMu       sync.Mutex
+	firewallRunning  map[string]bool
+	firewallDesired  map[string]string
+	firewallApplied  map[string]string
+	applyFirewall    func(context.Context, models.Server, []string, string, string) error
 
 	deployStatus *deployStatusStore
 
@@ -86,7 +94,7 @@ type Service struct {
 }
 
 func New(s storage.Storage, opts ...Option) *Service {
-	svc := &Service{store: s, tunnels: sshclient.NewManager(), plugins: defaultPluginRegistry(), providerRegistry: newProviderRegistry(), geocoder: defaultLocationGeocoder(), deployStatus: newDeployStatusStore(), version: "dev"}
+	svc := &Service{store: s, tunnels: sshclient.NewManager(), plugins: defaultPluginRegistry(), providerRegistry: newProviderRegistry(), geocoder: defaultLocationGeocoder(), deployStatus: newDeployStatusStore(), version: "dev", firewallRunning: map[string]bool{}, firewallDesired: map[string]string{}, firewallApplied: map[string]string{}, applyFirewall: deploy.SyncFirewall}
 	for _, opt := range opts {
 		opt(svc)
 	}

@@ -14,89 +14,25 @@
   limitations under the License.
 */
 
-import {type FormEvent, useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Plus, RefreshCw, Rocket} from 'lucide-react';
+import {RefreshCw, Rocket} from 'lucide-react';
 import {toast} from 'sonner';
 import {FormField} from '@/components/common/FormField';
-import {Modal} from '@/components/common/Modal';
 import {buttons, inputs} from '@/components/common/controls';
 import {SSHPassphraseModal} from '@/components/server/SSHPassphraseModal';
 import {SudoPasswordModal} from '@/components/server/SudoPasswordModal';
-import {createAgentSource, deployAgent, getDeployStatus, listAgentSources, unlockServerSudo, type AgentSourceInput} from '@/services/deployment';
+import {deployAgentPack, deployProvider, getDeployStatus, unlockServerSudo} from '@/services/deployment';
 import {unlockServerSSH} from '@/services/servers';
 import {SSHPassphraseRequiredError, SudoPasswordRequiredError} from '@/services/sshErrors';
 import {cn} from '@/lib/utils';
-import type {AgentSource, Server} from '@/types';
+import type {Server} from '@/types';
+
+const DEFAULT_AGENT_ARTIFACT = 'oci://ghcr.io/ks-tool/vpn-agent:v2.0.0-alpha.1';
+const DEFAULT_AWG_ARTIFACT = 'oci://ghcr.io/ks-tool/vpn-providers/awg:v1.0.0-alpha.1';
 
 function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
-}
-
-function AgentSourceForm({onClose, onCreated}: {onClose: () => void; onCreated: (source: AgentSource) => void}) {
-    const {t} = useTranslation();
-    const [type, setType] = useState<'url' | 'path' | 'image'>('url');
-    const [name, setName] = useState('');
-    const [value, setValue] = useState('');
-    const [cacheLocally, setCacheLocally] = useState(false);
-    const [userspace, setUserspace] = useState(false);
-    const [saving, setSaving] = useState(false);
-
-    const save = async (event: FormEvent) => {
-        event.preventDefault();
-        setSaving(true);
-        const input: AgentSourceInput = {
-            name: name.trim(),
-            url: type === 'url' ? value.trim() : '',
-            path: type === 'path' ? value.trim() : '',
-            image: type === 'image' ? value.trim() : '',
-            cacheLocally: type === 'url' && cacheLocally,
-            userspace: type !== 'image' && userspace,
-        };
-        try {
-            onCreated(await createAgentSource(input));
-        } catch (error) {
-            toast.error(message(error) || t('servers.sourceCreateError'));
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <Modal title={t('servers.addSourceTitle')} onClose={onClose} loading={saving} dimmed={false}>
-            <form onSubmit={save} className="space-y-4">
-                <FormField label={t('servers.sourceName')}>
-                    <input autoFocus required value={name} onChange={event => setName(event.target.value)} placeholder={t('servers.sourceNamePlaceholder')} disabled={saving} className={inputs.primary} />
-                </FormField>
-                <FormField label={t('servers.sourceType')}>
-                    <select value={type} onChange={event => {setType(event.target.value as typeof type); setValue('');}} disabled={saving} className={inputs.primary}>
-                        <option value="url">{t('servers.sourceTypeUrl')}</option>
-                        <option value="path">{t('servers.sourceTypePath')}</option>
-                        <option value="image">{t('servers.sourceTypeImage')}</option>
-                    </select>
-                </FormField>
-                <FormField label={type === 'url' ? 'URL' : type === 'path' ? t('servers.sourcePath') : t('servers.sourceImage')}>
-                    <input required value={value} onChange={event => setValue(event.target.value)} disabled={saving} className={cn(inputs.primary, 'font-mono text-xs')} />
-                </FormField>
-                {type === 'url' && (
-                    <label className="flex items-center gap-3 text-sm">
-                        <input type="checkbox" checked={cacheLocally} onChange={event => setCacheLocally(event.target.checked)} disabled={saving} />
-                        {t('servers.cacheLocally')}
-                    </label>
-                )}
-                {type !== 'image' && (
-                    <label className="flex items-center gap-3 text-sm">
-                        <input type="checkbox" checked={userspace} onChange={event => setUserspace(event.target.checked)} disabled={saving} />
-                        {t('servers.sourceUserspace')}
-                    </label>
-                )}
-                <div className="flex justify-end gap-2">
-                    <button type="button" onClick={onClose} disabled={saving} className={buttons.secondary}>{t('common.cancel')}</button>
-                    <button type="submit" disabled={saving || !name.trim() || !value.trim()} className={buttons.primary}>{saving ? t('common.saving') : t('servers.addSource')}</button>
-                </div>
-            </form>
-        </Modal>
-    );
 }
 
 export function AgentDeployment({server, onChanged, onBusyChange}: {
@@ -105,9 +41,10 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
     onBusyChange: (busy: boolean) => void;
 }) {
     const {t} = useTranslation();
-    const [sources, setSources] = useState<AgentSource[]>([]);
-    const [sourceId, setSourceId] = useState('');
-    const [addingSource, setAddingSource] = useState(false);
+    const [agentArtifact, setAgentArtifact] = useState(DEFAULT_AGENT_ARTIFACT);
+    const [awgArtifact, setAwgArtifact] = useState(DEFAULT_AWG_ARTIFACT);
+    const [userspace, setUserspace] = useState(false);
+    const [deploymentKind, setDeploymentKind] = useState<'agent' | 'provider'>('agent');
     const [starting, setStarting] = useState(false);
     const [deploying, setDeploying] = useState(false);
     const [step, setStep] = useState('');
@@ -121,16 +58,6 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
         onBusyChange(busy);
         return () => onBusyChange(false);
     }, [busy, onBusyChange]);
-
-    useEffect(() => {
-        let cancelled = false;
-        void listAgentSources().then(items => {
-            if (cancelled) return;
-            setSources(items);
-            setSourceId(current => items.some(item => item.id === current) ? current : (items[0]?.id ?? ''));
-        }).catch(error => toast.error(message(error)));
-        return () => {cancelled = true;};
-    }, []);
 
     const handleError = useCallback((error: unknown) => {
         setStarting(false);
@@ -148,23 +75,29 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
         toast.error(text || t('servers.deployError'));
     }, [t]);
 
-    const start = useCallback(async () => {
-        if (!sourceId) {
-            toast.error(t('servers.noSourceSelected'));
+    const start = useCallback(async (kind: 'agent' | 'provider') => {
+        const artifact = kind === 'agent' ? agentArtifact.trim() : awgArtifact.trim();
+        if (!artifact) {
+            toast.error(t('servers.artifactRequired'));
             return;
         }
+        setDeploymentKind(kind);
         setStarting(true);
         setDeployError('');
         setStep('connect');
         try {
-            await deployAgent(server.id, sourceId);
+            if (kind === 'agent') {
+                await deployAgentPack(server.id, artifact);
+            } else {
+                await deployProvider(server.id, {name: 'awg', artifact, options: {userspace}});
+            }
             setDeploying(true);
         } catch (error) {
             handleError(error);
         } finally {
             setStarting(false);
         }
-    }, [handleError, server.id, sourceId, t]);
+    }, [agentArtifact, awgArtifact, handleError, server.id, t, userspace]);
 
     useEffect(() => {
         if (!deploying) return;
@@ -208,7 +141,7 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
                 await unlockServerSudo(server.id, secret);
             }
             setUnlock(null);
-            await start();
+            await start(deploymentKind);
         } catch (error) {
             setUnlockError(message(error));
         } finally {
@@ -219,28 +152,33 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
     return (
         <div className="rounded-xl border border-border bg-card p-6 dark:border-white/5 dark:bg-white/3">
             <div className="mb-1 flex items-center gap-2 text-lg font-semibold"><Rocket size={20} />{t('servers.deployAgentTitle')}</div>
-            <p className="mb-5 text-sm text-muted-foreground">{t('servers.agentModal.deployHint')}</p>
-            <div className="flex items-end gap-2">
-                <div className="min-w-0 flex-1">
-                    <FormField label={t('servers.agentSource')}>
-                        <select value={sourceId} onChange={event => setSourceId(event.target.value)} disabled={busy} className={inputs.primary}>
-                            {!sources.length && <option value="">{t('servers.selectSource')}</option>}
-                            {sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
-                        </select>
-                    </FormField>
+            <p className="mb-5 text-sm text-muted-foreground">{t('servers.agentModal.packDeployHint')}</p>
+            <div className="space-y-4">
+                <FormField label={t('servers.agentArtifact')}>
+                    <input required value={agentArtifact} onChange={event => setAgentArtifact(event.target.value)} disabled={busy} className={cn(inputs.primary, 'font-mono text-xs')} />
+                </FormField>
+                <div className="flex justify-end">
+                    <button type="button" onClick={() => void start('agent')} disabled={busy || !agentArtifact.trim()} className={cn(buttons.primary, 'inline-flex items-center gap-2')}>
+                        <Rocket size={14} />{busy && deploymentKind === 'agent' ? t('servers.deploying') : t('servers.deployAgent')}
+                    </button>
                 </div>
-                <button type="button" onClick={() => setAddingSource(true)} disabled={busy} title={t('servers.addSourceTitle')} className={cn(buttons.secondary, 'px-3')}><Plus size={16} /></button>
-                <button type="button" onClick={() => void start()} disabled={busy || !sourceId} className={cn(buttons.primary, 'inline-flex items-center gap-2')}>
-                    <Rocket size={14} />{busy ? t('servers.deploying') : t('servers.deploy')}
-                </button>
+            </div>
+            <div className="mt-5 space-y-4 rounded-lg border border-border p-4 dark:border-white/10">
+                <FormField label={t('servers.providerArtifact')}>
+                    <input required value={awgArtifact} onChange={event => setAwgArtifact(event.target.value)} disabled={busy} className={cn(inputs.primary, 'font-mono text-xs')} />
+                </FormField>
+                <label className="flex items-center gap-3 text-sm">
+                    <input type="checkbox" checked={userspace} onChange={event => setUserspace(event.target.checked)} disabled={busy} />
+                    {t('servers.forceUserspace')}
+                </label>
+                <div className="flex justify-end">
+                    <button type="button" onClick={() => void start('provider')} disabled={busy || !awgArtifact.trim()} className={cn(buttons.primary, 'inline-flex items-center gap-2')}>
+                        <Rocket size={14} />{busy && deploymentKind === 'provider' ? t('servers.deploying') : t('servers.deployProvider')}
+                    </button>
+                </div>
             </div>
             {busy && step && <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><RefreshCw size={12} className="animate-spin" />{t(`servers.deploySteps.${step}`, step)}</div>}
             {deployError && !busy && <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">{deployError}</p>}
-            {addingSource && <AgentSourceForm onClose={() => setAddingSource(false)} onCreated={source => {
-                setSources(current => [...current, source]);
-                setSourceId(source.id);
-                setAddingSource(false);
-            }} />}
             {unlock === 'ssh' && <SSHPassphraseModal onSubmit={(secret, applyToAll) => submitUnlock(secret, applyToAll)} onClose={() => setUnlock(null)} loading={unlocking} error={unlockError} />}
             {unlock === 'sudo' && <SudoPasswordModal onSubmit={secret => submitUnlock(secret)} onClose={() => setUnlock(null)} loading={unlocking} error={unlockError} />}
         </div>
