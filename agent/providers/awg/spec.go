@@ -18,7 +18,7 @@ package awg
 
 import "github.com/ks-tool/vpn-agent/models"
 
-const APIVersion = "awg/v1alpha1"
+const APIVersion = "awg.ks-tool.dev/v1"
 
 type InterfaceSpec struct {
 	Interface    string   `json:"iface" jsonschema:"required,minLength=1,maxLength=15"`

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -40,12 +41,13 @@ type schemaCacheEntry struct {
 }
 
 type providerRegistry struct {
-	mu      sync.RWMutex
-	schemas map[schemaCacheKey]schemaCacheEntry
+	mu         sync.RWMutex
+	schemas    map[schemaCacheKey]schemaCacheEntry
+	refreshing map[string]bool
 }
 
 func newProviderRegistry() *providerRegistry {
-	return &providerRegistry{schemas: make(map[schemaCacheKey]schemaCacheEntry)}
+	return &providerRegistry{schemas: make(map[schemaCacheKey]schemaCacheEntry), refreshing: make(map[string]bool)}
 }
 
 func (r *providerRegistry) cached(agentID, provider, version string) (models.ProviderDefinition, bool) {
@@ -66,13 +68,19 @@ func (r *providerRegistry) store(agentID, version string, definition models.Prov
 }
 
 func (s *Service) GetProviderManifest(serverID string) (*models.Manifest, error) {
-	var manifest *models.Manifest
-	err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
-		var err error
-		manifest, err = client.Manifest(ctx)
-		return err
-	})
-	return manifest, err
+	manifest, err := cachedProviderManifest(serverID)
+	if err == nil {
+		s.providerRefresh.Add(1)
+		go func() {
+			defer s.providerRefresh.Done()
+			s.refreshProviderManifest(serverID)
+		}()
+		return manifest, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
+	return s.fetchProviderManifest(serverID)
 }
 
 func (s *Service) GetProviderSchema(serverID, providerName string) (*models.ProviderDefinition, error) {
@@ -89,6 +97,9 @@ func (s *Service) GetProviderSchema(serverID, providerName string) (*models.Prov
 	}
 	if provider == nil {
 		return nil, errors.New("provider not found in agent manifest")
+	}
+	if len(provider.Resources) > 0 {
+		return provider, nil
 	}
 	if cached, ok := s.providerRegistry.cached(manifest.AgentID, providerName, provider.Version); ok && definitionsEqual(cached.Resources, provider.Resources) {
 		return &cached, nil
@@ -120,7 +131,9 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 	}
 	localByName := make(map[string]models.Resource, len(local))
 	for _, item := range local {
-		localByName[item.Kind+"\x00"+item.Name] = item
+		if providerFromAPIVersion(item.APIVersion) == provider {
+			localByName[item.Kind+"\x00"+item.Name] = item
+		}
 	}
 	var resources []models.Resource
 	if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
@@ -157,6 +170,9 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 		return local[i].Kind == "Peer"
 	})
 	for _, item := range local {
+		if providerFromAPIVersion(item.APIVersion) != provider {
+			continue
+		}
 		apiVersion, ok := supported[item.Kind]
 		if !ok {
 			continue

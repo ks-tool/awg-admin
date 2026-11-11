@@ -32,7 +32,7 @@ func (c *Config) SetDefaults() {
 	c.Definition = map[string]any{
 		"name": "example", "version": "0.1.0",
 		"resources": []any{map[string]any{
-			"apiVersion": "example/v1alpha1", "kind": "Endpoint",
+			"apiVersion": "example.ks-tool.dev/v1", "kind": "Endpoint",
 			"specSchema": map[string]any{
 				"type": "object", "required": []any{"title", "address"},
 				"properties": map[string]any{

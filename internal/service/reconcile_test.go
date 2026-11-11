@@ -25,6 +25,7 @@ import (
 
 func newTestServerWithAgent(t *testing.T) (*Service, *models.Server, *fakeAgentTLS) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	ts, tlsMaterial, fa := newFakeAgentTLS(t)
 	t.Cleanup(ts.Close)
 

@@ -173,11 +173,10 @@ func (r *Runtime) Get(providerName, kind, name string) (models.Resource, error) 
 }
 
 func (r *Runtime) Put(providerName, kind, name string, desired models.Resource) (models.Resource, error) {
-	provider, definition, err := r.definition(providerName, kind)
+	_, definition, err := r.definition(providerName, kind)
 	if err != nil {
 		return models.Resource{}, err
 	}
-	_ = provider
 	if desired.APIVersion != definition.APIVersion {
 		return models.Resource{}, fmt.Errorf("apiVersion must be %s", definition.APIVersion)
 	}

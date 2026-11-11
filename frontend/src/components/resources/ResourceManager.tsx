@@ -178,10 +178,7 @@ export function ResourceManager({serverId, onChanged}: {serverId: string; onChan
                     <button type="button" onClick={() => void refresh()} disabled={loading} className={buttons.secondary} title={t('common.refresh')}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
                     <button
                         type="button"
-                        onClick={() => {
-                            const provider = interfaceProviders[0];
-                            if (provider) setEditor({provider: provider.name, kind: 'Interface'});
-                        }}
+                        onClick={() => setEditor({provider: '', kind: 'Interface'})}
                         disabled={interfaceProviders.length === 0}
                         className={buttons.primary}
                         title={t('servers.addInterfaceTooltip')}
@@ -259,7 +256,7 @@ export function ResourceManager({serverId, onChanged}: {serverId: string; onChan
                     }}
                 />
             )}
-            {editor && schemas[editor.provider] && (
+            {editor && (!editor.provider || schemas[editor.provider]) && (
                 <ResourceEditor
                     key={`${editor.provider}:${editor.kind}:${editor.resource?.id ?? 'new'}`}
                     state={editor}
@@ -340,21 +337,38 @@ function ResourceEditor({state, manifest, schemas, busy, onStateChange, onClose,
     onSave: (name: string, spec: Record<string, unknown>) => void;
 }) {
     const {t} = useTranslation();
+    const [step, setStep] = useState<'provider' | 'settings'>(state.resource ? 'settings' : 'provider');
     const [name, setName] = useState(state.resource?.name ?? '');
     const [formData, setFormData] = useState<Record<string, unknown>>(state.resource?.spec ?? {});
+    const providers = useMemo(() => manifest?.providers.filter(provider => provider.resources.some(resource => resource.kind === state.kind)) ?? [], [manifest, state.kind]);
     const definition = useMemo(() => schemas[state.provider]?.resources.find(item => item.kind === state.kind), [schemas, state.provider, state.kind]);
+
+    if (step === 'provider') {
+        return (
+            <Modal title={t('servers.interfaces.addTitle')} onClose={onClose} loading={busy} size="lg">
+                <FormField label={t('resources.provider')}>
+                    <select autoFocus value={state.provider} disabled={busy} onChange={event => onStateChange({provider: event.target.value, kind: state.kind})} className={inputs.primary}>
+                        <option value="">{t('resources.selectProvider')}</option>
+                        {providers.map(provider => <option key={provider.name} value={provider.name}>{provider.name} ({provider.version})</option>)}
+                    </select>
+                </FormField>
+                <div className="mt-6 flex justify-end gap-2">
+                    <button type="button" onClick={onClose} disabled={busy} className={buttons.secondary}>{t('common.cancel')}</button>
+                    <button type="button" onClick={() => setStep('settings')} disabled={busy || !state.provider} className={buttons.primary}>{t('common.next')}</button>
+                </div>
+            </Modal>
+        );
+    }
     if (!definition) return null;
 
     return (
         <Modal title={state.resource ? t('servers.interfaces.editTitle') : t('servers.interfaces.addTitle')} onClose={onClose} loading={busy} size="lg">
-            <FormField label={t('resources.provider')}>
-                <select value={state.provider} disabled={busy || !!state.resource} onChange={event => {
-                    setFormData({});
-                    onStateChange({provider: event.target.value, kind: 'Interface'});
-                }} className={inputs.primary}>
-                    {manifest?.providers.filter(provider => provider.resources.some(resource => resource.kind === 'Interface')).map(provider => <option key={provider.name} value={provider.name}>{provider.name} ({provider.version})</option>)}
-                </select>
-            </FormField>
+            <div className="mb-4 rounded-lg bg-muted px-3 py-2 text-sm">
+                <span className="text-muted-foreground">{t('resources.provider')}: </span>
+                <span className="font-semibold">{state.provider}</span>
+                <span className="ml-2 font-mono text-xs text-muted-foreground">{definition.apiVersion}</span>
+            </div>
+            {!state.resource && <button type="button" onClick={() => setStep('provider')} disabled={busy} className={cn(buttons.secondary, 'mb-4')}>{t('common.back')}</button>}
             <FormField label={t('resources.name')}>
                 <input required value={name} disabled={busy || !!state.resource} onChange={event => setName(event.target.value)} className={inputs.primary} />
             </FormField>

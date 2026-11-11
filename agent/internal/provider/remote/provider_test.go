@@ -63,7 +63,7 @@ func TestExternalProviderLifecycleCrashAndRestart(t *testing.T) {
 	}
 	core.Start(context.Background())
 	defer core.Close()
-	if _, err := core.Put("example", "Endpoint", "public", models.Resource{APIVersion: "example/v1alpha1", Spec: json.RawMessage(`{"title":"Public","address":"192.0.2.1"}`)}); err != nil {
+	if _, err := core.Put("example", "Endpoint", "public", models.Resource{APIVersion: "example.ks-tool.dev/v1", Spec: json.RawMessage(`{"title":"Public","address":"192.0.2.1"}`)}); err != nil {
 		t.Fatal(err)
 	}
 	waitRemoteStatus(t, core, "public", models.ResourceReady)
@@ -81,7 +81,7 @@ func TestExternalProviderLifecycleCrashAndRestart(t *testing.T) {
 	}
 
 	server.Close()
-	if _, err := core.Put("example", "Endpoint", "offline", models.Resource{APIVersion: "example/v1alpha1", Spec: json.RawMessage(`{"title":"Offline","address":"192.0.2.2"}`)}); err != nil {
+	if _, err := core.Put("example", "Endpoint", "offline", models.Resource{APIVersion: "example.ks-tool.dev/v1", Spec: json.RawMessage(`{"title":"Offline","address":"192.0.2.2"}`)}); err != nil {
 		t.Fatal(err)
 	}
 	waitRemoteStatus(t, core, "offline", models.ResourceDegraded)
@@ -191,7 +191,7 @@ func TestLoadProviderRegistryDirectory(t *testing.T) {
 func TestLoadProviderRegistryDiscoversManifest(t *testing.T) {
 	definition := models.ProviderDefinition{
 		Name: "awg", Version: "1.2.3",
-		Resources: []models.ResourceDefinition{{APIVersion: "awg/v1alpha1", Kind: "Interface", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash"}},
+		Resources: []models.ResourceDefinition{{APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash"}},
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/manifest" {

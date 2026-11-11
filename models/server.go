@@ -125,6 +125,9 @@ type Interface struct {
 	// plain v1 json tag semantics and doesn't infer this on its own.
 	agentmodels.InterfaceConfig `json:",inline" tstype:",extends"`
 
+	Provider     string `json:"provider,omitempty"`
+	ResourceName string `json:"resourceName,omitempty"`
+
 	// Sync status of this interface's config against the agent. Updated
 	// after every push attempt (see internal/service's agent push wiring);
 	// not touched by the agent itself.

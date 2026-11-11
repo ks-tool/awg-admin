@@ -319,6 +319,8 @@ export interface Registry {
   password?: string;
   plainHttp?: boolean;
 }
+export const RegistrySourceAgent = "agent";
+export const RegistrySourceProvider = "provider";
 /**
  * RegistrySource is a reusable agent OCI repository, provider OCI catalog or
  * local agent binary. Password is stored in the admin database, but list and
@@ -456,6 +458,8 @@ export interface CertKeyPair {
 }
 export interface Interface extends InterfaceConfig {
   id: string;
+  provider?: string;
+  resourceName?: string;
   /**
    * Sync status of this interface's config against the agent. Updated
    * after every push attempt (see internal/service's agent push wiring);
@@ -620,6 +624,8 @@ export interface Peer {
   name: string;
   pk: Key;
   interface: string;
+  provider?: string;
+  resourceName?: string;
   disabled?: boolean;
   /**
    * DNS is the client-side DNS for this peer's generated wg-quick config

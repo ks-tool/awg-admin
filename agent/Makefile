@@ -17,6 +17,16 @@ build-provider-awg:
 	@echo 'Build AWG provider (automatic kernel/userspace backend) ...'
 	@CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS)vpn-provider-awg ./providers/awg/cmd
 
+.PHONY: build-provider-xray
+build-provider-xray:
+	@echo 'Build Xray provider ...'
+	@CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS)vpn-provider-xray ./providers/xray/cmd
+
+.PHONY: build-provider-hysteria2
+build-provider-hysteria2:
+	@echo 'Build Hysteria 2 provider ...'
+	@CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS)vpn-provider-hysteria2 ./providers/hysteria2/cmd
+
 .PHONY: test
 test:
 	@echo 'Test agent module ...'

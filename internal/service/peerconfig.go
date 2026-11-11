@@ -50,6 +50,9 @@ func (s *Service) GetPeerConfig(userID string, key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if len(peer.Provider) > 0 && peer.Provider != "awg" {
+		return s.renderProviderPeerConfig(peer)
+	}
 
 	srv, err := s.findServerByInterface(peer.InterfaceId)
 	if err != nil {

@@ -84,7 +84,7 @@ func (s *Service) pushProviderInterface(serverID uuid.UUID, iface *models.Interf
 			return true, specErr
 		}
 		local = &models.Resource{
-			ID: iface.ID.String(), ServerID: serverID.String(), APIVersion: "awg/v1alpha1", Kind: "Interface", Name: iface.Interface,
+			ID: iface.ID.String(), ServerID: serverID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", Name: iface.Interface,
 			Generation: 1, Spec: spec,
 			Status: models.ResourceStatus{Phase: models.ResourcePending, Conditions: []models.Condition{{
 				Type: "Secrets", Status: models.ConditionFalse, Reason: "SecretMigrationPending", LastTransitionTime: time.Now().UTC(),
@@ -225,6 +225,9 @@ func (s *Service) removeLegacyResource(serverID string, resource models.Resource
 		if err != nil {
 			return nil
 		}
+		if providerFromAPIVersion(resource.APIVersion) != "awg" {
+			publicKey = publicKey.PublicKey()
+		}
 		err = s.store.Users().Peers(userID).Delete(publicKey)
 		if storage.IsNotFound(err) {
 			return nil
@@ -242,9 +245,6 @@ func (s *Service) syncLegacyResource(serverID string, resource models.Resource) 
 	}
 	switch resource.Kind {
 	case "Interface":
-		if resource.APIVersion != "awg/v1alpha1" {
-			return nil
-		}
 		interfaceID, err := uuid.Parse(resource.ID)
 		if err != nil {
 			return nil
@@ -257,13 +257,31 @@ func (s *Service) syncLegacyResource(serverID string, resource models.Resource) 
 		if iface != nil {
 			cfg = iface.InterfaceConfig
 		}
-		if err := json.Unmarshal(resource.Spec, &cfg); err != nil {
-			return err
+		if resource.APIVersion == "awg.ks-tool.dev/v1" {
+			if err := json.Unmarshal(resource.Spec, &cfg); err != nil {
+				return err
+			}
+		} else {
+			var spec struct {
+				Name     string `json:"name"`
+				Listen   string `json:"listen"`
+				Port     uint16 `json:"port"`
+				Disabled bool   `json:"disabled"`
+			}
+			if err := json.Unmarshal(resource.Spec, &spec); err != nil {
+				return err
+			}
+			cfg.Interface = spec.Name
+			cfg.Address = spec.Listen
+			cfg.ListenPort = spec.Port
+			cfg.Disabled = spec.Disabled
 		}
 		if iface == nil {
 			iface = &models.Interface{ID: interfaceID}
 		}
 		iface.InterfaceConfig = cfg
+		iface.Provider = providerFromAPIVersion(resource.APIVersion)
+		iface.ResourceName = resource.Name
 		return s.store.Servers().Interfaces(id).Set(iface)
 	case "Peer":
 		var spec struct {
@@ -288,6 +306,20 @@ func (s *Service) syncLegacyResource(serverID string, resource models.Resource) 
 		}
 		if err != nil {
 			return err
+		}
+		if resource.APIVersion != "awg.ks-tool.dev/v1" {
+			for peerIndex := range user.Peers {
+				peer := &user.Peers[peerIndex]
+				if peer.ResourceName != resource.Name && (len(peer.ResourceName) > 0 || peer.PrivateKey.String() != spec.PublicKey) {
+					continue
+				}
+				peer.Name = spec.Name
+				peer.Disabled = spec.Disabled
+				peer.Provider = providerFromAPIVersion(resource.APIVersion)
+				peer.ResourceName = resource.Name
+				return s.store.Users().Peers(userID).Set(peer)
+			}
+			return nil
 		}
 		for peerIndex := range user.Peers {
 			peer := &user.Peers[peerIndex]

@@ -23,6 +23,20 @@ case "$tag" in
         version=${tag#providers/awg/}
         artifact_type=application/vnd.ks-tool.vpn-provider-awg.v1
         ;;
+    providers/xray/v*)
+        binary=vpn-provider-xray
+        package=./providers/xray/cmd
+        repository=vpn-providers/xray
+        version=${tag#providers/xray/}
+        artifact_type=application/vnd.ks-tool.vpn-provider-xray.v1
+        ;;
+    providers/hysteria2/v*)
+        binary=vpn-provider-hysteria2
+        package=./providers/hysteria2/cmd
+        repository=vpn-providers/hysteria2
+        version=${tag#providers/hysteria2/}
+        artifact_type=application/vnd.ks-tool.vpn-provider-hysteria2.v1
+        ;;
     providers/example/v*)
         binary=example-provider
         package=./providers/example/cmd

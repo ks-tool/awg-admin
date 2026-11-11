@@ -65,7 +65,7 @@ func New() (*Provider, error) {
 	hash := sha256.Sum256(raw)
 	return &Provider{
 		definition: models.ResourceDefinition{
-			APIVersion: "example/v1alpha1", Kind: "Endpoint", SpecSchema: raw, SchemaHash: "sha256:" + hex.EncodeToString(hash[:]),
+			APIVersion: "example.ks-tool.dev/v1", Kind: "Endpoint", SpecSchema: raw, SchemaHash: "sha256:" + hex.EncodeToString(hash[:]),
 			Ports:   []models.PortDefinition{{Name: "example", LinkKinds: []string{"example"}, RemotePorts: []string{"example"}}},
 			Actions: []models.ActionDefinition{{Name: "inspect", Title: "Inspect endpoint", ResultType: models.ActionResultJSON, ArgumentsSchema: json.RawMessage(`{"type":"object","properties":{}}`)}},
 		},

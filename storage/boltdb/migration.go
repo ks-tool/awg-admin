@@ -394,7 +394,7 @@ func migrateInterface(serverID uuid.UUID, iface models.Interface) (models.Resour
 	status.Provider = provider
 	status.Conditions = append(status.Conditions, secretMigrationCondition())
 	return models.Resource{
-		ID: iface.ID.String(), ServerID: serverID.String(), APIVersion: "awg/v1alpha1", Kind: "Interface",
+		ID: iface.ID.String(), ServerID: serverID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface",
 		Name: iface.Interface, Generation: 1, Spec: rawSpec, Status: status,
 	}, nil
 }
@@ -424,7 +424,7 @@ func migratePeer(user models.User, peer models.Peer, iface models.Interface, ser
 	status.Provider = provider
 	status.Conditions = append(status.Conditions, secretMigrationCondition())
 	return models.Resource{
-		ID: id.String(), ServerID: serverID.String(), APIVersion: "awg/v1alpha1", Kind: "Peer",
+		ID: id.String(), ServerID: serverID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Peer",
 		Name: user.Name + "-" + peer.Name + "-" + id.String()[:8], Generation: 1, Spec: spec, Status: status,
 	}, nil
 }
@@ -447,7 +447,7 @@ func migrateLink(id uuid.UUID, source, target models.Interface, servers map[uuid
 
 func migrateEndpoint(iface models.Interface, server models.Server) models.LinkEndpoint {
 	return models.LinkEndpoint{
-		ServerID: server.ID.String(), ResourceID: iface.ID.String(), APIVersion: "awg/v1alpha1",
+		ServerID: server.ID.String(), ResourceID: iface.ID.String(), APIVersion: "awg.ks-tool.dev/v1",
 		Kind: "Interface", Name: iface.Interface, Port: "tunnel", Address: server.SSH.Host,
 	}
 }

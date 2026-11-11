@@ -20,14 +20,11 @@ package awg
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ks-tool/vpn-agent/internal/agent"
@@ -39,6 +36,8 @@ import (
 	"github.com/ks-tool/vpn-agent/internal/service"
 	"github.com/ks-tool/vpn-agent/internal/userspace"
 	"github.com/ks-tool/vpn-agent/mux/middleware"
+	providerdeploy "github.com/ks-tool/vpn-agent/providers/awg/deploy"
+	"github.com/ks-tool/vpn-agent/providers/proxy"
 	"github.com/ks-tool/vpn-agent/storage"
 	"github.com/ks-tool/vpn-agent/storage/fs"
 
@@ -65,6 +64,13 @@ func Run(version string) {
 		if err := runFirewallCommand(context.Background(), os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
+		}
+		return
+	}
+	handled, deployErr := proxy.DeployCommand(os.Args[1:], providerdeploy.Deploy)
+	if handled {
+		if deployErr != nil {
+			log.Fatal().Err(deployErr).Msg("provider deploy failed")
 		}
 		return
 	}
@@ -108,9 +114,6 @@ func Run(version string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize provider identity")
 	}
-	resourceRuntime := resource.NewRuntime(resourceStore, agentID, time.Second, 30*time.Second)
-	defer resourceRuntime.Close()
-
 	if err := loadInterfaces(store); err != nil {
 		log.Fatal().Err(err).Msg("failed to load WireGuard interfaces")
 	}
@@ -130,11 +133,6 @@ func Run(version string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize AWG provider")
 	}
-	if err := resourceRuntime.Register(awgProvider); err != nil {
-		log.Fatal().Err(err).Msg("failed to register AWG provider")
-	}
-	resourceRuntime.Start(context.Background())
-
 	collector := metrics.NewPeerCollector(metricsAwg, store, cfg.MetricsInterval)
 	collector.SetPersistence(filepath.Join(cfg.DB, metrics.HistoryFilename))
 	if err := collector.LoadHistory(); err != nil {
@@ -152,44 +150,26 @@ func Run(version string) {
 	hostInfo.Backend = backend.Kind
 	hostInfo.KernelModule = backend.KernelModule
 	hostInfo.InterfaceKinds = backend.InterfaceKinds
-	srv := &http.Server{Addr: cfg.Addr, Handler: api.NewWithResources(hostInfo, store, collector, resourceRuntime, middleware.RequestID, middleware.Logging)}
-	srv.TLSConfig, err = agentconfig.TLS(cfg.TLSCert, cfg.TLSKey, cfg.TLSClientCA)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to configure TLS")
-	}
-
-	go func() {
-		var err error
-		if srv.TLSConfig != nil {
-			log.Info().Msgf("Starting server on %s (mTLS)", cfg.Addr)
-			err = srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
-		} else {
-			log.Info().Msgf("Starting server on %s", cfg.Addr)
-			err = srv.ListenAndServe()
-		}
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal().Err(err).Msg("failed to start server")
-		}
-	}()
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	<-sig
-
-	stopMetrics()
-	select {
-	case <-metricsDone:
-	case <-time.After(5 * time.Second):
-		log.Warn().Msg("timed out waiting for metrics history to flush")
-	}
-
-	log.Info().Msg("stopping active interfaces")
-	service.NewHandler(store, metricsAwg).StopEnabled()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal().Err(err).Msg("failed to shutdown server")
+	log.Info().Msgf("Starting server on %s", cfg.Addr)
+	if err := proxy.Serve(proxy.ServeOptions{
+		Addr: cfg.Addr, TLSCert: cfg.TLSCert, TLSKey: cfg.TLSKey, TLSClientCA: cfg.TLSClientCA,
+		Store: resourceStore, AgentID: agentID, Provider: awgProvider,
+		Handler: func(runtime *resource.Runtime) http.Handler {
+			return api.NewWithResources(hostInfo, store, collector, runtime, middleware.RequestID, middleware.Logging)
+		},
+		Close: func() error {
+			stopMetrics()
+			select {
+			case <-metricsDone:
+			case <-time.After(5 * time.Second):
+				log.Warn().Msg("timed out waiting for metrics history to flush")
+			}
+			log.Info().Msg("stopping active interfaces")
+			service.NewHandler(store, metricsAwg).StopEnabled()
+			return nil
+		},
+	}); err != nil {
+		log.Fatal().Err(err).Msg("provider API failed")
 	}
 }
 

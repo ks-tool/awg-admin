@@ -98,14 +98,13 @@ func (s *Service) DeployProvider(id string, provider models.ProviderDeployment, 
 	s.deployStatus.start(sID)
 	s.deployStatus.setStep(sID, "install_provider_"+provider.Name)
 	go func() {
-		err := deploy.ProviderToPack(context.Background(), *srv, provider, registry, s.serverInterfaceNames(sID), s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID), func(step string) {
+		err := deploy.ProviderToPack(context.Background(), *srv, provider, registry, s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID), func(step string) {
 			s.deployStatus.setStep(sID, step)
 		})
 		s.deployStatus.finish(sID, err)
 		if err != nil {
 			return
 		}
-		s.markFirewallApplied(sID)
 		if err := s.SyncServer(id); err != nil {
 			log.Warn().Err(err).Str("server_id", id).Str("provider", provider.Name).Msg("failed to sync server after provider deployment")
 		}

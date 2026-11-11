@@ -29,7 +29,7 @@ func TestResourceWireFormatPreservesOpaqueSpecAndStatus(t *testing.T) {
 	resource := Resource{
 		ID:         "resource-id",
 		ServerID:   "server-id",
-		APIVersion: "example/v1alpha1",
+		APIVersion: "example.ks-tool.dev/v1",
 		Kind:       "Service",
 		Name:       "public",
 		Generation: 3,
@@ -54,7 +54,7 @@ func TestResourceWireFormatPreservesOpaqueSpecAndStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, field := range []string{
-		`"id":"resource-id"`, `"serverId":"server-id"`, `"apiVersion":"example/v1alpha1"`,
+		`"id":"resource-id"`, `"serverId":"server-id"`, `"apiVersion":"example.ks-tool.dev/v1"`,
 		`"kind":"Service"`, `"generation":3`, `"observedGeneration":2`,
 		`"phase":"Degraded"`, `"reason":"ApplyFailed"`, `"message":"temporary provider error"`,
 	} {
@@ -80,7 +80,7 @@ func TestManifestAndDefinitionsWireFormat(t *testing.T) {
 			Name:    "example",
 			Version: "1.2.3",
 			Resources: []ResourceDefinition{{
-				APIVersion: "example/v1alpha1",
+				APIVersion: "example.ks-tool.dev/v1",
 				Kind:       "Service",
 				SpecSchema: json.RawMessage(`{"type":"object"}`),
 				UISchema:   json.RawMessage(`{"ui:order":["name"]}`),
@@ -125,11 +125,11 @@ func TestManifestAndDefinitionsWireFormat(t *testing.T) {
 
 func TestLinkAndOpaqueOfferWireFormat(t *testing.T) {
 	source := LinkEndpoint{
-		ServerID: "server-a", ResourceID: "resource-a", APIVersion: "example/v1alpha1",
+		ServerID: "server-a", ResourceID: "resource-a", APIVersion: "example.ks-tool.dev/v1",
 		Kind: "Service", Name: "a", Port: "transport",
 	}
 	target := LinkEndpoint{
-		ServerID: "server-b", ResourceID: "resource-b", APIVersion: "example/v1alpha1",
+		ServerID: "server-b", ResourceID: "resource-b", APIVersion: "example.ks-tool.dev/v1",
 		Kind: "Service", Name: "b", Port: "transport",
 	}
 	link := Link{
@@ -170,7 +170,7 @@ func TestLinkAndOpaqueOfferWireFormat(t *testing.T) {
 
 func TestOptionalWireFieldsAreOmitted(t *testing.T) {
 	data, err := json.Marshal(ResourceDefinition{
-		APIVersion: "example/v1alpha1",
+		APIVersion: "example.ks-tool.dev/v1",
 		Kind:       "Service",
 		SpecSchema: json.RawMessage(`{"type":"object"}`),
 		SchemaHash: "hash",

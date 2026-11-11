@@ -34,7 +34,7 @@ func TestProviderResourceLifecycleAndSchemaCache(t *testing.T) {
 		t.Fatalf("GetProviderManifest: %+v, %v", manifest, err)
 	}
 	definition, err := svc.GetProviderSchema(serverID, "test")
-	if err != nil || len(definition.Resources) != 1 {
+	if err != nil || len(definition.Resources) != 3 {
 		t.Fatalf("GetProviderSchema: %+v, %v", definition, err)
 	}
 	if _, err := svc.GetProviderSchema(serverID, "test"); err != nil {
@@ -43,8 +43,8 @@ func TestProviderResourceLifecycleAndSchemaCache(t *testing.T) {
 	agent.mu.Lock()
 	calls := agent.schemaCalls
 	agent.mu.Unlock()
-	if calls != 1 {
-		t.Fatalf("schema cache missed: %d requests", calls)
+	if calls != 0 {
+		t.Fatalf("file schema cache missed: %d requests", calls)
 	}
 
 	spec := json.RawMessage(`{"nested":{"enabled":true}}`)
@@ -128,7 +128,7 @@ func TestProviderInterfaceAppearsInUserInterfaceList(t *testing.T) {
 	svc, server, _ := newTestServerWithAgent(t)
 	interfaceID := uuid.New()
 	item := models.Resource{
-		ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Interface", Name: "awg0", Generation: 1,
+		ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", Name: "awg0", Generation: 1,
 		Spec: json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`),
 	}
 	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
@@ -143,6 +143,42 @@ func TestProviderInterfaceAppearsInUserInterfaceList(t *testing.T) {
 	}
 }
 
+func TestGenericProviderPeerLifecycle(t *testing.T) {
+	svc, server, _ := newTestServerWithAgent(t)
+	interfaceID := uuid.New()
+	item := models.Resource{
+		ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "test/v1", Kind: "Interface", Name: "test0", Generation: 1,
+		Spec: json.RawMessage(`{"name":"test0","listen":"0.0.0.0","port":443}`),
+	}
+	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+		t.Fatal(err)
+	}
+	user, err := svc.CreateUser(UserInput{Name: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := svc.AddPeer(user.ID.String(), AddPeerInput{Name: "phone", InterfaceID: interfaceID, Spec: map[string]any{"custom": "value"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Peers) != 1 || updated.Peers[0].Provider != "test" || len(updated.Peers[0].ResourceName) == 0 {
+		t.Fatalf("unexpected generic peer: %+v", updated.Peers)
+	}
+	peerKey := updated.Peers[0].PrivateKey.String()
+	config, err := svc.GetPeerConfig(user.ID.String(), peerKey)
+	if err != nil || config != "test://client" {
+		t.Fatalf("GetPeerConfig = %q, %v", config, err)
+	}
+	updated, err = svc.SetPeerDisabled(user.ID.String(), peerKey, true)
+	if err != nil || !updated.Peers[0].Disabled {
+		t.Fatalf("SetPeerDisabled: %+v, %v", updated, err)
+	}
+	updated, err = svc.DeletePeer(user.ID.String(), peerKey)
+	if err != nil || len(updated.Peers) != 0 {
+		t.Fatalf("DeletePeer: %+v, %v", updated, err)
+	}
+}
+
 func TestServerMigrationCompletesOnlyWithAWGProvider(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
 	server.Unmanaged = true
@@ -150,7 +186,7 @@ func TestServerMigrationCompletesOnlyWithAWGProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	item := models.Resource{
-		ID: "migrated-interface", ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Interface", Name: "awg0", Generation: 1,
+		ID: "migrated-interface", ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", Name: "awg0", Generation: 1,
 		Spec:   json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`),
 		Status: models.ResourceStatus{Phase: models.ResourcePending, Conditions: []models.Condition{{Type: "Managed", Status: models.ConditionFalse, Reason: "Unmanaged"}}},
 	}
@@ -200,8 +236,8 @@ func TestMigratedResourcesAreSubmittedInterfaceFirst(t *testing.T) {
 	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
 		t.Fatal(err)
 	}
-	peer := models.Resource{ID: "00000000-0000-0000-0000-000000000000", ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Peer", Name: "peer", Spec: json.RawMessage(`{}`)}
-	item := models.Resource{ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Interface", Name: "awg0", Spec: json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`)}
+	peer := models.Resource{ID: "00000000-0000-0000-0000-000000000000", ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Peer", Name: "peer", Spec: json.RawMessage(`{}`)}
+	item := models.Resource{ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", Name: "awg0", Spec: json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`)}
 	if err := svc.saveProviderResource(server.ID.String(), peer); err != nil {
 		t.Fatal(err)
 	}
@@ -224,11 +260,11 @@ func TestServerStatusReflectsDegradedProviderResources(t *testing.T) {
 	agent.mu.Lock()
 	agent.awg = true
 	agent.resources["Interface/awg0"] = models.Resource{
-		ID: "resource", ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Interface", Name: "awg0", Generation: 1,
+		ID: "resource", ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", Name: "awg0", Generation: 1,
 		Status: models.ResourceStatus{ObservedGeneration: 1, Phase: models.ResourceDegraded},
 	}
 	agent.mu.Unlock()
-	item := models.Resource{ID: "resource", ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Interface", Name: "awg0", Generation: 1, Spec: json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`)}
+	item := models.Resource{ID: "resource", ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", Name: "awg0", Generation: 1, Spec: json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`)}
 	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +304,7 @@ func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
 	}
 	publicKey := peerKey.PublicKey()
 	spec, _ := json.Marshal(map[string]any{"name": "laptop", "interfaceRef": ifaceID.String(), "userRef": user.ID.String(), "publicKey": publicKey.String(), "allowedIPs": []string{"10.0.0.2/32"}})
-	item := models.Resource{ID: uuid.New().String(), ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Peer", Name: "alice-laptop", Generation: 1, Spec: spec}
+	item := models.Resource{ID: uuid.New().String(), ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Peer", Name: "alice-laptop", Generation: 1, Spec: spec}
 	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
 		t.Fatal(err)
 	}

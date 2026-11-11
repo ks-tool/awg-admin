@@ -32,7 +32,6 @@ import (
 	"github.com/ks-tool/vpn-admin/internal/config"
 	"github.com/ks-tool/vpn-admin/models"
 	vpnagentpack "github.com/ks-tool/vpn-admin/pack/vpn-agent"
-	providerdeploy "github.com/ks-tool/vpn-agent/providers/awg/deploy"
 )
 
 const (
@@ -114,16 +113,8 @@ func ToPack(ctx context.Context, srv models.Server, deployment models.AgentDeplo
 	return nil
 }
 
-func ProviderToPack(ctx context.Context, srv models.Server, provider models.ProviderDeployment, registry models.Registry, interfaceNames []string, passphrase, sudoPassword string, onStep func(string)) error {
-	var pack sdk.Pack
-	var values map[string]any
-	var err error
-	switch provider.Name {
-	case "awg":
-		pack, values, err = providerdeploy.New(provider, remoteDBPath)
-	default:
-		return fmt.Errorf("unsupported provider %q", provider.Name)
-	}
+func ProviderToPack(ctx context.Context, srv models.Server, provider models.ProviderDeployment, registry models.Registry, passphrase, sudoPassword string, onStep func(string)) error {
+	pack, values, err := newProviderPack(provider)
 	if err != nil {
 		return err
 	}
@@ -135,8 +126,7 @@ func ProviderToPack(ctx context.Context, srv models.Server, provider models.Prov
 		onStep("install_provider_" + provider.Name)
 	}
 	item := packRelease{
-		name: provider.Name, step: "provider_" + provider.Name, binary: pack.Meta().Name, pack: pack, values: values,
-		firewall: packFirewallRules(interfaceNames), registry: registry,
+		name: provider.Name, step: "provider_" + provider.Name, binary: pack.Meta().Name, pack: pack, values: values, registry: registry,
 	}
 	if err := applyPack(ctx, srv, item, passphrase, sudoPassword, config.AdminCachePath(home)); err != nil {
 		return fmt.Errorf("install %s provider: %w", provider.Name, err)

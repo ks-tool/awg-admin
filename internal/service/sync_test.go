@@ -146,15 +146,20 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 		_ = json.NewEncoder(w).Encode(cfg)
 	})
 	definition := models.ResourceDefinition{APIVersion: "test/v1", Kind: "Service", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash", Actions: []models.ActionDefinition{{Name: "importSecret", Title: "Import", ResultType: models.ActionResultJSON, Mutating: true}}, Ports: []models.PortDefinition{{Name: "tunnel", LinkKinds: []string{"test-link"}, RemotePorts: []string{"tunnel"}}}}
+	testProviderDefinition := models.ProviderDefinition{Name: "test", Version: "1", Resources: []models.ResourceDefinition{
+		definition,
+		{APIVersion: "test/v1", Kind: "Interface", SpecSchema: json.RawMessage(`{"type":"object"}`)},
+		{APIVersion: "test/v1", Kind: "Peer", SpecSchema: json.RawMessage(`{"type":"object"}`)},
+	}}
 	awgDefinition := models.ProviderDefinition{Name: "awg", Version: "1", Resources: []models.ResourceDefinition{
-		{APIVersion: "awg/v1alpha1", Kind: "Interface", SpecSchema: json.RawMessage(`{"type":"object"}`), Actions: []models.ActionDefinition{{Name: "importSecret", Title: "Import", ResultType: models.ActionResultJSON, Mutating: true}}},
-		{APIVersion: "awg/v1alpha1", Kind: "Peer", SpecSchema: json.RawMessage(`{"type":"object"}`), Actions: []models.ActionDefinition{{Name: "importSecret", Title: "Import", ResultType: models.ActionResultJSON, Mutating: true}}},
+		{APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", SpecSchema: json.RawMessage(`{"type":"object"}`), Actions: []models.ActionDefinition{{Name: "importSecret", Title: "Import", ResultType: models.ActionResultJSON, Mutating: true}}},
+		{APIVersion: "awg.ks-tool.dev/v1", Kind: "Peer", SpecSchema: json.RawMessage(`{"type":"object"}`), Actions: []models.ActionDefinition{{Name: "importSecret", Title: "Import", ResultType: models.ActionResultJSON, Mutating: true}}},
 	}}
 	mux.HandleFunc("GET /v1/manifest", func(w http.ResponseWriter, r *http.Request) {
 		fa.mu.Lock()
 		awg := fa.awg
 		fa.mu.Unlock()
-		providers := []models.ProviderDefinition{{Name: "test", Version: "1", Resources: []models.ResourceDefinition{definition}}}
+		providers := []models.ProviderDefinition{testProviderDefinition}
 		if awg {
 			providers = append(providers, awgDefinition)
 		}
@@ -168,7 +173,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 			_ = json.NewEncoder(w).Encode(awgDefinition)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(models.ProviderDefinition{Name: "test", Version: "1", Resources: []models.ResourceDefinition{definition}})
+		_ = json.NewEncoder(w).Encode(testProviderDefinition)
 	})
 	mux.HandleFunc("GET /v1/providers/{provider}/resources", func(w http.ResponseWriter, r *http.Request) {
 		fa.mu.Lock()
@@ -212,6 +217,10 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 		fa.mu.Lock()
 		fa.actionCalls++
 		fa.mu.Unlock()
+		if r.PathValue("action") == "renderClientConfig" {
+			_ = json.NewEncoder(w).Encode(models.ActionResult{Type: models.ActionResultFile, Data: json.RawMessage(`"test://client"`), FileName: "peer.txt"})
+			return
+		}
 		_ = json.NewEncoder(w).Encode(models.ActionResult{Type: models.ActionResultJSON, Data: json.RawMessage(`{"ok":true}`)})
 	})
 	mux.HandleFunc("DELETE /v1/providers/{provider}/resources/{kind}/{name}", func(w http.ResponseWriter, r *http.Request) {
@@ -297,8 +306,10 @@ func newTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	svc := New(db)
+	t.Cleanup(svc.StopTunnels)
 	t.Cleanup(func() { _ = db.Close() })
-	return New(db)
+	return svc
 }
 
 func mustParseKey(t *testing.T, k agentmodels.Key) string {

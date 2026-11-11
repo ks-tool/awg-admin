@@ -23,6 +23,7 @@ import type { Key } from '@/types';
 export interface AddPeerInput {
   name: string;
   interfaceId: string;
+  spec?: Record<string, unknown>;
   allowedIps: string[];
   endpoint?: string;
   dns?: string[];

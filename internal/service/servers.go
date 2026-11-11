@@ -97,6 +97,10 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 		return "", err
 	}
 	if srv.Unmanaged {
+		if _, err := s.fetchProviderManifest(id); err != nil {
+			log.Warn().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
+			return models.AgentStatusUnmanaged, nil
+		}
 		if err := s.completeServerMigration(srv); err != nil {
 			log.Warn().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
 			return models.AgentStatusUnmanaged, nil
@@ -134,14 +138,15 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 		return models.AgentStatusDegraded, nil
 	}
 
-	resources, err := s.localProviderResources(id)
+	manifest, err := s.fetchProviderManifest(id)
 	if err != nil {
-		return "", err
+		log.Warn().Err(err).Str("server_id", id).Msg("failed to read provider manifest health")
+		return models.AgentStatusDegraded, nil
 	}
-	if len(resources) > 0 {
-		resources, err = s.ListProviderResources(id, "awg")
+	for _, provider := range manifest.Providers {
+		resources, err := s.ListProviderResources(id, provider.Name)
 		if err != nil {
-			log.Warn().Err(err).Str("server_id", id).Msg("failed to read provider resource health")
+			log.Warn().Err(err).Str("server_id", id).Str("provider", provider.Name).Msg("failed to read provider resource health")
 			return models.AgentStatusDegraded, nil
 		}
 		for _, resource := range resources {

@@ -22,6 +22,8 @@ import {ArrowLeft, ArrowRightLeft, Download, FileDown, Key, Plus, Power, PowerOf
 import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {listInterfaces} from '@/services/interfaces';
+import {getProviderSchema} from '@/services/resources';
+import {SchemaForm} from '@/components/topology/SchemaForm';
 import {getPeerConfig, getPeerQRCode, migratePeer, savePeerConfig, savePeerQRCode, setPeerDisabled} from '@/services/peers';
 import {CopyButton} from '@/components/common/CopyButton';
 import {StatusBadge} from '@/components/common/StatusBadge';
@@ -32,7 +34,7 @@ import {buttons, inputs} from '@/components/common/controls';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {CollapsibleSection} from '@/components/common/CollapsibleSection';
 import {cn} from '@/lib/utils';
-import type {Interface, Server} from '@/types';
+import type {Interface, ProviderDefinition, Server} from '@/types';
 
 // ---------------------------------------------------------------------------
 // Peer QR code modal
@@ -165,6 +167,7 @@ const INITIAL_PEER_FORM = {
     name: '',
     serverId: '',
     interfaceId: '',
+    spec: {} as Record<string, unknown>,
     allowedIps: '',
     endpoint: '',
     dns: '',
@@ -187,7 +190,10 @@ function AddPeerModal({
 }) {
     const {t} = useTranslation();
     const [form, setForm] = useState<PeerFormData>(INITIAL_PEER_FORM);
-    const [interfaces, setInterfaces] = useState<Array<{ id: string; name: string; addr: string }>>([]);
+    const [interfaces, setInterfaces] = useState<Array<{ id: string; name: string; addr: string; provider?: string }>>([]);
+    const [providerDefinition, setProviderDefinition] = useState<ProviderDefinition | null>(null);
+    const selectedInterface = interfaces.find(iface => iface.id === form.interfaceId);
+    const isProviderPeer = !!selectedInterface?.provider && selectedInterface.provider !== 'awg';
 
     useEffect(() => {
         let cancelled = false;
@@ -201,7 +207,7 @@ function AddPeerModal({
             const list = await listInterfaces(form.serverId);
             if (!cancelled) {
                 setInterfaces(
-                    list ? list.map(iface => ({id: iface.id, name: iface.iface, addr: iface.addr || ''})) : [],
+                    list ? list.map(iface => ({id: iface.id, name: iface.iface, addr: iface.addr || '', provider: iface.provider})) : [],
                 );
             }
         })();
@@ -210,14 +216,33 @@ function AddPeerModal({
         };
     }, [form.serverId]);
 
+    useEffect(() => {
+        if (!isProviderPeer || !selectedInterface?.provider) return;
+        let cancelled = false;
+        void getProviderSchema(form.serverId, selectedInterface.provider).then(definition => {
+            if (!cancelled) setProviderDefinition(definition);
+        }).catch(error => toast.error(error instanceof Error ? error.message : String(error)));
+        return () => {cancelled = true;};
+    }, [form.serverId, isProviderPeer, selectedInterface?.provider]);
+
+    const peerSchema = React.useMemo(() => {
+        const definition = providerDefinition?.resources.find(resource => resource.kind === 'Peer');
+        if (!definition) return null;
+        const internal = new Set(['name', 'interfaceRef', 'userRef', 'publicKey', 'disabled']);
+        const properties = Object.fromEntries(Object.entries(definition.specSchema.properties ?? {}).filter(([key]) => !internal.has(key)));
+        const required = Array.isArray(definition.specSchema.required) ? definition.specSchema.required.filter(key => typeof key === 'string' && !internal.has(key)) : [];
+        return {...definition.specSchema, properties, required};
+    }, [providerDefinition]);
+    const hasProviderFields = isProviderPeer && Object.keys(peerSchema?.properties ?? {}).length > 0;
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const {name, value, type} = e.target;
         const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
         setForm(prev => ({
             ...prev,
             [name]: val,
-            // changing server invalidates the previously selected interface
             ...(name === 'serverId' ? {interfaceId: ''} : {}),
+            ...(name === 'serverId' || name === 'interfaceId' ? {spec: {}} : {}),
         }));
     };
 
@@ -273,7 +298,7 @@ function AddPeerModal({
                     </select>
                 </FormField>
 
-                <CollapsibleSection label={t('common.advancedSettings')}>
+                {!isProviderPeer && <CollapsibleSection label={t('common.advancedSettings')}>
                 <FormField label={`${t('peers.allowedIPs')} (${t('common.optional')})`}>
                     <input
                         type="text"
@@ -351,20 +376,27 @@ function AddPeerModal({
                         />
                     </FormField>
                 )}
-                </CollapsibleSection>
+                </CollapsibleSection>}
 
-                <div className="flex gap-3 pt-4">
-                    <button
-                        onClick={handleSubmit}
+                {hasProviderFields && peerSchema && (
+                    <SchemaForm
+                        schema={peerSchema}
+                        formData={form.spec}
+                        onChange={spec => setForm(prev => ({...prev, spec}))}
+                        onSubmit={spec => onSubmit({...form, spec})}
+                        submitLabel={loading ? `${t('common.saving')}...` : t('peers.addPeer')}
                         disabled={loading || !form.interfaceId}
-                        className={cn('flex-1', buttons.primary)}
-                    >
-                        {loading ? `${t('common.saving')}...` : t('peers.addPeer')}
-                    </button>
-                    <button onClick={onClose} disabled={loading} className={cn('flex-1', buttons.secondary)}>
-                        {t('common.cancel')}
-                    </button>
-                </div>
+                    />
+                )}
+                {!hasProviderFields && (
+                    <div className="flex gap-3 pt-4">
+                        <button onClick={handleSubmit} disabled={loading || !form.interfaceId} className={cn('flex-1', buttons.primary)}>
+                            {loading ? `${t('common.saving')}...` : t('peers.addPeer')}
+                        </button>
+                        <button onClick={onClose} disabled={loading} className={cn('flex-1', buttons.secondary)}>{t('common.cancel')}</button>
+                    </div>
+                )}
+                {hasProviderFields && <button onClick={onClose} disabled={loading} className={cn('w-full', buttons.secondary)}>{t('common.cancel')}</button>}
             </div>
         </Modal>
     );
@@ -492,6 +524,7 @@ export default function UserDetail() {
             await addPeer(selectedUserId, {
                 name: form.name,
                 interfaceId: form.interfaceId,
+                spec: form.spec,
                 allowedIps: allowedIpsArray,
                 endpoint: form.endpoint || undefined,
                 dns: dnsArray.length ? dnsArray : undefined,
@@ -736,13 +769,13 @@ export default function UserDetail() {
                                             >
                                                 <QrCode size={16}/>
                                             </button>
-                                            <button
+                                            {(!peer.provider || peer.provider === 'awg') && <button
                                                 onClick={() => { setMigrateTarget(''); setPeerToMigrate({publicKey: peer.pk, name: peer.name, currentInterface: peer.interface}); }}
                                                 className="p-1 text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300 rounded transition-colors"
                                                 title={t('peers.migrateTooltip')}
                                             >
                                                 <ArrowRightLeft size={16}/>
-                                            </button>
+                                            </button>}
                                             <button
                                                 onClick={() => handleTogglePeerDisabled(peer.pk, !peer.disabled)}
                                                 disabled={togglingPeerKey === peer.pk}

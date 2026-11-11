@@ -102,7 +102,7 @@ Legacy variables with the `AWG_ADMIN_` prefix are accepted as fallbacks. Main pa
 | `~/.vpn-admin/db` | The complete administrative BoltDB database. |
 | `~/.vpn-admin/acme` | Autocert certificates for the standalone interface. |
 | `~/.vpn-admin/plugins` | `plugin.json` files and deployment plugin executables. |
-| `~/.vpn-admin/cache` | Pack state, target, release caches and `datacenter-atlas.json`. |
+| `~/.vpn-admin/cache` | Pack state, target/release caches, `datacenter-atlas.json` and provider schemas `<apiVersion>.<kind>.spec` (`/` becomes `__`). |
 
 Docker sets `HOME=/data`, so the `/data` volume preserves the database and working directories. Do not keep the only database
 copy inside a disposable container.
@@ -122,11 +122,16 @@ important to distinguish the two independent extension mechanisms.
 - reconciles resources and participates in link `prepare`/`commit`/`delete`;
 - exposes host info, system metrics and ICMP latency.
 
-A provider is an independent optional component. Its own pack defines OS packages, environment, files, registration and
-dependencies. Systemd runs only `vpn-agent`; there are no separate provider unit files.
+A provider is an independent optional component. The admin knows only its artifact URL and the standard command
+`vpn-provider-<name> deploy --config <file>`. Provider-specific `options` are opaque to the admin. The provider installs its
+core/dependencies and writes its registration; there is no provider-name switch or provider import in the admin. Systemd runs
+only `vpn-agent`; there are no separate provider unit files. AWG, Xray and Hysteria 2 share the same deploy and HTTP runtime.
 
 With `discover: true`, the agent reads definitions through the provider's `GET /v1/manifest`. A static registration can embed
-definitions directly. Providers normally listen on loopback; remote registrations must use mTLS.
+definitions directly. Resource schemas use domain versions such as `awg.ks-tool.dev/v1`, `xray.ks-tool.dev/v1` and
+`hysteria2.ks-tool.dev/v1`. The admin caches each full `ResourceDefinition` as `<apiVersion>.<kind>.spec` after replacing `/`
+with `__`. Cached schemas drive forms both online and offline; a live manifest refreshes them in the background. Health checks
+always use the live agent, never the cached manifest. Providers normally listen on loopback; remote registrations must use mTLS.
 
 The AWG provider selects its kernel backend when `modinfo amneziawg` or `modinfo wireguard` succeeds, and otherwise uses
 `amneziawg-go`. The `userspace` installation option, `--userspace` flag or `VPN_PROVIDER_AWG_USERSPACE=true` forces userspace.
@@ -264,8 +269,8 @@ For AWG, a source receives a peer to the next node, `AllowedIPs = 0.0.0.0/0` and
 receives the return peer and marking/NAT rules. On an intermediate node, both roles apply independently to their respective
 links. Tables and marks derive from link IDs rather than one shared global value.
 
-Host firewall configuration is handled separately through pack/host target, with firewalld, ufw and iptables support. VPN Admin
-does not require you to repeat the manual v1 command examples.
+Providers manage their own firewalls through firewalld, ufw or iptables during reconciliation. VPN Admin does not require you
+to repeat the manual v1 command examples.
 
 ### Moving a tunnel
 
@@ -311,9 +316,11 @@ Install the agent first. Then click **+** under **Installed providers** and use 
 and one of the 10 newest versions. For official GHCR, providers are discovered from `providers/<name>/v*` release tags in
 `ks-tool/vpn-agent`; a private registry must support OCI `_catalog` for automatic listing.
 
-Each provider is installed by its own `pack apply`, independently of the agent. AWG exposes the provider-specific option
-`{"userspace": true}`; the core does not impose this option on other providers. The **−** button removes a provider registration
-through its pack. Installed names and versions come from `/v1/manifest`.
+Each provider is installed independently of the agent. The generic admin pack downloads the selected binary and invokes
+`deploy --config`; the provider owns all further installation work. AWG accepts `{"userspace": true}`. Xray and Hysteria 2 accept
+optional `coreArtifact` and `coreSHA256` overrides; their built-in releases use pinned, checksum-verified core downloads. No
+admin rebuild is needed for a third-party provider implementing the same command and resource API. The **−** button removes a
+provider registration. Installed names and versions come from `/v1/manifest`.
 
 Operations are asynchronous: the UI polls deployment status and shows the current step or error. After success, the admin syncs
 the server's inventory. The agent does not install providers or invoke pack itself.
@@ -334,10 +341,10 @@ local self-deploy binary is shipped as pack content without an OCI download.
 
 ### Firewall and upgrading from awg-agent
 
-The AWG pack enables `net.ipv4.ip_forward=1`. During provider installation and after a successful AWG interface change, the host
-target adds input acceptance **by interface name**, such as `i:awg0`, through the available firewall backend. A separate
-lightweight firewall pack does not download the provider again or restart the agent. There is no need to install iptables just
-for these rules.
+AWG deployment enables `net.ipv4.ip_forward=1`; its resource hooks manage interface and tunnel rules. Xray and Hysteria 2 manage
+listener rules during reconciliation: TCP for Xray and UDP for Hysteria 2. All three select active firewalld or ufw and otherwise
+use iptables; iptables rules are persisted with `netfilter-persistent` when available. Disabling or deleting a listener removes
+its rule. Provider installation itself does not ask the admin to add `i:<name>` firewall rules.
 
 When installing the new `vpn-agent`, the pack first stops the legacy `awg-agent.service`. After the new agent starts and passes
 readiness, the old unit and `/usr/local/bin/awg-agent` are removed. The upgrade is therefore performed from Manage panel, with
@@ -349,10 +356,24 @@ The **Interfaces** tab combines `Interface` resources from every provider in the
 provider/kind, phase, observed generation and condition. Indicator colors are green for Ready, red for Degraded and yellow for
 Pending/Deleting.
 
-The **+** button selects a provider and creates its `Interface` resource. The `spec` form is built by RJSF from
-`specSchema`/`uiSchema`; an existing interface's name and provider are immutable. A boolean `disabled` property enables
-activate/deactivate without deletion. A created AWG interface is immediately available in the interface list when adding a
-user peer; `Peer` resources are created from the user form, not from the interface editor.
+The **+** button opens a two-step wizard: select any installed provider, then edit its `Interface.spec` through RJSF using
+`specSchema`/`uiSchema`. An existing interface's name and provider are immutable. A boolean `disabled` property activates or
+deactivates the listener without deletion. Every provider `Interface` is available when adding a user peer; `Peer` resources
+are created from the user form, not from the interface editor.
+
+Built-in profiles:
+
+- **AWG** — AmneziaWG/WireGuard interfaces, peers, links, metrics and client `.conf` files.
+- **Xray** — VLESS over TCP or WebSocket, optional TLS with an existing or automatically generated self-signed certificate.
+  Each `Peer` owns a UUID secret; `renderClientConfig` returns a VLESS URI. `coreArtifact`/`coreSHA256` can replace the pinned
+  Xray-core download with a trusted mirror.
+- **Hysteria 2** — QUIC/UDP listeners, TLS and `userpass` authentication. Each `Peer` owns a generated password and returns a
+  `hysteria2://` URI. Generated self-signed certificates set `insecure=1` in the URI; install a trusted certificate for production.
+
+Xray and Hysteria 2 interfaces are logical listeners, not OS network interfaces. Their core processes run under the provider,
+which in turn is supervised by `vpn-agent`. Same-protocol or mixed-protocol links are **not** implied by these resources:
+Xray↔AWG↔Hysteria 2 chains require explicit outbound/policy-routing support and an end-to-end test; the current AWG link
+implementation does not provide that mixed-hop routing.
 
 The manifest can declare interface actions with their own argument schemas. VPN Admin supports:
 
@@ -365,16 +386,18 @@ The editor does not replace provider validation: semantic errors are returned th
 
 ## Users and client peers
 
-The **Users** view manages global owners of AWG peers. A user has a name, description and enabled/disabled state; their peers
-can be on different servers. This is a separate model from users of a particular plugin VPN service.
+The **Users** view manages global owners of provider peers. A user has a name, description and enabled/disabled state; their
+peers can be on different servers and different protocols. This is a separate model from users of a particular plugin VPN service.
 
-Creating a peer selects a server and interface. Device name, Allowed IPs, endpoint, DNS, private key and preshared key are
-supported. An empty address is allocated from the interface pool, and an empty key is generated. A `/32` host must belong to the
-subnet and be unique; a wider CIDR is allowed for site-to-site routes.
+Creating a peer selects a server and interface. For AWG, the form supports Allowed IPs, endpoint, DNS, private key and preshared
+key; an empty address is allocated and an empty key is generated. For every other provider, additional fields come from its
+`Peer.specSchema` through RJSF. The provider creates and stores the actual UUID/password in its mode-0600 secret store; admin
+`spec` documents contain only public identifiers. The admin waits for the resource to become Ready before adding it to the user.
 
-Peers offer a client `.conf` and QR code. Desktop saves files through native dialogs; standalone downloads them in the browser.
-A peer can be deactivated without losing keys, or moved to another interface: keys, name, DNS and PSK are preserved. Its address
-is kept if it fits the new subnet and is free; otherwise a new address is allocated. Both interfaces are synchronized.
+Peers offer the provider's client configuration or URI and a QR code. Desktop saves files through native dialogs; standalone
+downloads them in the browser. Peers can be deactivated without deleting credentials. AWG peers can also be moved between AWG
+interfaces with keys and addresses preserved or reallocated. For generic providers, create a new peer on the target interface
+instead of moving it.
 
 ### Importing wg-quick / awg-quick
 
@@ -526,7 +549,7 @@ groups:
 | `/servers/:id/providers/*` | Manifest, schemas, resources, status and actions. |
 | `/links/*` | Provider links: list/create/apply/move/delete. |
 | `/artifacts/*`, `/registry-sources/*` | OCI tags, provider catalog and saved registries. |
-| `/users/*` | Global users and AWG peers. |
+| `/users/*` | Global users and provider peers. |
 | `/tunnels/*` | Compatibility with the old two-node model; use Graph/links for new routes. |
 
 All operational routes except login/logout require a standalone session. Moving uses `PUT /links/:linkID` and

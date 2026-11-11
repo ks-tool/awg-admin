@@ -31,7 +31,7 @@ import (
 	"github.com/ks-tool/vpn-admin/models"
 )
 
-func TestProviderToPackUsesProviderOwnedPack(t *testing.T) {
+func TestProviderToPackUsesGenericDeployCommand(t *testing.T) {
 	provider := models.ProviderDeployment{
 		Name: "awg", Artifact: ociArtifactURL(t), Options: map[string]any{"userspace": true},
 	}
@@ -53,14 +53,13 @@ func TestProviderToPackUsesProviderOwnedPack(t *testing.T) {
 		if values.Values["artifact"] != provider.Artifact {
 			t.Fatalf("unexpected artifact: %#v", values.Values)
 		}
-		if values.Values["registrationPath"] != "/var/lib/vpn-agent/providers.d/awg.conf" {
-			t.Fatalf("unexpected registration path: %#v", values.Values)
+		deployment := values.Values["deployment"].(map[string]any)
+		if deployment["agentDB"] != "/var/lib/vpn-agent" {
+			t.Fatalf("unexpected deployment config: %#v", deployment)
 		}
-		registry := values.Values["registry"].(map[string]any)
-		registered := registry["providers"].([]any)[0].(map[string]any)
-		args := registered["args"].([]any)
-		if len(args) != 1 || args[0] != "--userspace" {
-			t.Fatalf("provider options were not applied: %#v", registered)
+		providerOptions := deployment["options"].(map[string]any)
+		if providerOptions["userspace"] != true {
+			t.Fatalf("provider options were not passed through: %#v", providerOptions)
 		}
 		response, err := http.Get(provider.Artifact)
 		if err != nil {
@@ -71,22 +70,30 @@ func TestProviderToPackUsesProviderOwnedPack(t *testing.T) {
 		if err != nil || string(binary) != "test AWG provider binary\n" {
 			t.Fatalf("unexpected OCI test binary: %q, %v", binary, err)
 		}
-		var env map[string]any
-		readPackTestJSON(t, filepath.Join(options.Dir, "env.yaml"), &env)
-		keys := env["keys"].(map[string]any)
-		placement := keys["vpn-provider-awg"].(map[string]any)
-		firewall := placement["firewall"].([]any)
-		if len(firewall) != 1 || firewall[0] != "i:awg0" {
-			t.Fatalf("unexpected firewall: %#v", placement)
-		}
 		return nil
 	}
 	srv := models.Server{SSH: models.SSHConfig{Host: "192.0.2.1", User: "root", Key: "/tmp/id"}}
-	if err := ProviderToPack(context.Background(), srv, provider, models.Registry{}, []string{"awg0"}, "", "", nil); err != nil {
+	if err := ProviderToPack(context.Background(), srv, provider, models.Registry{}, "", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if called != 1 {
 		t.Fatalf("provider apply called %d times", called)
+	}
+}
+
+func TestProviderPackAcceptsUnknownProvider(t *testing.T) {
+	pack, values, err := newProviderPack(models.ProviderDeployment{
+		Name: "vpn-huita", Artifact: "oci://registry.example.com/vpn-providers/vpn-huita:v1", Options: map[string]any{"custom": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pack.Meta().Name != "vpn-provider-vpn-huita" {
+		t.Fatalf("unexpected pack name: %s", pack.Meta().Name)
+	}
+	deployment := values["deployment"].(map[string]any)
+	if deployment["options"].(map[string]any)["custom"] != true {
+		t.Fatalf("custom options were not preserved: %#v", deployment)
 	}
 }
 

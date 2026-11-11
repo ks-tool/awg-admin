@@ -504,6 +504,8 @@ export namespace models {
 	    i3?: string;
 	    i4?: string;
 	    i5?: string;
+	    provider?: string;
+	    resourceName?: string;
 	    inSync: boolean;
 	    lastSyncError?: string;
 	    // Go type: time
@@ -547,6 +549,8 @@ export namespace models {
 	        this.i3 = source["i3"];
 	        this.i4 = source["i4"];
 	        this.i5 = source["i5"];
+	        this.provider = source["provider"];
+	        this.resourceName = source["resourceName"];
 	        this.inSync = source["inSync"];
 	        this.lastSyncError = source["lastSyncError"];
 	        this.lastSyncedAt = this.convertValues(source["lastSyncedAt"], null);
@@ -1131,6 +1135,8 @@ export namespace models {
 	    name: string;
 	    pk: number[];
 	    interface: number[];
+	    provider?: string;
+	    resourceName?: string;
 	    disabled?: boolean;
 	    dns?: string[];
 	
@@ -1143,6 +1149,8 @@ export namespace models {
 	        this.name = source["name"];
 	        this.pk = source["pk"];
 	        this.interface = source["interface"];
+	        this.provider = source["provider"];
+	        this.resourceName = source["resourceName"];
 	        this.disabled = source["disabled"];
 	        this.dns = source["dns"];
 	    }
@@ -1794,6 +1802,7 @@ export namespace service {
 	export class AddPeerInput {
 	    Name: string;
 	    InterfaceID: number[];
+	    Spec: Record<string, any>;
 	    AllowedIPs: string[];
 	    Endpoint: string;
 	    DNS: string[];
@@ -1810,6 +1819,7 @@ export namespace service {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Name = source["Name"];
 	        this.InterfaceID = source["InterfaceID"];
+	        this.Spec = source["Spec"];
 	        this.AllowedIPs = source["AllowedIPs"];
 	        this.Endpoint = source["Endpoint"];
 	        this.DNS = source["DNS"];

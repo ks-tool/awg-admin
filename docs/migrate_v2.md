@@ -97,7 +97,7 @@ If `~/.vpn-admin/db` already exists, back it up before intentionally replacing i
 
 - Servers, including UUID, Location, SSH settings and agent mTLS material, are preserved.
 - Users, peers, administrator credentials, agent sources and topology coordinates are preserved.
-- Legacy interfaces become `awg/v1alpha1` resources with `Kind=Interface`; interface UUIDs are preserved.
+- Legacy interfaces become `awg.ks-tool.dev/v1` resources with `Kind=Interface`; interface UUIDs are preserved.
 - User peers become `Kind=Peer` resources with `interfaceRef` and `userRef`.
 - Legacy tunnels and topology connections become `Link` records.
 - New `resources`, `links`, `providers` and `meta` buckets are created.
@@ -233,7 +233,7 @@ chmod 600 ~/.vpn-admin/db
 
 - Сохраняются серверы, включая UUID, Location, SSH-настройки и mTLS-материал агентов.
 - Сохраняются пользователи, пиры, учётные данные администратора, источники агентов и координаты топологии.
-- Прежние интерфейсы становятся ресурсами `awg/v1alpha1` с `Kind=Interface`; UUID интерфейсов сохраняются.
+- Прежние интерфейсы становятся ресурсами `awg.ks-tool.dev/v1` с `Kind=Interface`; UUID интерфейсов сохраняются.
 - Пиры пользователей становятся ресурсами `Kind=Peer` со ссылками `interfaceRef` и `userRef`.
 - Прежние туннели и связи топологии становятся записями `Link`.
 - Создаются buckets `resources`, `links`, `providers` и `meta`.

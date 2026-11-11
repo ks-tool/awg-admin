@@ -79,6 +79,7 @@ type Service struct {
 	tunnels          *sshclient.Manager
 	plugins          *plugin.Registry
 	providerRegistry *providerRegistry
+	providerRefresh  sync.WaitGroup
 	geocoder         locationGeocoder
 	topologyMu       sync.Mutex
 	firewallMu       sync.Mutex
@@ -129,6 +130,7 @@ func (s *Service) StartTunnels() {
 
 // StopTunnels closes every tunnel opened by StartTunnels.
 func (s *Service) StopTunnels() {
+	s.providerRefresh.Wait()
 	if err := s.tunnels.Close(); err != nil {
 		log.Error().Err(err).Msg("failed to close agent tunnels")
 	}
