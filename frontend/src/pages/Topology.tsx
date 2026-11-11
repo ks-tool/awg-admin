@@ -441,8 +441,6 @@ export default function Topology() {
                 <ServerMetricsModal
                     serverId={metricsModalServerId}
                     serverName={topology.servers.find(server => server.id === metricsModalServerId)?.name ?? ''}
-                    topologyServer={topology.servers.find(server => server.id === metricsModalServerId)}
-                    topology={topology}
                     onChanged={refresh}
                     onClose={() => setMetricsModalServerId(null)}
                 />

@@ -19,10 +19,11 @@ configuration and network links.
 - **Network Graph.** Interfaces can be connected by directed arrows into chains of any length. Port compatibility, duplicates,
   self-connections and cycles are validated. To reroute an existing connection, select its arrow, press `m`, drag either endpoint
   and confirm with **Create**.
-- **Agent and providers.** `vpn-agent` can be installed from an OCI release or a local binary. VPN providers are installed and
-  removed independently of the agent. Public GHCR and private OCI registries with saved credentials are supported.
-- **JSON Schema resources.** A provider manifest describes resources, ports and actions. VPN Admin renders forms with RJSF and
-  displays `generation`/`observedGeneration`, phases, conditions, action results and downloadable files.
+- **Agent and providers.** Under **Manage panel → Agent**, `vpn-agent` can be installed from an OCI release or a local binary.
+  VPN providers are installed and removed independently of the agent. Public GHCR and private OCI registries are supported.
+- **Interfaces through JSON Schema.** Under **Manage panel → Interfaces**, an installed provider is selected and its `Interface`
+  resource is created through RJSF. The panel shows interface health and actions. Peers are not created here: a user selects
+  the required interface when adding a peer. Unmanaged `wg-quick`/`awg-quick` interfaces can be imported from the same tab.
 - **VPN service plugins.** A separate plugin API models a service as “application + configuration”, passes topology to the plugin
   and provides independent JSON schemas for configuration and users.
 - **AWG.** Built-in AmneziaWG and WireGuard support includes interfaces and peers, obfuscation, kernel/userspace modes, client

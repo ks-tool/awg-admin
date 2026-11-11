@@ -16,13 +16,15 @@
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Edit2, Network, Play, Plus, Power, RefreshCw, Trash2} from 'lucide-react';
+import {Edit2, FileInput, Network, Play, Plus, Power, RefreshCw, Trash2} from 'lucide-react';
 import {toast} from 'sonner';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {FormField} from '@/components/common/FormField';
 import {Modal} from '@/components/common/Modal';
 import {buttons, inputs} from '@/components/common/controls';
+import {ImportInterfaceModal} from '@/components/server/ImportInterfaceModal';
 import {SchemaForm} from '@/components/topology/SchemaForm';
+import {listUnmanagedInterfaces} from '@/services/servers';
 import {
     deleteProviderResource,
     getProviderManifest,
@@ -32,7 +34,7 @@ import {
     runProviderResourceAction,
 } from '@/services/resources';
 import {cn} from '@/lib/utils';
-import type {ActionDefinition, ActionResult, ProviderDefinition, ProviderManifest, ProviderResource, ResourceDefinition} from '@/types';
+import type {ActionDefinition, ActionResult, ProviderDefinition, ProviderManifest, ProviderResource, ResourceDefinition, UnmanagedInterface} from '@/types';
 
 interface ListedResource {
     provider: string;
@@ -56,19 +58,25 @@ export function ResourceManager({serverId, onChanged}: {serverId: string; onChan
     const [manifest, setManifest] = useState<ProviderManifest | null>(null);
     const [schemas, setSchemas] = useState<Record<string, ProviderDefinition>>({});
     const [resources, setResources] = useState<ListedResource[]>([]);
+    const [unmanaged, setUnmanaged] = useState<UnmanagedInterface[]>([]);
     const [loading, setLoading] = useState(true);
     const [editor, setEditor] = useState<EditorState | null>(null);
     const [deleting, setDeleting] = useState<ListedResource | null>(null);
     const [action, setAction] = useState<ActionState | null>(null);
+    const [importTarget, setImportTarget] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
     const load = useCallback(async () => {
-        const nextManifest = await getProviderManifest(serverId);
+        const [nextManifest, nextUnmanaged] = await Promise.all([
+            getProviderManifest(serverId),
+            listUnmanagedInterfaces(serverId),
+        ]);
         const definitions = await Promise.all(nextManifest.providers.map(provider => getProviderSchema(serverId, provider.name)));
         const nextSchemas = Object.fromEntries(definitions.map(definition => [definition.name, definition]));
         const lists = await Promise.all(nextManifest.providers.map(async provider => {
             const items = await listProviderResources(serverId, provider.name);
             return items.flatMap(resource => {
+                if (resource.kind !== 'Interface') return [];
                 const definition = nextSchemas[provider.name]?.resources.find(item => item.kind === resource.kind);
                 return definition ? [{provider: provider.name, definition, resource}] : [];
             });
@@ -76,6 +84,7 @@ export function ResourceManager({serverId, onChanged}: {serverId: string; onChan
         setManifest(nextManifest);
         setSchemas(nextSchemas);
         setResources(lists.flat());
+        setUnmanaged(nextUnmanaged ?? []);
     }, [serverId]);
 
     const refresh = useCallback(async () => {
@@ -159,38 +168,38 @@ export function ResourceManager({serverId, onChanged}: {serverId: string; onChan
         return properties?.disabled?.type === 'boolean';
     };
 
+    const interfaceProviders = manifest?.providers.filter(provider => provider.resources.some(resource => resource.kind === 'Interface')) ?? [];
+
     return (
         <div className="rounded-xl border border-border bg-card p-6 dark:border-white/5 dark:bg-white/3">
             <div className="mb-4 flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-lg font-semibold"><Network size={20} />{t('resources.title')} ({resources.length})</h2>
+                <h2 className="flex items-center gap-2 text-lg font-semibold"><Network size={20} />{t('servers.interface')} ({resources.length})</h2>
                 <div className="flex gap-2">
                     <button type="button" onClick={() => void refresh()} disabled={loading} className={buttons.secondary} title={t('common.refresh')}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
                     <button
                         type="button"
                         onClick={() => {
-                            const provider = manifest?.providers[0];
-                            const kind = provider?.resources[0]?.kind;
-                            if (provider && kind) setEditor({provider: provider.name, kind});
+                            const provider = interfaceProviders[0];
+                            if (provider) setEditor({provider: provider.name, kind: 'Interface'});
                         }}
-                        disabled={!manifest?.providers.some(provider => provider.resources.length > 0)}
+                        disabled={interfaceProviders.length === 0}
                         className={buttons.primary}
-                        title={t('resources.add')}
+                        title={t('servers.addInterfaceTooltip')}
                     ><Plus size={14} /></button>
                 </div>
             </div>
-            {manifest && manifest.providers.length > 0 && (
+            {interfaceProviders.length > 0 && (
                 <div className="mb-4 flex flex-wrap gap-2">
-                    {manifest.providers.map(provider => (
+                    {interfaceProviders.map(provider => (
                         <div key={provider.name} className="rounded-lg border border-border bg-background px-3 py-2 text-xs dark:border-white/10 dark:bg-white/5">
                             <span className="font-semibold">{provider.name}</span>
                             <span className="ml-2 font-mono text-muted-foreground">{provider.version}</span>
-                            <span className="ml-2 text-muted-foreground">{provider.resources.map(resource => resource.kind).join(', ')}</span>
                         </div>
                     ))}
                 </div>
             )}
-            {loading ? <div className="py-8 text-center text-sm text-muted-foreground">{t('common.loading')}</div> : resources.length === 0 ? (
-                <div className="py-4 text-center text-muted-foreground">{t('resources.empty')}</div>
+            {loading ? <div className="py-8 text-center text-sm text-muted-foreground">{t('common.loading')}</div> : resources.length === 0 && unmanaged.length === 0 ? (
+                <div className="py-4 text-center text-muted-foreground">{t('servers.interfaces.noInterfaces')}</div>
             ) : (
                 <div className="space-y-3">
                     {resources.map(item => {
@@ -219,6 +228,36 @@ export function ResourceManager({serverId, onChanged}: {serverId: string; onChan
                         );
                     })}
                 </div>
+            )}
+            {unmanaged.length > 0 && (
+                <div className="mt-3 space-y-3">
+                    {unmanaged.map(item => (
+                        <div key={item.name} className="flex items-center justify-between rounded-lg border border-dashed border-amber-300/70 bg-background p-4 dark:border-amber-500/30 dark:bg-white/5">
+                            <div className="flex items-center gap-2 text-sm font-semibold">
+                                <Network size={16} />
+                                {item.name}
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">{t('servers.import.notManagedBadge')}</span>
+                                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-medium text-muted-foreground">{item.kind}</span>
+                            </div>
+                            <button type="button" onClick={() => setImportTarget(item.name)} className={cn(buttons.secondary, 'inline-flex items-center gap-1.5 px-3 py-1')} title={t('servers.import.rowHint')}>
+                                <FileInput size={14} />{t('servers.import.button')}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {importTarget !== null && (
+                <ImportInterfaceModal
+                    serverId={serverId}
+                    initialInterface={importTarget}
+                    unmanaged={unmanaged}
+                    onClose={() => setImportTarget(null)}
+                    onImported={() => {
+                        setImportTarget(null);
+                        onChanged?.();
+                        void refresh();
+                    }}
+                />
             )}
             {editor && schemas[editor.provider] && (
                 <ResourceEditor
@@ -307,27 +346,15 @@ function ResourceEditor({state, manifest, schemas, busy, onStateChange, onClose,
     if (!definition) return null;
 
     return (
-        <Modal title={state.resource ? t('resources.editTitle') : t('resources.addTitle')} onClose={onClose} loading={busy} size="lg">
-            <div className="grid gap-4 md:grid-cols-2">
-                <FormField label={t('resources.provider')}>
-                    <select value={state.provider} disabled={busy || !!state.resource} onChange={event => {
-                        const provider = event.target.value;
-                        const kind = schemas[provider]?.resources[0]?.kind ?? '';
-                        setFormData({});
-                        onStateChange({provider, kind});
-                    }} className={inputs.primary}>
-                        {manifest?.providers.map(provider => <option key={provider.name} value={provider.name}>{provider.name} ({provider.version})</option>)}
-                    </select>
-                </FormField>
-                <FormField label={t('resources.kind')}>
-                    <select value={state.kind} disabled={busy || !!state.resource} onChange={event => {
-                        setFormData({});
-                        onStateChange({provider: state.provider, kind: event.target.value});
-                    }} className={inputs.primary}>
-                        {schemas[state.provider]?.resources.map(resource => <option key={resource.kind} value={resource.kind}>{resource.kind}</option>)}
-                    </select>
-                </FormField>
-            </div>
+        <Modal title={state.resource ? t('servers.interfaces.editTitle') : t('servers.interfaces.addTitle')} onClose={onClose} loading={busy} size="lg">
+            <FormField label={t('resources.provider')}>
+                <select value={state.provider} disabled={busy || !!state.resource} onChange={event => {
+                    setFormData({});
+                    onStateChange({provider: event.target.value, kind: 'Interface'});
+                }} className={inputs.primary}>
+                    {manifest?.providers.filter(provider => provider.resources.some(resource => resource.kind === 'Interface')).map(provider => <option key={provider.name} value={provider.name}>{provider.name} ({provider.version})</option>)}
+                </select>
+            </FormField>
             <FormField label={t('resources.name')}>
                 <input required value={name} disabled={busy || !!state.resource} onChange={event => setName(event.target.value)} className={inputs.primary} />
             </FormField>

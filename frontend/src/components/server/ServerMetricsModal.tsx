@@ -32,20 +32,17 @@ import {Modal} from '@/components/common/Modal';
 import {AgentDeployment} from '@/components/server/AgentDeployment';
 import {ResourceManager} from '@/components/resources/ResourceManager';
 import ServerDetail from '@/pages/ServerDetail';
-import {TopologyServerManage} from '@/components/topology/TopologyServerManage';
 import {getServerInterfaceMetricsHistory, getServerMetricsHistory} from '@/services/servers';
 import {useAppStore} from '@/store';
 import {byName, cn, formatBytes} from '@/lib/utils';
 import {b64ToHex, isPeerConnected} from '@/lib/peers';
-import type {PeerHistoryPoint, SystemHistory, SystemHistoryPoint, Topology, TopologyServer} from '@/types';
+import type {PeerHistoryPoint, SystemHistory, SystemHistoryPoint} from '@/types';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
 interface Props {
     serverId: string;
     serverName: string;
-    topologyServer?: TopologyServer;
-    topology?: Topology;
     onChanged?: () => Promise<void>;
     onClose: () => void;
 }
@@ -214,7 +211,7 @@ function Sparkline({values, times, height = 28}: {values: number[]; times?: numb
     );
 }
 
-type ManageTab = 'metrics' | 'interfaces' | 'providers' | 'agent' | 'information';
+type ManageTab = 'metrics' | 'interfaces' | 'agent' | 'information';
 type MetricsTab = 'system' | 'peers';
 
 type RangeKey = '1h' | '3h' | '6h' | '24h' | 'all';
@@ -230,7 +227,7 @@ const RANGES: {key: RangeKey; ms: number | null}[] = [
     {key: 'all', ms: null},
 ];
 
-export function ServerMetricsModal({serverId, serverName, topologyServer, topology, onChanged, onClose}: Props) {
+export function ServerMetricsModal({serverId, serverName, onChanged, onClose}: Props) {
     const {t} = useTranslation();
     const users = useAppStore((s) => s.users);
     const servers = useAppStore((s) => s.servers);
@@ -241,13 +238,13 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
     const [tab, setTab] = useState<MetricsTab>('system');
     const [range, setRange] = useState<RangeKey>('all');
     const [deploymentBusy, setDeploymentBusy] = useState(false);
-    const legacyServer = servers.find(server => server.id === serverId);
+    const server = servers.find(server => server.id === serverId);
     const handleChanged = useCallback(() => { void onChanged?.(); }, [onChanged]);
 
     useEffect(() => {
         if (manageTab !== 'metrics') return;
         let cancelled = false;
-        const interfaceIds = legacyServer?.interfaces ?? [];
+        const interfaceIds = server?.interfaces ?? [];
         void Promise.all([
             getServerMetricsHistory(serverId),
             Promise.all(interfaceIds.map(id => getServerInterfaceMetricsHistory(serverId, id))),
@@ -262,7 +259,7 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
         return () => {
             cancelled = true;
         };
-    }, [serverId, manageTab, legacyServer]);
+    }, [serverId, manageTab, server]);
 
     // Restrict every series (system points + each peer's points) to the
     // selected window. The cutoff is relative to the newest retained sample —
@@ -461,10 +458,9 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
         scales: {...baseOptions.scales, y: {...netBounds, ticks: {font: {size: 10}, callback: (v) => formatBytes(Number(v))}}},
     };
 
-    const manageTabs: ManageTab[] = ['interfaces', 'providers', 'agent', 'metrics', 'information'];
+    const manageTabs: ManageTab[] = ['interfaces', 'agent', 'metrics', 'information'];
     const manageTabLabels: Record<ManageTab, string> = {
         interfaces: 'servers.interfacesTab',
-        providers: 'servers.providersTab',
         agent: 'servers.agentTab',
         metrics: 'servers.metricsTitle',
         information: 'servers.informationTab',
@@ -473,7 +469,7 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
 
     return (
         <Modal title={`${serverName} - ${t('servers.managePanel')}`} onClose={onClose} size="lg" loading={deploymentBusy}>
-            <div className="mb-4 flex gap-1 overflow-x-auto border-b border-border dark:border-white/10" role="tablist">
+            <div className="mb-4 flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden border-b border-border dark:border-white/10" role="tablist">
                 {manageTabs.map(item => (
                     <button
                         key={item}
@@ -481,9 +477,8 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
                         role="tab"
                         aria-selected={manageTab === item}
                         onClick={() => setManageTab(item)}
-                        disabled={!legacyServer && (item === 'providers' || item === 'agent')}
                         className={cn(
-                            '-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                            '-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
                             manageTab === item
                                 ? 'border-sky-500 text-foreground dark:text-zinc-100'
                                 : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
@@ -615,25 +610,14 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
                 </div>
             ))}
             {manageTab !== 'metrics' && (
-                legacyServer ? (
-                    manageTab === 'providers' ? (
+                server ? (
+                    manageTab === 'interfaces' ? (
                         <ResourceManager serverId={serverId} onChanged={handleChanged} />
                     ) : manageTab === 'agent' ? (
-                        <AgentDeployment server={legacyServer} onChanged={handleChanged} onBusyChange={setDeploymentBusy} />
+                        <AgentDeployment server={server} onChanged={handleChanged} onBusyChange={setDeploymentBusy} />
                     ) : (
-                        <ServerDetail
-                            serverId={serverId}
-                            section={manageTab === 'interfaces' ? 'interfaces' : 'information'}
-                            onChanged={handleChanged}
-                        />
+                        <ServerDetail serverId={serverId} section="information" onChanged={handleChanged} />
                     )
-                ) : topologyServer && topology && onChanged ? (
-                    <TopologyServerManage
-                        server={topologyServer}
-                        topology={topology}
-                        section={manageTab === 'interfaces' ? 'interfaces' : 'information'}
-                        onChanged={onChanged}
-                    />
                 ) : (
                     <div className="py-8 text-center text-sm text-muted-foreground">{t('servers.noServers')}</div>
                 )

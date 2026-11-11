@@ -124,6 +124,25 @@ func TestMigratedSecretIsSentOnlyThroughAction(t *testing.T) {
 	}
 }
 
+func TestProviderInterfaceAppearsInUserInterfaceList(t *testing.T) {
+	svc, server, _ := newTestServerWithAgent(t)
+	interfaceID := uuid.New()
+	item := models.Resource{
+		ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Interface", Name: "awg0", Generation: 1,
+		Spec: json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`),
+	}
+	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+		t.Fatal(err)
+	}
+	interfaces, err := svc.ListInterfaces(server.ID.String())
+	if err != nil || len(interfaces) != 1 {
+		t.Fatalf("interfaces = %+v, %v", interfaces, err)
+	}
+	if interfaces[0].ID != interfaceID || interfaces[0].Interface != "awg0" || interfaces[0].Address != "10.0.0.1/24" {
+		t.Fatalf("unexpected interface: %+v", interfaces[0])
+	}
+}
+
 func TestServerMigrationCompletesOnlyWithAWGProvider(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
 	server.Unmanaged = true

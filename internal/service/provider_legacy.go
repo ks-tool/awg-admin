@@ -242,20 +242,26 @@ func (s *Service) syncLegacyResource(serverID string, resource models.Resource) 
 	}
 	switch resource.Kind {
 	case "Interface":
+		if resource.APIVersion != "awg/v1alpha1" {
+			return nil
+		}
 		interfaceID, err := uuid.Parse(resource.ID)
 		if err != nil {
 			return nil
 		}
 		iface, err := s.store.Servers().Interfaces(id).Get(interfaceID)
-		if storage.IsNotFound(err) {
-			return nil
-		}
-		if err != nil {
+		if err != nil && !storage.IsNotFound(err) {
 			return err
 		}
-		cfg := iface.InterfaceConfig
+		cfg := agentmodels.InterfaceConfig{}
+		if iface != nil {
+			cfg = iface.InterfaceConfig
+		}
 		if err := json.Unmarshal(resource.Spec, &cfg); err != nil {
 			return err
+		}
+		if iface == nil {
+			iface = &models.Interface{ID: interfaceID}
 		}
 		iface.InterfaceConfig = cfg
 		return s.store.Servers().Interfaces(id).Set(iface)

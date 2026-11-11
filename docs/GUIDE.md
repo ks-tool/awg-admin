@@ -31,10 +31,8 @@ current UI.
   - [Independent provider installation](#independent-provider-installation)
   - [Managed host requirements](#managed-host-requirements)
   - [Firewall and upgrading from awg-agent](#firewall-and-upgrading-from-awg-agent)
-- [Provider resources](#provider-resources)
-- [AWG interfaces, users and peers](#awg-interfaces-users-and-peers)
-  - [The specialized interface editor](#the-specialized-interface-editor)
-  - [Users and client peers](#users-and-client-peers)
+- [Provider interfaces](#provider-interfaces)
+- [Users and client peers](#users-and-client-peers)
   - [Importing wg-quick / awg-quick](#importing-wg-quick--awg-quick)
 - [The VPN service model and external plugins](#the-vpn-service-model-and-external-plugins)
 - [Metrics and tunnel latency](#metrics-and-tunnel-latency)
@@ -189,8 +187,7 @@ The modal accepts a name, SSH host/port/user, authentication, agent address, des
 Creating a record does not prove connectivity: SSH errors surface during later operations.
 
 A server created by this form belongs to the current agent-based inventory and is automatically projected into Topology with
-the same UUID. Its interfaces appear in Network Graph. The API also supports abstract topology-only servers without agent
-inventory, but their Agent and Providers tabs are disabled.
+the same UUID. Its interfaces appear in Network Graph. Manage panel uses the agent and installed providers for every server.
 
 ### SSH and mTLS
 
@@ -229,18 +226,14 @@ For an agent-based server, point color comes from the agent check:
 - **yellow** — transitional, degraded or unmanaged state;
 - **red** — the connection or agent is unavailable.
 
-For a topology-only server, the worst VPN service status is used: running is green, error is red, everything else is yellow.
 The tooltip contains the address, coordinates, agent status and services. No native SVG alt-tooltip is layered over it.
 
 Clicking a point opens **Manage panel** with these tabs:
 
-- **Interfaces** — the specialized AWG editor;
-- **Providers** — generic resources and actions;
+- **Interfaces** — interfaces created by installed providers and their actions;
 - **Agent** — agent and provider installation;
 - **Metrics** — system and peers;
 - **Information** — SSH, TLS and metadata.
-
-Agent and Providers are available only for agent-based inventory.
 
 ## Network Graph and tunnels
 
@@ -258,9 +251,6 @@ For two agent-based AWG interfaces, a **provider link** is created:
 2. Both agents execute `prepare`, and the admin exchanges their offers.
 3. Both sides execute `commit`; only then does the link become `Ready`.
 4. On failure, the link remains `Degraded` with a condition instead of silently disappearing.
-
-If either endpoint is topology-only, an abstract `NetworkConnection` is created. It is stored in Topology and passed to the
-plugin on the next service **Apply**; by itself it does not call the agent provider API.
 
 A selected arrow can be deleted with **Delete** or **Backspace** after confirmation. Deleting a provider link removes only its
 generated tunnel peers and link-specific hooks/routes. The interface and user peers are preserved.
@@ -353,46 +343,27 @@ When installing the new `vpn-agent`, the pack first stops the legacy `awg-agent.
 readiness, the old unit and `/usr/local/bin/awg-agent` are removed. The upgrade is therefore performed from Manage panel, with
 no manual server commands.
 
-## Provider resources
+## Provider interfaces
 
-The **Providers** tab combines resources from every provider in the agent manifest. Each resource shows provider/kind, phase,
-observed generation and condition. Indicator colors are green for Ready, red for Degraded and yellow for Pending/Deleting.
+The **Interfaces** tab combines `Interface` resources from every provider in the agent manifest. Each interface shows
+provider/kind, phase, observed generation and condition. Indicator colors are green for Ready, red for Degraded and yellow for
+Pending/Deleting.
 
-The **+** button opens provider and kind selection. The `spec` form is built by RJSF from `specSchema`/`uiSchema`; an existing
-resource's name and type are immutable. A boolean `disabled` property enables activate/deactivate without deletion.
+The **+** button selects a provider and creates its `Interface` resource. The `spec` form is built by RJSF from
+`specSchema`/`uiSchema`; an existing interface's name and provider are immutable. A boolean `disabled` property enables
+activate/deactivate without deletion. A created AWG interface is immediately available in the interface list when adding a
+user peer; `Peer` resources are created from the user form, not from the interface editor.
 
-The manifest can declare actions with their own argument schemas. VPN Admin supports:
+The manifest can declare interface actions with their own argument schemas. VPN Admin supports:
 
 - JSON results;
 - downloadable files with names and media types;
 - asynchronous results with `taskId`;
 - `mutating` and `requiresConfirmation`.
 
-AWG provides `Interface` and `Peer` resources, including client config rendering, key rotation/revocation and secret import for
-migration. The generic editor does not replace provider validation: semantic errors are returned through status/conditions.
+The editor does not replace provider validation: semantic errors are returned through status/conditions.
 
-## AWG interfaces, users and peers
-
-### The specialized interface editor
-
-Agent-based AWG inventory retains a specialized editor under **Interfaces**, complementing the generic Providers UI. Main fields
-are name, CIDR, client DNS, listen port, private key, activation and AmneziaWG parameters.
-
-- An empty address on creation allocates the first host in the next free `/24` from `172.23.0.0/16`.
-- An empty private key is generated automatically.
-- Name, port and subnet overlap are checked against the server's other interfaces.
-- Deactivation preserves configuration but takes the interface down.
-- Clearing the Amnezia checkbox creates plain WireGuard; otherwise `Jc/Jmin/Jmax`, `S1–S4`, `H1–H4` and `I1–I5` control
-  obfuscation.
-- **Force replace peers** applies `ReplacePeers=true` and resets active sessions on that interface.
-
-An interface with tunnel metadata cannot be edited or deleted through the specialized editor until its connection is removed.
-Deleting a free interface cascades to its peers and asks for additional confirmation when peers exist.
-
-`PreUp`, `PostUp`, `PreDown` and `PostDown` hooks run with the agent's privileges; `%i` expands to the interface name. An AWG
-link uses generated hooks for policy routing and NAT and removes only its own commands.
-
-### Users and client peers
+## Users and client peers
 
 The **Users** view manages global owners of AWG peers. A user has a name, description and enabled/disabled state; their peers
 can be on different servers. This is a separate model from users of a particular plugin VPN service.
@@ -459,8 +430,8 @@ nonzero exit code. The call timeout is 30 seconds. Go `.so` plugins are unsuppor
 
 > **Current frontend limitation.** The model, HTTP API, RJSF forms and service inspector exist, but the add-plugin-service button
 > and Network Graph node selection are not yet connected to the main workspace. Create services through
-> `POST /topology/services` or the corresponding Wails binding. Do not confuse this model with the fully available **Providers**
-> tab for agent resources.
+> `POST /topology/services` or the corresponding Wails binding. Do not confuse this model with agent interfaces on the
+> **Interfaces** tab.
 
 A plugin runs with the admin's privileges and is not sandboxed. Install only trusted executables and restrict access to the
 plugins directory.
