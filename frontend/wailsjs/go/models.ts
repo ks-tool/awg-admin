@@ -1227,10 +1227,8 @@ export namespace models {
 	
 	export class RegistrySource {
 	    id: number[];
-	    name: string;
 	    url: string;
-	    agentRepository: string;
-	    providerRepository: string;
+	    type: string;
 	    username?: string;
 	    password?: string;
 	    hasPassword?: boolean;
@@ -1243,10 +1241,8 @@ export namespace models {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
-	        this.name = source["name"];
 	        this.url = source["url"];
-	        this.agentRepository = source["agentRepository"];
-	        this.providerRepository = source["providerRepository"];
+	        this.type = source["type"];
 	        this.username = source["username"];
 	        this.password = source["password"];
 	        this.hasPassword = source["hasPassword"];

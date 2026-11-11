@@ -80,9 +80,8 @@ export function RegistrySourcesSection() {
                 {sources.map(source => (
                     <div key={source.id} className="flex items-start justify-between gap-3 rounded-lg border border-border bg-background p-3 dark:border-white/10 dark:bg-white/5">
                         <div className="min-w-0 space-y-1">
-                            <div className="text-sm font-medium">{source.name}<span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{source.url}</span></div>
-                            <div className="break-all font-mono text-xs text-muted-foreground">{t('settings.agentArtifacts')}: {source.agentRepository}</div>
-                            <div className="break-all font-mono text-xs text-muted-foreground">{t('settings.providerArtifacts')}: {source.providerRepository}</div>
+                            <div className="text-sm font-medium">{t(source.type === 'agent' ? 'servers.sourceTypeAgent' : 'servers.sourceTypeProvider')}</div>
+                            <div className="break-all font-mono text-xs text-muted-foreground">{source.url}</div>
                         </div>
                         <div className="flex shrink-0 gap-2">
                             <button type="button" onClick={() => {
@@ -96,7 +95,7 @@ export function RegistrySourcesSection() {
             </div>
             {modalOpen && <RegistrySourceModal source={editing} onClose={() => setModalOpen(false)} onSaved={source => {
                 setModalOpen(false);
-                setSources(current => [...current.filter(item => item.id !== source.id), source].sort((a, b) => a.name.localeCompare(b.name)));
+                setSources(current => [...current.filter(item => item.id !== source.id), source].sort((a, b) => a.type.localeCompare(b.type) || a.url.localeCompare(b.url)));
             }} />}
             {deleting && <ConfirmModal title={t('servers.registrySources')} message={t('servers.confirmDeleteRegistry')} onConfirm={() => void remove()} onCancel={() => setDeleting(null)} />}
         </div>

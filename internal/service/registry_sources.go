@@ -18,6 +18,7 @@ package service
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"uuid"
 
@@ -32,30 +33,21 @@ func (s *Service) ListRegistrySources() ([]models.RegistrySource, error) {
 		return nil, err
 	}
 	for i := range sources {
-		setDefaultSourceRepositories(&sources[i])
 		scrubRegistrySource(&sources[i])
 	}
 	return sources, nil
 }
 
-func (s *Service) CreateRegistrySource(name, address, agentRepository, providerRepository, username, password string, plainHTTP bool) (*models.RegistrySource, error) {
-	address, err := normalizeRegistryAddress(address)
-	if err != nil {
-		return nil, err
-	}
-	agentRepository, providerRepository, err = normalizeSourceRepositories(address, agentRepository, providerRepository)
+func (s *Service) CreateRegistrySource(address, sourceType, username, password string, plainHTTP bool) (*models.RegistrySource, error) {
+	address, err := normalizeRegistrySourceURL(address, sourceType)
 	if err != nil {
 		return nil, err
 	}
 	if err := validateRegistryCredentials(username, password); err != nil {
 		return nil, err
 	}
-	if len(strings.TrimSpace(name)) == 0 {
-		return nil, fmt.Errorf("registry source name is required")
-	}
 	source := &models.RegistrySource{
-		ID: uuid.New(), Name: strings.TrimSpace(name), URL: address,
-		AgentRepository: agentRepository, ProviderRepository: providerRepository,
+		ID: uuid.New(), URL: address, Type: sourceType,
 		Username: strings.TrimSpace(username), Password: password, PlainHTTP: plainHTTP,
 	}
 	if err := s.store.RegistrySources().Set(source); err != nil {
@@ -64,7 +56,7 @@ func (s *Service) CreateRegistrySource(name, address, agentRepository, providerR
 	return publicRegistrySource(source), nil
 }
 
-func (s *Service) UpdateRegistrySource(id, name, address, agentRepository, providerRepository, username, password string, plainHTTP bool) (*models.RegistrySource, error) {
+func (s *Service) UpdateRegistrySource(id, address, sourceType, username, password string, plainHTTP bool) (*models.RegistrySource, error) {
 	sourceID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err
@@ -73,16 +65,9 @@ func (s *Service) UpdateRegistrySource(id, name, address, agentRepository, provi
 	if err != nil {
 		return nil, err
 	}
-	address, err = normalizeRegistryAddress(address)
+	address, err = normalizeRegistrySourceURL(address, sourceType)
 	if err != nil {
 		return nil, err
-	}
-	agentRepository, providerRepository, err = normalizeSourceRepositories(address, agentRepository, providerRepository)
-	if err != nil {
-		return nil, err
-	}
-	if len(strings.TrimSpace(name)) == 0 {
-		return nil, fmt.Errorf("registry source name is required")
 	}
 	username = strings.TrimSpace(username)
 	if len(password) == 0 && len(username) > 0 {
@@ -92,8 +77,7 @@ func (s *Service) UpdateRegistrySource(id, name, address, agentRepository, provi
 		return nil, err
 	}
 	updated := &models.RegistrySource{
-		ID: sourceID, Name: strings.TrimSpace(name), URL: address,
-		AgentRepository: agentRepository, ProviderRepository: providerRepository,
+		ID: sourceID, URL: address, Type: sourceType,
 		Username: username, Password: password, PlainHTTP: plainHTTP,
 	}
 	if err := s.store.RegistrySources().Set(updated); err != nil {
@@ -122,6 +106,9 @@ func (s *Service) resolveRegistry(registry models.Registry) (models.Registry, er
 	if err != nil {
 		return models.Registry{}, err
 	}
+	if !strings.HasPrefix(source.URL, "oci://") {
+		return models.Registry{}, fmt.Errorf("local source %q has no OCI registry credentials", source.URL)
+	}
 	return models.Registry{
 		SourceID: registry.SourceID, Username: source.Username,
 		Password: source.Password, PlainHTTP: source.PlainHTTP,
@@ -139,62 +126,25 @@ func scrubRegistrySource(source *models.RegistrySource) {
 	source.Password = ""
 }
 
-func normalizeRegistryAddress(address string) (string, error) {
+func normalizeRegistrySourceURL(address, sourceType string) (string, error) {
 	address = strings.TrimSpace(address)
-	address = strings.TrimPrefix(address, "https://")
-	address = strings.TrimPrefix(address, "http://")
-	address = strings.TrimPrefix(address, "oci://")
-	address = strings.TrimSuffix(address, "/")
-	if len(address) == 0 || strings.ContainsAny(address, "/@?# \t\r\n") {
-		return "", fmt.Errorf("registry address must be a host with an optional port, without a repository path")
+	if sourceType != models.RegistrySourceAgent && sourceType != models.RegistrySourceProvider {
+		return "", fmt.Errorf("source type must be %q or %q", models.RegistrySourceAgent, models.RegistrySourceProvider)
 	}
-	return "oci://" + address, nil
-}
-
-func normalizeSourceRepositories(address, agentRepository, providerRepository string) (string, string, error) {
-	defaultAgent, defaultProvider := defaultSourceRepositories(address)
-	var err error
-	agentRepository, err = normalizeSourceRepository(address, agentRepository, defaultAgent)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid agent repository: %w", err)
+	if strings.HasPrefix(address, "oci://") {
+		ref, err := parseOCIRepository(address)
+		if err != nil {
+			return "", err
+		}
+		return ref.withoutTag(), nil
 	}
-	providerRepository, err = normalizeSourceRepository(address, providerRepository, defaultProvider)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid provider repository: %w", err)
+	if sourceType != models.RegistrySourceAgent {
+		return "", fmt.Errorf("provider source must be an OCI catalog URL")
 	}
-	return agentRepository, providerRepository, nil
-}
-
-func normalizeSourceRepository(address, repository, fallback string) (string, error) {
-	repository = strings.TrimSpace(repository)
-	if len(repository) == 0 {
-		repository = fallback
+	if !filepath.IsAbs(address) {
+		return "", fmt.Errorf("agent source must be an OCI repository URL or an absolute local binary path")
 	}
-	ref, err := parseOCIRepository(repository)
-	if err != nil {
-		return "", err
-	}
-	if !strings.EqualFold(ref.host, strings.TrimPrefix(address, "oci://")) {
-		return "", fmt.Errorf("repository registry %q does not match source %q", ref.host, address)
-	}
-	return ref.withoutTag(), nil
-}
-
-func defaultSourceRepositories(address string) (string, string) {
-	if strings.EqualFold(address, "oci://ghcr.io") {
-		return officialAgentRepository, officialProviderRepository
-	}
-	return address + "/ks-tool/vpn-agent", address + "/vpn-providers"
-}
-
-func setDefaultSourceRepositories(source *models.RegistrySource) {
-	agentRepository, providerRepository := defaultSourceRepositories(source.URL)
-	if len(source.AgentRepository) == 0 {
-		source.AgentRepository = agentRepository
-	}
-	if len(source.ProviderRepository) == 0 {
-		source.ProviderRepository = providerRepository
-	}
+	return filepath.Clean(address), nil
 }
 
 func validateRegistryCredentials(username, password string) error {

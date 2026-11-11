@@ -30,25 +30,24 @@ export function RegistrySourceModal({source, onClose, onSaved}: {
     onSaved: (source: RegistrySource) => void;
 }) {
     const {t} = useTranslation();
-    const [name, setName] = useState(source?.name ?? '');
     const [url, setUrl] = useState(source?.url ?? '');
-    const [agentRepository, setAgentRepository] = useState(source?.agentRepository ?? '');
-    const [providerRepository, setProviderRepository] = useState(source?.providerRepository ?? '');
+    const [type, setType] = useState(source?.type ?? 'agent');
     const [username, setUsername] = useState(source?.username ?? '');
     const [password, setPassword] = useState('');
     const [plainHttp, setPlainHttp] = useState(source?.plainHttp ?? false);
     const [saving, setSaving] = useState(false);
+    const isOCI = url.trim().startsWith('oci://');
 
     const save = async () => {
-        if (!name.trim() || !url.trim()) {
+        if (!url.trim()) {
             toast.error(t('servers.registryFieldsRequired'));
             return;
         }
         setSaving(true);
         try {
             const input = {
-                name: name.trim(), url: url.trim(), agentRepository: agentRepository.trim(),
-                providerRepository: providerRepository.trim(), username: username.trim(), password, plainHttp,
+                url: url.trim(), type, username: isOCI ? username.trim() : '',
+                password: isOCI ? password : '', plainHttp: isOCI && plainHttp,
             };
             const saved = source
                 ? await updateRegistrySource(source.id, input)
@@ -64,34 +63,32 @@ export function RegistrySourceModal({source, onClose, onSaved}: {
     return (
         <Modal title={source ? t('servers.editRegistryTitle') : t('servers.addRegistryTitle')} onClose={onClose} loading={saving}>
             <div className="space-y-4">
-                <FormField label={t('servers.sourceName')}>
-                    <input value={name} onChange={event => setName(event.target.value)} disabled={saving} className={inputs.primary} placeholder="Private OCI" />
-                </FormField>
                 <FormField label={t('servers.registryAddress')}>
-                    <input value={url} onChange={event => setUrl(event.target.value)} disabled={saving} className={cn(inputs.primary, 'font-mono text-xs')} placeholder="oci://registry.example:5000" />
+                    <input value={url} onChange={event => setUrl(event.target.value)} disabled={saving} className={cn(inputs.primary, 'font-mono text-xs')} placeholder={type === 'agent' ? 'oci://ghcr.io/ks-tool/vpn-agent' : 'oci://ghcr.io/ks-tool/vpn-providers'} />
                 </FormField>
-                <FormField label={t('servers.agentRepository')}>
-                    <input value={agentRepository} onChange={event => setAgentRepository(event.target.value)} disabled={saving} className={cn(inputs.primary, 'font-mono text-xs')} placeholder="oci://ghcr.io/ks-tool/vpn-agent" />
+                <FormField label={t('servers.sourceType')}>
+                    <select value={type} onChange={event => setType(event.target.value)} disabled={saving} className={inputs.primary}>
+                        <option value="agent">{t('servers.sourceTypeAgent')}</option>
+                        <option value="provider">{t('servers.sourceTypeProvider')}</option>
+                    </select>
                 </FormField>
-                <FormField label={t('servers.providerCatalog')}>
+                {isOCI && (
                     <>
-                        <input value={providerRepository} onChange={event => setProviderRepository(event.target.value)} disabled={saving} className={cn(inputs.primary, 'font-mono text-xs')} placeholder="oci://ghcr.io/ks-tool/vpn-providers" />
-                        <p className="text-xs text-muted-foreground">{t('settings.repositoryDefaultsHint')}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <FormField label={t('servers.registryUsername')}>
+                                <input value={username} onChange={event => setUsername(event.target.value)} disabled={saving} className={inputs.primary} autoComplete="username" />
+                            </FormField>
+                            <FormField label={t('servers.registryPassword')}>
+                                <input type="password" value={password} onChange={event => setPassword(event.target.value)} disabled={saving} className={inputs.primary} autoComplete="new-password" placeholder={source?.hasPassword ? t('servers.registryPasswordUnchanged') : ''} />
+                            </FormField>
+                        </div>
+                        <label className="flex items-center gap-3 text-sm">
+                            <input type="checkbox" checked={plainHttp} onChange={event => setPlainHttp(event.target.checked)} disabled={saving} />
+                            {t('servers.registryPlainHttp')}
+                        </label>
                     </>
-                </FormField>
-                <div className="grid grid-cols-2 gap-3">
-                    <FormField label={t('servers.registryUsername')}>
-                        <input value={username} onChange={event => setUsername(event.target.value)} disabled={saving} className={inputs.primary} autoComplete="username" />
-                    </FormField>
-                    <FormField label={t('servers.registryPassword')}>
-                        <input type="password" value={password} onChange={event => setPassword(event.target.value)} disabled={saving} className={inputs.primary} autoComplete="new-password" placeholder={source?.hasPassword ? t('servers.registryPasswordUnchanged') : ''} />
-                    </FormField>
-                </div>
-                <label className="flex items-center gap-3 text-sm">
-                    <input type="checkbox" checked={plainHttp} onChange={event => setPlainHttp(event.target.checked)} disabled={saving} />
-                    {t('servers.registryPlainHttp')}
-                </label>
-                <p className="text-xs text-muted-foreground">{t('servers.registryHint')}</p>
+                )}
+                <p className="text-xs text-muted-foreground">{t(!url.trim() || isOCI ? 'servers.registryHint' : 'servers.localRegistrySourceHint')}</p>
                 <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={onClose} disabled={saving} className={buttons.secondary}>{t('common.cancel')}</button>
                     <button type="button" onClick={() => void save()} disabled={saving} className={buttons.primary}>{saving ? t('common.saving') : t('common.save')}</button>

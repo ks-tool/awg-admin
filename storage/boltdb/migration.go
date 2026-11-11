@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 	"uuid"
 
@@ -95,20 +96,75 @@ func initializeSchema(tx *bolt.Tx) error {
 			return err
 		}
 	}
+	if err := migrateRegistrySourceRecords(tx); err != nil {
+		return err
+	}
 	meta := tx.Bucket(bktMeta)
 	if meta.Get(registrySourcesInitializeKey) == nil {
-		source := &models.RegistrySource{
-			ID: uuid.New(), Name: "GitHub Container Registry", URL: "oci://ghcr.io",
-			AgentRepository: "oci://ghcr.io/ks-tool/vpn-agent", ProviderRepository: "oci://ghcr.io/ks-tool/vpn-providers",
+		sources := []*models.RegistrySource{
+			{ID: uuid.New(), URL: "oci://ghcr.io/ks-tool/vpn-agent", Type: models.RegistrySourceAgent},
+			{ID: uuid.New(), URL: "oci://ghcr.io/ks-tool/vpn-providers", Type: models.RegistrySourceProvider},
 		}
-		if err := put(tx.Bucket(bktRegistrySources), idKey(source.ID), source); err != nil {
-			return err
+		for _, source := range sources {
+			if err := put(tx.Bucket(bktRegistrySources), idKey(source.ID), source); err != nil {
+				return err
+			}
 		}
 		if err := meta.Put(registrySourcesInitializeKey, []byte("1")); err != nil {
 			return err
 		}
 	}
 	return meta.Put(schemaVersionKey, []byte(strconv.Itoa(currentSchemaVersion)))
+}
+
+func migrateRegistrySourceRecords(tx *bolt.Tx) error {
+	type legacySource struct {
+		ID                 uuid.UUID `json:"id"`
+		URL                string    `json:"url"`
+		Type               string    `json:"type"`
+		AgentRepository    string    `json:"agentRepository"`
+		ProviderRepository string    `json:"providerRepository"`
+		Username           string    `json:"username"`
+		Password           string    `json:"password"`
+		PlainHTTP          bool      `json:"plainHttp"`
+	}
+	bucket := tx.Bucket(bktRegistrySources)
+	return bucket.ForEach(func(key, value []byte) error {
+		if value == nil {
+			return nil
+		}
+		var legacy legacySource
+		if err := json.Unmarshal(value, &legacy); err != nil {
+			return err
+		}
+		if legacy.Type == models.RegistrySourceAgent || legacy.Type == models.RegistrySourceProvider {
+			return nil
+		}
+		agentRepository := legacy.AgentRepository
+		providerRepository := legacy.ProviderRepository
+		if len(agentRepository) == 0 {
+			agentRepository = "oci://ghcr.io/ks-tool/vpn-agent"
+			if legacy.URL != "oci://ghcr.io" {
+				agentRepository = strings.TrimSuffix(legacy.URL, "/") + "/ks-tool/vpn-agent"
+			}
+		}
+		if len(providerRepository) == 0 {
+			providerRepository = "oci://ghcr.io/ks-tool/vpn-providers"
+			if legacy.URL != "oci://ghcr.io" {
+				providerRepository = strings.TrimSuffix(legacy.URL, "/") + "/vpn-providers"
+			}
+		}
+		sources := []*models.RegistrySource{
+			{ID: legacy.ID, URL: agentRepository, Type: models.RegistrySourceAgent, Username: legacy.Username, Password: legacy.Password, PlainHTTP: legacy.PlainHTTP},
+			{ID: uuid.New(), URL: providerRepository, Type: models.RegistrySourceProvider, Username: legacy.Username, Password: legacy.Password, PlainHTTP: legacy.PlainHTTP},
+		}
+		for _, source := range sources {
+			if err := put(bucket, idKey(source.ID), source); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func MigrateV2(sourcePath, destinationPath string, force bool) error {

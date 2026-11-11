@@ -41,6 +41,55 @@ type legacyFixture struct {
 	user    uuid.UUID
 }
 
+func TestLegacyRegistrySourceSplitsIntoAgentAndProvider(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := bolt.Open(path, 0o600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.New()
+	err = raw.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(bktRegistrySources)
+		if err := bucket.ForEach(func(key, value []byte) error { return bucket.Delete(key) }); err != nil {
+			return err
+		}
+		return put(bucket, idKey(id), map[string]any{
+			"id": id, "name": "Private", "url": "oci://registry.example:5000",
+			"agentRepository":    "oci://registry.example:5000/team/agent",
+			"providerRepository": "oci://registry.example:5000/team/providers",
+			"username":           "reader", "password": "secret", "plainHttp": true,
+		})
+	})
+	if closeErr := raw.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	sources, err := db.RegistrySources().List()
+	if err != nil || len(sources) != 2 {
+		t.Fatalf("sources = %+v, %v", sources, err)
+	}
+	if sources[0].ID != id || sources[0].Type != models.RegistrySourceAgent || sources[0].URL != "oci://registry.example:5000/team/agent" || sources[0].Password != "secret" {
+		t.Fatalf("agent source = %+v", sources[0])
+	}
+	if sources[1].Type != models.RegistrySourceProvider || sources[1].URL != "oci://registry.example:5000/team/providers" || !sources[1].PlainHTTP {
+		t.Fatalf("provider source = %+v", sources[1])
+	}
+}
+
 func TestManualMigrationPreservesSourceAndMarksServersUnmanaged(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "legacy.db")
@@ -87,11 +136,13 @@ func TestManualMigrationPreservesSourceAndMarksServersUnmanaged(t *testing.T) {
 		t.Fatalf("auth changed: %+v, %v", auth, err)
 	}
 	registrySources, err := db.RegistrySources().List()
-	if err != nil || len(registrySources) != 1 || registrySources[0].URL != "oci://ghcr.io" || registrySources[0].AgentRepository != "oci://ghcr.io/ks-tool/vpn-agent" || registrySources[0].ProviderRepository != "oci://ghcr.io/ks-tool/vpn-providers" {
-		t.Fatalf("default OCI registry was not initialized during migration: %+v, %v", registrySources, err)
+	if err != nil || len(registrySources) != 2 || registrySources[0].URL != "oci://ghcr.io/ks-tool/vpn-agent" || registrySources[0].Type != models.RegistrySourceAgent || registrySources[1].URL != "oci://ghcr.io/ks-tool/vpn-providers" || registrySources[1].Type != models.RegistrySourceProvider {
+		t.Fatalf("default OCI sources were not initialized during migration: %+v, %v", registrySources, err)
 	}
-	if err := db.RegistrySources().Delete(registrySources[0].ID); err != nil {
-		t.Fatal(err)
+	for _, source := range registrySources {
+		if err := db.RegistrySources().Delete(source.ID); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	resourcesA, err := db.Resources(fixture.serverA).List()

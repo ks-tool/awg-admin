@@ -300,25 +300,26 @@ service plugin's **Apply**.
 
 ### OCI registries and local binaries
 
-**Settings → Agent and provider sources** manages OCI sources. Each source stores a name, host:port, full agent repository,
-provider catalog prefix, username/password and plain HTTP option. The password is stored in BoltDB, omitted from list/get API
-responses and never shown again in the form; an empty password field during editing preserves the old password. HTTPS is the
-default; enable plain HTTP only on a trusted network.
+**Settings → Agent and provider sources** defines each source with one URL and the **Agent** or **Provider** type. An agent
+source is a full OCI repository such as `oci://ghcr.io/ks-tool/vpn-agent`, or an absolute path to a local `vpn-agent` binary.
+A provider source is an OCI catalog prefix such as `oci://ghcr.io/ks-tool/vpn-providers`. In standalone mode, local paths refer
+to the admin server, not the computer running the browser. OCI sources can also store a username/password and enable plain
+HTTP. The password is stored in BoltDB, omitted from list/get API responses and never shown again in the form; an empty password
+field during editing preserves the old password. HTTPS is the default; enable plain HTTP only on a trusted network.
 
-The first database initialization adds `GitHub Container Registry — oci://ghcr.io` with `oci://ghcr.io/ks-tool/vpn-agent` and
-`oci://ghcr.io/ks-tool/vpn-providers`. This is a one-time operation controlled by a `meta` marker, including during v1→v2
-migration: a deleted source is not recreated.
+The first database initialization adds two independent sources: `oci://ghcr.io/ks-tool/vpn-agent` with the **Agent** type and
+`oci://ghcr.io/ks-tool/vpn-providers` with the **Provider** type. This is a one-time operation controlled by a `meta` marker,
+including during v1→v2 migration: a deleted source is not recreated. Records in the previous format are automatically split
+into agent and provider sources.
 
-**Deploy agent** in **Manage panel → Agent** opens a modal for selecting a configured source and version. It shows the 10 newest
-tags in descending semver order. **Local binary** is also available: desktop provides a file dialog, while in standalone the
-path refers to the admin server, not the computer running the browser.
+**Deploy agent** in **Manage panel → Agent** opens a modal with a drop-down list of **Agent** sources. OCI sources show the 10
+newest tags in descending semver order. A local source needs no version: its saved binary is uploaded through self-deploy.
 
 ### Independent provider installation
 
-Install the agent first. Then click **+** under **Installed providers** and use the same modal to select a source, provider and
-one of the 10 newest versions. For official GHCR, providers are discovered from `providers/<name>/v*` release tags in
-`ks-tool/vpn-agent`; a private registry must support OCI `_catalog` for automatic listing. If the catalog is unavailable, enter
-the provider name manually and load its repository tags.
+Install the agent first. Then click **+** under **Installed providers** and use the drop-down lists to select a source, provider
+and one of the 10 newest versions. For official GHCR, providers are discovered from `providers/<name>/v*` release tags in
+`ks-tool/vpn-agent`; a private registry must support OCI `_catalog` for automatic listing.
 
 Each provider is installed by its own `pack apply`, independently of the agent. AWG exposes the provider-specific option
 `{"userspace": true}`; the core does not impose this option on other providers. The **−** button removes a provider registration

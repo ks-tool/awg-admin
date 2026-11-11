@@ -320,16 +320,14 @@ export interface Registry {
   plainHttp?: boolean;
 }
 /**
- * RegistrySource is a reusable OCI registry and its artifact repositories.
- * Password is stored in the admin database, but list and get responses clear
- * it and expose HasPassword.
+ * RegistrySource is a reusable agent OCI repository, provider OCI catalog or
+ * local agent binary. Password is stored in the admin database, but list and
+ * get responses clear it and expose HasPassword.
  */
 export interface RegistrySource {
   id: string;
-  name: string;
   url: string;
-  agentRepository: string;
-  providerRepository: string;
+  type: string;
   username?: string;
   password?: string;
   hasPassword?: boolean;

@@ -80,26 +80,26 @@ func TestRegistrySourceLifecycleKeepsPasswordOutOfList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(initialized) != 1 || initialized[0].AgentRepository != officialAgentRepository || initialized[0].ProviderRepository != officialProviderRepository {
-		t.Fatalf("default source repositories = %#v", initialized)
+	if len(initialized) != 2 || initialized[0].URL != officialAgentRepository || initialized[0].Type != models.RegistrySourceAgent || initialized[1].URL != officialProviderRepository || initialized[1].Type != models.RegistrySourceProvider {
+		t.Fatalf("default sources = %#v", initialized)
 	}
 	for _, source := range initialized {
 		if err := svc.DeleteRegistrySource(source.ID.String()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	source, err := svc.CreateRegistrySource("private", "registry.example:5000/", "oci://registry.example:5000/team/agent", "oci://registry.example:5000/team/providers", "reader", "secret", true)
+	source, err := svc.CreateRegistrySource("oci://registry.example:5000/team/agent/", models.RegistrySourceAgent, "reader", "secret", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if source.URL != "oci://registry.example:5000" || source.AgentRepository != "oci://registry.example:5000/team/agent" || source.ProviderRepository != "oci://registry.example:5000/team/providers" || !source.HasPassword || source.Password != "" {
+	if source.URL != "oci://registry.example:5000/team/agent" || source.Type != models.RegistrySourceAgent || !source.HasPassword || source.Password != "" {
 		t.Fatalf("created source = %#v", source)
 	}
 	list, err := svc.ListRegistrySources()
 	if err != nil || len(list) != 1 || list[0].Password != "" || !list[0].HasPassword {
 		t.Fatalf("sources = %#v, %v", list, err)
 	}
-	updated, err := svc.UpdateRegistrySource(source.ID.String(), "private", source.URL, source.AgentRepository, source.ProviderRepository, "reader", "", false)
+	updated, err := svc.UpdateRegistrySource(source.ID.String(), source.URL, source.Type, "reader", "", false)
 	if err != nil || !updated.HasPassword || updated.PlainHTTP {
 		t.Fatalf("updated source = %#v, %v", updated, err)
 	}
@@ -107,11 +107,25 @@ func TestRegistrySourceLifecycleKeepsPasswordOutOfList(t *testing.T) {
 	if err != nil || resolved.Password != "secret" || resolved.PlainHTTP {
 		t.Fatalf("resolved registry = %#v, %v", resolved, err)
 	}
-	cleared, err := svc.UpdateRegistrySource(source.ID.String(), "private", source.URL, source.AgentRepository, source.ProviderRepository, "", "", false)
+	cleared, err := svc.UpdateRegistrySource(source.ID.String(), source.URL, source.Type, "", "", false)
 	if err != nil || cleared.HasPassword {
 		t.Fatalf("cleared source = %#v, %v", cleared, err)
 	}
 	if err := svc.DeleteRegistrySource(source.ID.String()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRegistrySourceAcceptsLocalAgentBinaryOnly(t *testing.T) {
+	svc := newTestService(t)
+	source, err := svc.CreateRegistrySource("/opt/vpn-agent", models.RegistrySourceAgent, "", "", false)
+	if err != nil || source.URL != "/opt/vpn-agent" {
+		t.Fatalf("local source = %#v, %v", source, err)
+	}
+	if _, err := svc.CreateRegistrySource("relative/vpn-agent", models.RegistrySourceAgent, "", "", false); err == nil {
+		t.Fatal("relative local path was accepted")
+	}
+	if _, err := svc.CreateRegistrySource("/opt/provider", models.RegistrySourceProvider, "", "", false); err == nil {
+		t.Fatal("local provider source was accepted")
 	}
 }

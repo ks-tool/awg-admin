@@ -30,7 +30,12 @@ type registrySources struct {
 
 func (r *registrySources) List() ([]models.RegistrySource, error) {
 	sources, err := list[models.RegistrySource](r.db, bktRegistrySources)
-	sort.Slice(sources, func(i, j int) bool { return sources[i].Name < sources[j].Name })
+	sort.Slice(sources, func(i, j int) bool {
+		if sources[i].Type == sources[j].Type {
+			return sources[i].URL < sources[j].URL
+		}
+		return sources[i].Type < sources[j].Type
+	})
 	return sources, err
 }
 
