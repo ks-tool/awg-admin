@@ -39,10 +39,11 @@ WantedBy=multi-user.target
 `
 
 type Config struct {
-	Artifact string            `json:"artifact" jsonschema:"required,format=uri"`
-	Env      map[string]string `json:"env,omitempty"`
-	TLS      TLS               `json:"tls,omitempty"`
-	Unit     string            `json:"unit"`
+	Artifact   string            `json:"artifact,omitempty" jsonschema:"format=uri"`
+	Env        map[string]string `json:"env,omitempty"`
+	TLS        TLS               `json:"tls,omitempty"`
+	Unit       string            `json:"unit"`
+	SelfDeploy bool              `json:"-"`
 }
 
 type TLS struct {
@@ -65,7 +66,12 @@ func (*Config) Meta() sdk.Meta {
 	return sdk.Meta{Name: "vpn-agent", Version: "2.0.0", Description: "VPN agent for external providers", License: "Apache-2.0"}
 }
 
-func (*Config) PackRoot() packschema.Root {
+func (c *Config) PackRoot() packschema.Root {
+	binary := packschema.File{Path: "/usr/local/bin/vpn-agent", URL: "{{ .artifact }}", Mode: "0755"}
+	if c.SelfDeploy {
+		binary.URL = ""
+		binary.Source = "vpn-agent"
+	}
 	return packschema.Root{
 		Ports:     map[string]int{"agent": 8080},
 		Data:      map[string]packschema.Volume{"state": {MountPath: "/var/lib/vpn-agent", Size: "100Mi"}},
@@ -91,7 +97,7 @@ fi`},
 			"debian": {
 				Prepare: []string{"ca-certificates"},
 				Content: []packschema.File{
-					{Path: "/usr/local/bin/vpn-agent", URL: "{{ .artifact }}", Mode: "0755"},
+					binary,
 					{Path: "/etc/systemd/system/vpn-agent.service", Values: "unit", Format: "text", Mode: "0644"},
 					{Path: "/etc/vpn-agent/vpn-agent.env", Values: "env", Format: "env", Mode: "0600"},
 					{Path: "/etc/vpn-agent/ca.pem", Values: "tls/ca", Format: "text", Mode: "0600"},

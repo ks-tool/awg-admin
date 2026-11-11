@@ -31,6 +31,7 @@ type Storage interface {
 	Servers() Servers
 	Auth() Auth
 	AgentSources() AgentSources
+	RegistrySources() RegistrySources
 	Topology() Topology
 	Resources(serverID uuid.UUID) Resources
 	Links() Links
@@ -46,6 +47,15 @@ type AgentSources interface {
 	List() ([]models.AgentSource, error)
 	Get(id uuid.UUID) (*models.AgentSource, error)
 	Set(src *models.AgentSource) error
+	Delete(id uuid.UUID) error
+}
+
+// RegistrySources holds reusable private OCI registry connections shared by
+// agent and provider deployment.
+type RegistrySources interface {
+	List() ([]models.RegistrySource, error)
+	Get(id uuid.UUID) (*models.RegistrySource, error)
+	Set(src *models.RegistrySource) error
 	Delete(id uuid.UUID) error
 }
 

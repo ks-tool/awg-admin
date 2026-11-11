@@ -66,6 +66,15 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 
 	protected.GET("/backup", h.backupDownload)
 	protected.GET("/version", h.appVersion)
+	protected.POST("/artifacts/tags", h.artifactTagList)
+	protected.POST("/artifacts/providers", h.artifactProviderList)
+
+	protected.WithGroup("/registry-sources", func(gr *bunrouter.Group) {
+		gr.POST("", h.registrySourceCreate)
+		gr.GET("/", h.registrySourceList)
+		gr.PUT("/:sourceID", h.registrySourceUpdate)
+		gr.DELETE("/:sourceID", h.registrySourceDelete)
+	})
 
 	protected.WithGroup("/topology", func(gr *bunrouter.Group) {
 		gr.GET("", h.topologyGet)
@@ -146,6 +155,7 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 			gr.POST("/deploy", h.serverDeployAgent)
 			gr.POST("/deploy/pack", h.serverDeployAgentPack)
 			gr.POST("/deploy/provider", h.serverDeployProvider)
+			gr.DELETE("/deploy/providers/:provider", h.serverRemoveProvider)
 			gr.GET("/deploy/status", h.serverDeployStatus)
 			gr.POST("/sync", h.serverSync)
 			gr.GET("/reconcile", h.serverReconcile)

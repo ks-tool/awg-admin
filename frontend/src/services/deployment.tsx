@@ -15,10 +15,11 @@
 */
 
 import * as AppBindings from '../../wailsjs/go/main/App';
-import {get, post} from './api';
+import {get, post, remove} from './api';
 import {getCurrentApiMode} from './apiMode';
+import {bindingsClient} from './bindingsClient';
 import {throwIfPassphraseRequired, throwIfSudoPasswordRequired} from './sshErrors';
-import type {DeployStatus, ProviderDeployment} from '@/types';
+import type {AgentDeployment, DeployStatus, ProviderDeployment, Registry} from '@/types';
 
 const isDesktop = () => getCurrentApiMode() === 'bindings';
 
@@ -42,26 +43,31 @@ function unwrap<T>(response: {data: T; error?: string}): T {
     return response.data;
 }
 
-export async function deployAgentPack(serverId: string, agentArtifact: string): Promise<void> {
+export async function deployAgentPack(serverId: string, deployment: AgentDeployment): Promise<void> {
     if (isDesktop()) {
-        await binding(() => AppBindings.DeployAgentPack(serverId, agentArtifact));
+        await binding(() => AppBindings.DeployAgentPack(serverId, deployment as never));
         return;
     }
-    unwrap(await post<void, {agentArtifact: string}>(
-        `/servers/${encodeURIComponent(serverId)}/deploy/pack`,
-        {agentArtifact},
+    unwrap(await post<void, AgentDeployment>(`/servers/${encodeURIComponent(serverId)}/deploy/pack`, deployment));
+}
+
+export async function deployProvider(serverId: string, provider: ProviderDeployment, registry: Registry): Promise<void> {
+    if (isDesktop()) {
+        await binding(() => AppBindings.DeployProvider(serverId, provider, registry as never));
+        return;
+    }
+    unwrap(await post<void, ProviderDeployment & {registry: Registry}>(
+        `/servers/${encodeURIComponent(serverId)}/deploy/provider`,
+        {...provider, registry},
     ));
 }
 
-export async function deployProvider(serverId: string, provider: ProviderDeployment): Promise<void> {
+export async function removeProvider(serverId: string, provider: string): Promise<void> {
     if (isDesktop()) {
-        await binding(() => AppBindings.DeployProvider(serverId, provider));
+        await binding(() => AppBindings.RemoveProvider(serverId, provider));
         return;
     }
-    unwrap(await post<void, ProviderDeployment>(
-        `/servers/${encodeURIComponent(serverId)}/deploy/provider`,
-        provider,
-    ));
+    unwrap(await remove<void>(`/servers/${encodeURIComponent(serverId)}/deploy/providers/${encodeURIComponent(provider)}`));
 }
 
 export async function getDeployStatus(serverId: string): Promise<DeployStatus> {
@@ -77,4 +83,11 @@ export async function unlockServerSudo(serverId: string, password: string): Prom
         return;
     }
     unwrap(await post<void, typeof body>(`/servers/${encodeURIComponent(serverId)}/sudo/unlock`, body));
+}
+
+export async function selectAgentFile(title: string): Promise<string> {
+    if (!isDesktop()) return '';
+    const response = await bindingsClient.selectFile(title);
+    if (response.error) throw new Error(response.error);
+    return response.data;
 }

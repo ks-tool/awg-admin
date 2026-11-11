@@ -152,13 +152,11 @@ func (h *Handler) serverDeployAgentPack(w http.ResponseWriter, r bunrouter.Reque
 	}
 	fields["server_id"] = sID
 
-	var req struct {
-		AgentArtifact string `json:"agentArtifact"`
-	}
+	var req models.AgentDeployment
 	if err := decode(r, &req); err != nil {
 		return badRequest(err)
 	}
-	if err := h.svc.DeployAgentPack(sID, req.AgentArtifact); err != nil {
+	if err := h.svc.DeployAgentPack(sID, req); err != nil {
 		return handleErr(err, fields)
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -173,12 +171,27 @@ func (h *Handler) serverDeployProvider(w http.ResponseWriter, r bunrouter.Reques
 	}
 	fields["server_id"] = sID
 
-	var req models.ProviderDeployment
+	var req struct {
+		models.ProviderDeployment
+		Registry models.Registry `json:"registry"`
+	}
 	if err := decode(r, &req); err != nil {
 		return badRequest(err)
 	}
-	if err := h.svc.DeployProvider(sID, req); err != nil {
+	if err := h.svc.DeployProvider(sID, req.ProviderDeployment, req.Registry); err != nil {
 		return handleErr(err, fields)
+	}
+	w.WriteHeader(http.StatusAccepted)
+	return nil
+}
+
+func (h *Handler) serverRemoveProvider(w http.ResponseWriter, r bunrouter.Request) error {
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	if err := h.svc.RemoveProvider(sID, r.Param("provider")); err != nil {
+		return handleErr(err, map[string]any{"method": r.Method, "path": r.URL.Path, "server_id": sID})
 	}
 	w.WriteHeader(http.StatusAccepted)
 	return nil

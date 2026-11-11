@@ -232,3 +232,64 @@ func TestSyncFirewallUsesDedicatedPack(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestApplyPackSelfDeploysLocalAgentBinary(t *testing.T) {
+	original := embeddedPackApply
+	t.Cleanup(func() { embeddedPackApply = original })
+	binary := []byte{'b', 'i', 'n', 0, 'a', 'r', 'y'}
+	path := filepath.Join(t.TempDir(), "vpn-agent")
+	if err := os.WriteFile(path, binary, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
+		deployed, err := os.ReadFile(filepath.Join(options.Dir, "packs", "vpn-agent", "templates", "vpn-agent"))
+		if err != nil || string(deployed) != string(binary) {
+			t.Fatalf("local binary = %q, %v", deployed, err)
+		}
+		var values struct {
+			Values map[string]any `json:"values"`
+		}
+		readPackTestJSON(t, filepath.Join(options.Dir, "values.yaml"), &values)
+		if _, ok := values.Values["artifact"]; ok {
+			t.Fatalf("self-deploy must not use an artifact URL: %#v", values)
+		}
+		return nil
+	}
+	srv := models.Server{SSH: models.SSHConfig{Host: "192.0.2.1", Key: "/tmp/id"}}
+	values, _, err := agentPackValues(srv, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := packRelease{
+		name: "vpn-agent", step: "agent", binary: "vpn-agent", localBinary: path,
+		pack: &vpnagentpack.Config{SelfDeploy: true}, values: values,
+	}
+	if err := applyPack(context.Background(), srv, item, "", "", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestApplyPackUsesPrivateRegistrySettings(t *testing.T) {
+	original := embeddedPackApply
+	t.Cleanup(func() { embeddedPackApply = original })
+	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
+		if options.Env["VPN_ADMIN_OCI_USERNAME"] != "reader" || options.Env["VPN_ADMIN_OCI_PASSWORD"] != "secret" {
+			t.Fatalf("registry credentials were not passed to pack: %#v", options.Env)
+		}
+		var env map[string]any
+		readPackTestJSON(t, filepath.Join(options.Dir, "env.yaml"), &env)
+		if env["mirror_plain_http"] != true || env["mirror_username_env"] != "VPN_ADMIN_OCI_USERNAME" || env["mirror_password_env"] != "VPN_ADMIN_OCI_PASSWORD" {
+			t.Fatalf("unexpected registry environment: %#v", env)
+		}
+		return nil
+	}
+	srv := models.Server{SSH: models.SSHConfig{Host: "192.0.2.1", Key: "/tmp/id"}}
+	item := packRelease{
+		name: "vpn-agent", step: "agent", binary: "vpn-agent", pack: &vpnagentpack.Config{},
+		values:   map[string]any{"artifact": "oci://registry.example/team/vpn-agent:v1"},
+		registry: models.Registry{Username: "reader", Password: "secret", PlainHTTP: true},
+	}
+	if err := applyPack(context.Background(), srv, item, "", "", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+}

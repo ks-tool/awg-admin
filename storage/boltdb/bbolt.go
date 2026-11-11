@@ -35,16 +35,18 @@ const (
 	interfacesBucketName   = "interfaces"
 	authBucketName         = "auth"
 	agentSourcesBucketName = "agent_sources"
+	registrySourcesBucket  = "registry_sources"
 	topologyBucketName     = "topology"
 )
 
 var (
-	bktServers      = []byte(serversBucketName)
-	bktInterfaces   = []byte(interfacesBucketName)
-	bktUsers        = []byte(usersBucketName)
-	bktAuth         = []byte(authBucketName)
-	bktAgentSources = []byte(agentSourcesBucketName)
-	bktTopology     = []byte(topologyBucketName)
+	bktServers         = []byte(serversBucketName)
+	bktInterfaces      = []byte(interfacesBucketName)
+	bktUsers           = []byte(usersBucketName)
+	bktAuth            = []byte(authBucketName)
+	bktAgentSources    = []byte(agentSourcesBucketName)
+	bktRegistrySources = []byte(registrySourcesBucket)
+	bktTopology        = []byte(topologyBucketName)
 )
 
 // authRecordKey is the auth bucket's one and only key — there's a single
@@ -82,6 +84,9 @@ func (db *BoltDB) Users() storage.Users               { return &users{db.db} }
 func (db *BoltDB) Servers() storage.Servers           { return &servers{db: db.db} }
 func (db *BoltDB) Auth() storage.Auth                 { return &auth{db: db.db} }
 func (db *BoltDB) AgentSources() storage.AgentSources { return &agentSources{db: db.db} }
+func (db *BoltDB) RegistrySources() storage.RegistrySources {
+	return &registrySources{db: db.db}
+}
 
 // ─────────────────────────────── helpers ───────────────────────────────────
 

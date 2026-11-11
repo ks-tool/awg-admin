@@ -307,6 +307,55 @@ export interface ImportPreviewHooks {
 }
 
 //////////
+// source: registry.go
+
+/**
+ * Registry contains per-deployment OCI registry settings. SourceID selects a
+ * saved registry; inline credentials are supported for one-off operations.
+ */
+export interface Registry {
+  sourceId?: string;
+  username?: string;
+  password?: string;
+  plainHttp?: boolean;
+}
+/**
+ * RegistrySource is a reusable private OCI registry. Password is stored in the
+ * admin database, but list and get responses clear it and expose HasPassword.
+ */
+export interface RegistrySource {
+  id: string;
+  name: string;
+  url: string;
+  username?: string;
+  password?: string;
+  hasPassword?: boolean;
+  plainHttp?: boolean;
+}
+/**
+ * RegistryRequest identifies an untagged OCI repository or repository prefix.
+ */
+export interface RegistryRequest {
+  repository: string;
+  registry?: Registry;
+}
+/**
+ * AgentDeployment selects either an OCI release or a local vpn-agent binary.
+ */
+export interface AgentDeployment {
+  artifact?: string;
+  binaryPath?: string;
+  registry?: Registry;
+}
+/**
+ * ProviderRepository is a provider found under an OCI repository prefix.
+ */
+export interface ProviderRepository {
+  name: string;
+  repository: string;
+}
+
+//////////
 // source: server.go
 
 export interface Server {

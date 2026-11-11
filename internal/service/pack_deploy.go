@@ -19,6 +19,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/deploy"
@@ -27,7 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (s *Service) DeployAgentPack(id, agentArtifact string) error {
+func (s *Service) DeployAgentPack(id string, deployment models.AgentDeployment) error {
 	debugOp("DeployAgentPack").Str("server_id", id).Msg("deploying agent")
 	sID, err := uuid.Parse(id)
 	if err != nil {
@@ -37,15 +39,31 @@ func (s *Service) DeployAgentPack(id, agentArtifact string) error {
 	if err != nil {
 		return err
 	}
-	if agentArtifact == "" {
+	if len(deployment.Artifact) == 0 && len(deployment.BinaryPath) == 0 {
 		defaults := &vpnagentpack.Config{}
 		defaults.SetDefaults()
-		agentArtifact = defaults.Artifact
+		deployment.Artifact = defaults.Artifact
+	}
+	if (len(deployment.Artifact) == 0) == (len(deployment.BinaryPath) == 0) {
+		return errors.New("select exactly one agent OCI artifact or local binary")
+	}
+	if len(deployment.BinaryPath) > 0 {
+		info, err := os.Stat(deployment.BinaryPath)
+		if err != nil {
+			return fmt.Errorf("read local agent binary: %w", err)
+		}
+		if !info.Mode().IsRegular() || info.Size() == 0 {
+			return errors.New("local agent binary must be a non-empty regular file")
+		}
+	}
+	deployment.Registry, err = s.resolveRegistry(deployment.Registry)
+	if err != nil {
+		return err
 	}
 
 	s.deployStatus.start(sID)
 	go func() {
-		err := deploy.ToPack(context.Background(), *srv, agentArtifact, s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID), func(step string) {
+		err := deploy.ToPack(context.Background(), *srv, deployment, s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID), func(step string) {
 			s.deployStatus.setStep(sID, step)
 		})
 		s.deployStatus.finish(sID, err)
@@ -59,7 +77,7 @@ func (s *Service) DeployAgentPack(id, agentArtifact string) error {
 	return nil
 }
 
-func (s *Service) DeployProvider(id string, provider models.ProviderDeployment) error {
+func (s *Service) DeployProvider(id string, provider models.ProviderDeployment, registry models.Registry) error {
 	debugOp("DeployProvider").Str("server_id", id).Str("provider", provider.Name).Msg("deploying provider")
 	sID, err := uuid.Parse(id)
 	if err != nil {
@@ -69,14 +87,18 @@ func (s *Service) DeployProvider(id string, provider models.ProviderDeployment) 
 	if err != nil {
 		return err
 	}
-	if provider.Name == "" || provider.Artifact == "" {
+	if len(provider.Name) == 0 || len(provider.Artifact) == 0 {
 		return errors.New("provider name and OCI artifact are required")
+	}
+	registry, err = s.resolveRegistry(registry)
+	if err != nil {
+		return err
 	}
 
 	s.deployStatus.start(sID)
 	s.deployStatus.setStep(sID, "install_provider_"+provider.Name)
 	go func() {
-		err := deploy.ProviderToPack(context.Background(), *srv, provider, s.serverInterfaceNames(sID), s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID), func(step string) {
+		err := deploy.ProviderToPack(context.Background(), *srv, provider, registry, s.serverInterfaceNames(sID), s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID), func(step string) {
 			s.deployStatus.setStep(sID, step)
 		})
 		s.deployStatus.finish(sID, err)
@@ -86,6 +108,30 @@ func (s *Service) DeployProvider(id string, provider models.ProviderDeployment) 
 		s.markFirewallApplied(sID)
 		if err := s.SyncServer(id); err != nil {
 			log.Warn().Err(err).Str("server_id", id).Str("provider", provider.Name).Msg("failed to sync server after provider deployment")
+		}
+	}()
+	return nil
+}
+
+func (s *Service) RemoveProvider(id, name string) error {
+	debugOp("RemoveProvider").Str("server_id", id).Str("provider", name).Msg("removing provider")
+	sID, err := uuid.Parse(id)
+	if err != nil {
+		return err
+	}
+	srv, err := s.store.Servers().Get(sID)
+	if err != nil {
+		return err
+	}
+	s.deployStatus.start(sID)
+	s.deployStatus.setStep(sID, "remove_provider_"+name)
+	go func() {
+		err := deploy.RemoveProviderFromPack(context.Background(), *srv, name, s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID))
+		s.deployStatus.finish(sID, err)
+		if err == nil {
+			if err := s.SyncServer(id); err != nil {
+				log.Warn().Err(err).Str("server_id", id).Str("provider", name).Msg("failed to sync server after provider removal")
+			}
 		}
 	}()
 	return nil

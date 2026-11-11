@@ -82,7 +82,7 @@ func TestProviderToPackUsesProviderOwnedPack(t *testing.T) {
 		return nil
 	}
 	srv := models.Server{SSH: models.SSHConfig{Host: "192.0.2.1", User: "root", Key: "/tmp/id"}}
-	if err := ProviderToPack(context.Background(), srv, provider, []string{"awg0"}, "", "", nil); err != nil {
+	if err := ProviderToPack(context.Background(), srv, provider, models.Registry{}, []string{"awg0"}, "", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if called != 1 {

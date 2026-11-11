@@ -45,10 +45,12 @@ type packRelease struct {
 	name        string
 	step        string
 	binary      string
+	localBinary string
 	pack        sdk.Pack
 	values      map[string]any
 	credentials []render.Credential
 	firewall    []string
+	registry    models.Registry
 }
 
 type firewallPack struct{}
@@ -87,9 +89,10 @@ func SyncFirewall(ctx context.Context, srv models.Server, interfaceNames []strin
 }
 
 // ToPack installs only the agent. Providers are deployed separately through
-// ProviderToPack.
-func ToPack(ctx context.Context, srv models.Server, agentArtifact, passphrase, sudoPassword string, onStep func(string)) error {
-	agentValues, agentCredentials, err := agentPackValues(srv, agentArtifact)
+// ProviderToPack. A local binary is shipped as pack content; an OCI artifact is
+// downloaded by the host target through its registry proxy.
+func ToPack(ctx context.Context, srv models.Server, deployment models.AgentDeployment, passphrase, sudoPassword string, onStep func(string)) error {
+	agentValues, agentCredentials, err := agentPackValues(srv, deployment.Artifact)
 	if err != nil {
 		return err
 	}
@@ -100,8 +103,10 @@ func ToPack(ctx context.Context, srv models.Server, agentArtifact, passphrase, s
 	if onStep != nil {
 		onStep("install_agent")
 	}
+	agentPack := &vpnagentpack.Config{SelfDeploy: len(deployment.BinaryPath) > 0}
 	item := packRelease{
-		name: "vpn-agent", step: "agent", binary: "vpn-agent", pack: &vpnagentpack.Config{}, values: agentValues, credentials: agentCredentials,
+		name: "vpn-agent", step: "agent", binary: "vpn-agent", localBinary: deployment.BinaryPath,
+		pack: agentPack, values: agentValues, credentials: agentCredentials, registry: deployment.Registry,
 	}
 	if err := applyPack(ctx, srv, item, passphrase, sudoPassword, config.AdminCachePath(home)); err != nil {
 		return fmt.Errorf("install vpn-agent: %w", err)
@@ -109,7 +114,7 @@ func ToPack(ctx context.Context, srv models.Server, agentArtifact, passphrase, s
 	return nil
 }
 
-func ProviderToPack(ctx context.Context, srv models.Server, provider models.ProviderDeployment, interfaceNames []string, passphrase, sudoPassword string, onStep func(string)) error {
+func ProviderToPack(ctx context.Context, srv models.Server, provider models.ProviderDeployment, registry models.Registry, interfaceNames []string, passphrase, sudoPassword string, onStep func(string)) error {
 	var pack sdk.Pack
 	var values map[string]any
 	var err error
@@ -131,7 +136,7 @@ func ProviderToPack(ctx context.Context, srv models.Server, provider models.Prov
 	}
 	item := packRelease{
 		name: provider.Name, step: "provider_" + provider.Name, binary: pack.Meta().Name, pack: pack, values: values,
-		firewall: packFirewallRules(interfaceNames),
+		firewall: packFirewallRules(interfaceNames), registry: registry,
 	}
 	if err := applyPack(ctx, srv, item, passphrase, sudoPassword, config.AdminCachePath(home)); err != nil {
 		return fmt.Errorf("install %s provider: %w", provider.Name, err)
@@ -142,10 +147,10 @@ func ProviderToPack(ctx context.Context, srv models.Server, provider models.Prov
 var embeddedPackApply = packcmd.Apply
 
 func applyPack(ctx context.Context, srv models.Server, item packRelease, passphrase, sudoPassword, cache string) error {
-	if srv.SSH.Password != "" && srv.SSH.Key == "" && srv.SSH.KeyData == "" {
+	if len(srv.SSH.Password) > 0 && len(srv.SSH.Key) == 0 && len(srv.SSH.KeyData) == 0 {
 		return fmt.Errorf("pack host target requires SSH key authentication; password authentication is not supported")
 	}
-	if srv.SSH.User != "" && srv.SSH.User != "root" && sudoPassword != "" {
+	if len(srv.SSH.User) > 0 && srv.SSH.User != "root" && len(sudoPassword) > 0 {
 		return fmt.Errorf("pack host target requires passwordless sudo for a non-root SSH user")
 	}
 	root := filepath.Join(cache, "releases")
@@ -159,6 +164,16 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 	defer func() { _ = os.RemoveAll(dir) }()
 	if err := sdk.Generate(filepath.Join(dir, "packs"), item.pack); err != nil {
 		return err
+	}
+	if len(item.localBinary) > 0 {
+		binary, err := os.ReadFile(item.localBinary)
+		if err != nil {
+			return fmt.Errorf("read local agent binary: %w", err)
+		}
+		path := filepath.Join(dir, "packs", item.pack.Meta().Name, "templates", "vpn-agent")
+		if err := os.WriteFile(path, binary, 0o600); err != nil {
+			return fmt.Errorf("prepare local agent binary: %w", err)
+		}
 	}
 	if err := writePackJSON(filepath.Join(dir, "release.yaml"), map[string]any{
 		"pack": filepath.Join(dir, "packs", item.pack.Meta().Name),
@@ -180,7 +195,7 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 		}
 		values["artifact"] = artifactURL
 		registry = artifactRegistry
-	} else if item.binary != "" {
+	} else if len(item.binary) > 0 && len(item.localBinary) == 0 {
 		return fmt.Errorf("%s artifact is required", item.name)
 	}
 	if err := writePackJSON(filepath.Join(dir, "values.yaml"), map[string]any{"values": values}); err != nil {
@@ -194,13 +209,13 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 	if srv.SSH.Port != 0 {
 		host["port"] = strconv.FormatUint(uint64(srv.SSH.Port), 10)
 	}
-	if srv.SSH.KeyData != "" {
+	if len(srv.SSH.KeyData) > 0 {
 		identity := filepath.Join(dir, "ssh-identity")
 		if err := os.WriteFile(identity, []byte(srv.SSH.KeyData), 0o600); err != nil {
 			return err
 		}
 		host["identity"] = identity
-	} else if srv.SSH.Key != "" {
+	} else if len(srv.SSH.Key) > 0 {
 		host["identity"] = srv.SSH.Key
 	}
 	placement := map[string]any{"hosts": []string{"server"}, "packages": []string{}}
@@ -216,8 +231,15 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 		},
 		"run": map[string]any{"jobs": 1},
 	}
-	if registry != "" {
+	if len(registry) > 0 {
 		env["mirror_registry"] = registry
+		if item.registry.PlainHTTP {
+			env["mirror_plain_http"] = true
+		}
+		if len(item.registry.Username) > 0 {
+			env["mirror_username_env"] = "VPN_ADMIN_OCI_USERNAME"
+			env["mirror_password_env"] = "VPN_ADMIN_OCI_PASSWORD"
+		}
 	}
 	if len(item.credentials) > 0 {
 		secrets := filepath.Join(dir, "secrets")
@@ -238,9 +260,13 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 	if err := writePackJSON(filepath.Join(dir, "env.yaml"), env); err != nil {
 		return err
 	}
-	options := packcmd.ApplyOptions{Dir: dir, CacheDir: filepath.Join(cache, "pack"), Refresh: true}
-	if passphrase != "" {
-		options.Env = map[string]string{"PACK_SSH_PASSPHRASE": passphrase}
+	options := packcmd.ApplyOptions{Dir: dir, CacheDir: filepath.Join(cache, "pack"), Refresh: true, Env: map[string]string{}}
+	if len(passphrase) > 0 {
+		options.Env["PACK_SSH_PASSPHRASE"] = passphrase
+	}
+	if len(item.registry.Username) > 0 {
+		options.Env["VPN_ADMIN_OCI_USERNAME"] = item.registry.Username
+		options.Env["VPN_ADMIN_OCI_PASSWORD"] = item.registry.Password
 	}
 	return embeddedPackApply(ctx, options)
 }
@@ -249,7 +275,7 @@ func packFirewallRules(interfaceNames []string) []string {
 	seen := map[string]bool{}
 	rules := make([]string, 0, len(interfaceNames))
 	for _, name := range interfaceNames {
-		if name == "" || seen[name] {
+		if len(name) == 0 || seen[name] {
 			continue
 		}
 		seen[name] = true
@@ -267,7 +293,7 @@ func packArtifactURL(artifact, binary string) (string, string, error) {
 	}
 	ref := strings.TrimPrefix(artifact, "oci://")
 	registry, path, ok := strings.Cut(ref, "/")
-	if !ok || registry == "" || path == "" || strings.Contains(path, "@") {
+	if !ok || len(registry) == 0 || len(path) == 0 || strings.Contains(path, "@") {
 		return "", "", fmt.Errorf("OCI artifact %q must include a registry, repository and tag", artifact)
 	}
 	name := path[strings.LastIndex(path, "/")+1:]
@@ -286,11 +312,8 @@ func writePackJSON(path string, value any) error {
 }
 
 func agentPackValues(srv models.Server, artifact string) (map[string]any, []render.Credential, error) {
-	if artifact == "" {
-		return nil, nil, fmt.Errorf("agent OCI artifact is required")
-	}
 	addr := srv.Agent.Address
-	if addr == "" {
+	if len(addr) == 0 {
 		addr = "127.0.0.1:" + defaultAgentPort
 	}
 	env := map[string]any{
@@ -298,7 +321,10 @@ func agentPackValues(srv models.Server, artifact string) (map[string]any, []rend
 		"VPN_AGENT_DB":           remoteDBPath,
 		"VPN_AGENT_LEGACY_PROXY": "http://127.0.0.1:9091",
 	}
-	values := map[string]any{"artifact": artifact, "env": env}
+	values := map[string]any{"env": env}
+	if len(artifact) > 0 {
+		values["artifact"] = artifact
+	}
 	if srv.Agent.TLS.IsZero() {
 		return values, nil, nil
 	}

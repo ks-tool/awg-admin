@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/horchestra/pack/sdk"
+	"github.com/horchestra/pack/sdk/packschema"
 )
 
 func TestPackGenerates(t *testing.T) {
@@ -44,4 +45,21 @@ func TestPackGenerates(t *testing.T) {
 		return
 	}
 	t.Fatal("systemd unit is missing from pack content")
+}
+
+func TestSelfDeployPackUsesBinaryContent(t *testing.T) {
+	config := &Config{SelfDeploy: true}
+	config.SetDefaults()
+	var binary *packschema.File
+	for i, file := range config.PackRoot().Packages["debian"].Content {
+		if file.Path == "/usr/local/bin/vpn-agent" {
+			binary = &config.PackRoot().Packages["debian"].Content[i]
+		}
+	}
+	if binary == nil || binary.Source != "vpn-agent" || binary.URL != "" {
+		t.Fatalf("unexpected self-deploy binary file: %#v", binary)
+	}
+	if err := sdk.Generate(t.TempDir(), config); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -37,11 +37,12 @@ import (
 const currentSchemaVersion = 2
 
 var (
-	bktResources     = []byte("resources")
-	bktLinks         = []byte("links")
-	bktProviders     = []byte("providers")
-	bktMeta          = []byte("meta")
-	schemaVersionKey = []byte("schemaVersion")
+	bktResources                 = []byte("resources")
+	bktLinks                     = []byte("links")
+	bktProviders                 = []byte("providers")
+	bktMeta                      = []byte("meta")
+	schemaVersionKey             = []byte("schemaVersion")
+	registrySourcesInitializeKey = []byte("registrySourcesInitialized")
 )
 
 func (db *BoltDB) initialize(path string) error {
@@ -79,7 +80,7 @@ func readSchemaVersion(db *bolt.DB) (int, bool, bool, error) {
 }
 
 func initializeSchema(tx *bolt.Tx) error {
-	for _, bucket := range [][]byte{bktServers, bktInterfaces, bktUsers, bktAgentSources, bktTopology, bktAuth, bktResources, bktLinks, bktProviders, bktMeta} {
+	for _, bucket := range [][]byte{bktServers, bktInterfaces, bktUsers, bktAgentSources, bktRegistrySources, bktTopology, bktAuth, bktResources, bktLinks, bktProviders, bktMeta} {
 		if _, err := tx.CreateBucketIfNotExists(bucket); err != nil {
 			return err
 		}
@@ -94,7 +95,17 @@ func initializeSchema(tx *bolt.Tx) error {
 			return err
 		}
 	}
-	return tx.Bucket(bktMeta).Put(schemaVersionKey, []byte(strconv.Itoa(currentSchemaVersion)))
+	meta := tx.Bucket(bktMeta)
+	if meta.Get(registrySourcesInitializeKey) == nil {
+		source := &models.RegistrySource{ID: uuid.New(), Name: "GitHub Container Registry", URL: "oci://ghcr.io"}
+		if err := put(tx.Bucket(bktRegistrySources), idKey(source.ID), source); err != nil {
+			return err
+		}
+		if err := meta.Put(registrySourcesInitializeKey, []byte("1")); err != nil {
+			return err
+		}
+	}
+	return meta.Put(schemaVersionKey, []byte(strconv.Itoa(currentSchemaVersion)))
 }
 
 func MigrateV2(sourcePath, destinationPath string, force bool) error {

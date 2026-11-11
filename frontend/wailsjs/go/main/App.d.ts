@@ -30,6 +30,8 @@ export function CreateNetworkInterface(arg1:string,arg2:service.NetworkInterface
 
 export function CreateProviderLink(arg1:string,arg2:string):Promise<models.Link>;
 
+export function CreateRegistrySource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean):Promise<models.RegistrySource>;
+
 export function CreateServer(arg1:service.ServerInput):Promise<models.Server>;
 
 export function CreateTopologyServer(arg1:service.TopologyServerInput):Promise<models.Topology>;
@@ -60,6 +62,8 @@ export function DeleteProviderLink(arg1:string):Promise<void>;
 
 export function DeleteProviderResource(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
+export function DeleteRegistrySource(arg1:string):Promise<void>;
+
 export function DeleteServer(arg1:string):Promise<void>;
 
 export function DeleteTopologyServer(arg1:string):Promise<void>;
@@ -72,9 +76,9 @@ export function DeleteVPNServiceUser(arg1:string,arg2:string):Promise<void>;
 
 export function DeployAgent(arg1:string,arg2:string):Promise<void>;
 
-export function DeployAgentPack(arg1:string,arg2:string):Promise<void>;
+export function DeployAgentPack(arg1:string,arg2:models.AgentDeployment):Promise<void>;
 
-export function DeployProvider(arg1:string,arg2:models.ProviderDeployment):Promise<void>;
+export function DeployProvider(arg1:string,arg2:models.ProviderDeployment,arg3:models.Registry):Promise<void>;
 
 export function ForceReplaceInterfacePeers(arg1:string,arg2:string):Promise<void>;
 
@@ -120,13 +124,19 @@ export function ListAgentReleases():Promise<Array<models.AgentReleaseAsset>>;
 
 export function ListAgentSources():Promise<Array<models.AgentSource>>;
 
+export function ListArtifactTags(arg1:string,arg2:models.Registry):Promise<Array<string>>;
+
 export function ListInterfaces(arg1:string):Promise<Array<models.Interface>>;
 
 export function ListPeers(arg1:string):Promise<Array<models.Peer>>;
 
 export function ListProviderLinks():Promise<Array<models.Link>>;
 
+export function ListProviderRepositories(arg1:string,arg2:models.Registry):Promise<Array<models.ProviderRepository>>;
+
 export function ListProviderResources(arg1:string,arg2:string):Promise<Array<models.Resource>>;
+
+export function ListRegistrySources():Promise<Array<models.RegistrySource>>;
 
 export function ListServers():Promise<Array<models.Server>>;
 
@@ -155,6 +165,8 @@ export function ReconcileServer(arg1:string):Promise<service.ReconcileReport>;
 export function RefreshAgentSourceCache(arg1:string):Promise<void>;
 
 export function RefreshVPNServiceStatus(arg1:string):Promise<models.VPNService>;
+
+export function RemoveProvider(arg1:string,arg2:string):Promise<void>;
 
 export function RemoveTunnel(arg1:string):Promise<void>;
 
@@ -201,6 +213,8 @@ export function UpdateAgentSource(arg1:string,arg2:string,arg3:string,arg4:strin
 export function UpdateInterfaceConfig(arg1:string,arg2:string,arg3:models.InterfaceConfig):Promise<models.Interface>;
 
 export function UpdateNetworkInterface(arg1:string,arg2:service.NetworkInterfaceInput):Promise<models.Topology>;
+
+export function UpdateRegistrySource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean):Promise<models.RegistrySource>;
 
 export function UpdateServer(arg1:string,arg2:service.ServerInput):Promise<models.Server>;
 

@@ -86,6 +86,13 @@ func TestManualMigrationPreservesSourceAndMarksServersUnmanaged(t *testing.T) {
 	if err != nil || auth.PasswordHash != "existing-password-hash" {
 		t.Fatalf("auth changed: %+v, %v", auth, err)
 	}
+	registrySources, err := db.RegistrySources().List()
+	if err != nil || len(registrySources) != 1 || registrySources[0].URL != "oci://ghcr.io" {
+		t.Fatalf("default OCI registry was not initialized during migration: %+v, %v", registrySources, err)
+	}
+	if err := db.RegistrySources().Delete(registrySources[0].ID); err != nil {
+		t.Fatal(err)
+	}
 
 	resourcesA, err := db.Resources(fixture.serverA).List()
 	if err != nil {
@@ -145,6 +152,10 @@ func TestManualMigrationPreservesSourceAndMarksServersUnmanaged(t *testing.T) {
 		t.Fatalf("second Open: %v", err)
 	}
 	defer func() { _ = db.Close() }()
+	registrySources, err = db.RegistrySources().List()
+	if err != nil || len(registrySources) != 0 {
+		t.Fatalf("deleted OCI registry was initialized again: %+v, %v", registrySources, err)
+	}
 	resourcesA, _ = db.Resources(fixture.serverA).List()
 	resourcesB, _ = db.Resources(fixture.serverB).List()
 	links, _ = db.Links().List()
