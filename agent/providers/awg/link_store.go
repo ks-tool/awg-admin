@@ -23,18 +23,21 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ks-tool/vpn-agent/models"
 	"github.com/ks-tool/vpn-agent/storage"
 )
 
 type linkState struct {
-	Interface     string   `json:"interface"`
-	Role          string   `json:"role"`
-	PeerPublicKey string   `json:"peerPublicKey"`
-	Table         int      `json:"table,omitempty"`
-	Priority      int      `json:"priority,omitempty"`
-	Mark          string   `json:"mark,omitempty"`
-	PreUp         []string `json:"preUp,omitempty"`
-	PostDown      []string `json:"postDown,omitempty"`
+	LinkID        string              `json:"linkId,omitempty"`
+	Interface     string              `json:"interface"`
+	Role          string              `json:"role"`
+	PeerPublicKey string              `json:"peerPublicKey"`
+	Table         int                 `json:"table,omitempty"`
+	Priority      int                 `json:"priority,omitempty"`
+	Mark          string              `json:"mark,omitempty"`
+	PreUp         []string            `json:"preUp,omitempty"`
+	PostDown      []string            `json:"postDown,omitempty"`
+	Driver        *models.RouteDriver `json:"driver,omitempty"`
 }
 
 type linkStore struct{ root string }
@@ -111,6 +114,29 @@ func (s *linkStore) delete(linkID string) error {
 		return err
 	}
 	return nil
+}
+
+func (s *linkStore) list() (map[string]linkState, error) {
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		return nil, err
+	}
+	states := make(map[string]linkState)
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".link" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(s.root, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		var state linkState
+		if err := json.Unmarshal(data, &state); err != nil {
+			return nil, err
+		}
+		states[entry.Name()] = state
+	}
+	return states, nil
 }
 
 func (s *linkStore) filename(linkID string) string {

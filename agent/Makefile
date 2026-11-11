@@ -38,3 +38,9 @@ test:
 test-e2e:
 	@echo 'Run userspace tunnel e2e (needs Docker) ...'
 	@cd e2e && GOWORK=off AWG_E2E=1 go test -run TestUserspaceTunnel -v -timeout 600s .
+
+# Multi-provider chains: five Xray nodes, five Hysteria 2 nodes and eight mixed nodes.
+.PHONY: test-provider-e2e
+test-provider-e2e:
+	@echo 'Run Xray, Hysteria 2 and mixed provider e2e (needs Docker) ...'
+	@cd e2e && GOWORK=off PROVIDER_E2E=1 go test -run 'Test(XrayProviderChain|HysteriaProviderChain|MixedProviderChain)' -v -timeout 1200s .

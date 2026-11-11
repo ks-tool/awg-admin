@@ -43,6 +43,7 @@ type Provider struct {
 	secrets      *secretStore
 	processes    *processManager
 	firewall     *listenerFirewall
+	links        *proxyLinkStore
 	definitions  []models.ResourceDefinition
 	ifaceChecker *packschemavalidator.Compiled
 	peerChecker  *packschemavalidator.Compiled
@@ -62,6 +63,10 @@ func New(adapter Adapter, version string, resources resource.Store, root, core s
 		return nil, err
 	}
 	processes, err := newProcessManager(core, filepath.Join(root, "cores"))
+	if err != nil {
+		return nil, err
+	}
+	links, err := newProxyLinkStore(filepath.Join(root, "links"))
 	if err != nil {
 		return nil, err
 	}
@@ -85,6 +90,7 @@ func New(adapter Adapter, version string, resources resource.Store, root, core s
 	interfaceDefinition := models.ResourceDefinition{
 		APIVersion: adapter.APIVersion(), Kind: "Interface", SpecSchema: interfaceSchema,
 		UISchema: adapter.InterfaceUISchema(), SchemaHash: schemaHash(interfaceSchema),
+		Ports: []models.PortDefinition{{Name: "tunnel", Title: "VPN tunnel", LinkKinds: []string{adapter.Name(), models.RouteLinkKind}, RemotePorts: []string{"tunnel"}}},
 	}
 	peerDefinition := models.ResourceDefinition{
 		APIVersion: adapter.APIVersion(), Kind: "Peer", SpecSchema: peerSchema, SchemaHash: schemaHash(peerSchema),
@@ -97,7 +103,7 @@ func New(adapter Adapter, version string, resources resource.Store, root, core s
 		},
 	}
 	return &Provider{
-		adapter: adapter, version: version, resources: resources, secrets: secrets, processes: processes, firewall: newListenerFirewall(),
+		adapter: adapter, version: version, resources: resources, secrets: secrets, processes: processes, firewall: newListenerFirewall(), links: links,
 		definitions: []models.ResourceDefinition{interfaceDefinition, peerDefinition}, ifaceChecker: interfaceChecker, peerChecker: peerChecker,
 	}, nil
 }
@@ -207,7 +213,11 @@ func (p *Provider) applyInterface(interfaceItem models.Resource) error {
 	if err != nil {
 		return err
 	}
-	config, err := p.adapter.RenderServer(interfaceItem.Spec, peers, p.processes.resourceDir(interfaceItem.ID))
+	routes, err := p.interfaceRoutes(interfaceItem.ID)
+	if err != nil {
+		return err
+	}
+	config, err := p.adapter.RenderServer(interfaceItem.Spec, peers, routes, p.processes.resourceDir(interfaceItem.ID))
 	if err != nil {
 		return err
 	}
@@ -246,6 +256,15 @@ func (p *Provider) interfacePeers(interfaceItem models.Resource) ([]Peer, error)
 			return nil, err
 		}
 		peers = append(peers, Peer{Resource: stored.Resource, Spec: spec, Secret: secret})
+	}
+	links, err := p.links.list()
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range links {
+		if record.Role == "target" && record.Peer != nil && record.Offer.Endpoint.ResourceID == interfaceItem.ID {
+			peers = append(peers, *record.Peer)
+		}
 	}
 	return peers, nil
 }

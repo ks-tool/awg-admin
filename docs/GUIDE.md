@@ -371,9 +371,13 @@ Built-in profiles:
   `hysteria2://` URI. Generated self-signed certificates set `insecure=1` in the URI; install a trusted certificate for production.
 
 Xray and Hysteria 2 interfaces are logical listeners, not OS network interfaces. Their core processes run under the provider,
-which in turn is supervised by `vpn-agent`. Same-protocol or mixed-protocol links are **not** implied by these resources:
-Xray↔AWG↔Hysteria 2 chains require explicit outbound/policy-routing support and an end-to-end test; the current AWG link
-implementation does not provide that mixed-hop routing.
+which in turn is supervised by `vpn-agent`. Same-protocol links work between nodes. Local `route` links connect different
+providers on one host: the target supplies a connector, while the source uses SOCKS5 for proxy protocols or a dedicated
+policy-routing table and TUN for AWG. `route` is rejected between different hosts. One outgoing link is allowed per proxy
+listener; user peers are preserved when link peers are added.
+
+The e2e suite verifies five-node Xray and Hysteria 2 chains plus an eight-node mixed chain with 13 links and real HTTP traffic:
+`make -C agent test-provider-e2e` (Docker, `/dev/net/tun` and `NET_ADMIN`).
 
 The manifest can declare interface actions with their own argument schemas. VPN Admin supports:
 

@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/ks-tool/vpn-agent/providers/proxy"
@@ -89,7 +90,7 @@ func (Adapter) ValidateInterface(raw json.RawMessage) error {
 	return nil
 }
 
-func (a Adapter) RenderServer(raw json.RawMessage, peers []proxy.Peer, stateDir string) (proxy.CoreConfig, error) {
+func (a Adapter) RenderServer(raw json.RawMessage, peers []proxy.Peer, routes []proxy.Route, stateDir string) (proxy.CoreConfig, error) {
 	spec, err := decodeInterface(raw)
 	if err != nil {
 		return proxy.CoreConfig{}, err
@@ -123,6 +124,26 @@ func (a Adapter) RenderServer(raw json.RawMessage, peers []proxy.Peer, stateDir 
 	if len(listen) == 0 {
 		listen = "0.0.0.0"
 	}
+	outbound := map[string]any{
+		"protocol": "freedom", "tag": "direct",
+		"settings": map[string]any{"finalRules": []map[string]any{{
+			"action": "allow",
+			"ip":     []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10", "fc00::/7", "fe80::/10", "::1/128"},
+		}}},
+	}
+	if len(routes) > 0 {
+		host, portText, err := net.SplitHostPort(routes[0].SOCKS5)
+		if err != nil {
+			return proxy.CoreConfig{}, err
+		}
+		port, err := strconv.Atoi(portText)
+		if err != nil {
+			return proxy.CoreConfig{}, err
+		}
+		outbound = map[string]any{"protocol": "socks", "tag": "next-hop", "settings": map[string]any{
+			"servers": []map[string]any{{"address": host, "port": port}},
+		}}
+	}
 	document := map[string]any{
 		"log": map[string]any{"loglevel": "warning"},
 		"inbounds": []map[string]any{{
@@ -130,7 +151,7 @@ func (a Adapter) RenderServer(raw json.RawMessage, peers []proxy.Peer, stateDir 
 			"settings":       map[string]any{"clients": clients, "decryption": "none"},
 			"streamSettings": stream,
 		}},
-		"outbounds": []map[string]any{{"protocol": "freedom", "tag": "direct"}},
+		"outbounds": []map[string]any{outbound},
 	}
 	data, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {

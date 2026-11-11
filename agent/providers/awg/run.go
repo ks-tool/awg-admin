@@ -60,6 +60,13 @@ type config struct {
 }
 
 func Run(version string) {
+	if len(os.Args) > 1 && os.Args[1] == "route-client" {
+		if err := runRouteClient(context.Background(), os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "firewall" {
 		if err := runFirewallCommand(context.Background(), os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -153,7 +160,7 @@ func Run(version string) {
 	log.Info().Msgf("Starting server on %s", cfg.Addr)
 	if err := proxy.Serve(proxy.ServeOptions{
 		Addr: cfg.Addr, TLSCert: cfg.TLSCert, TLSKey: cfg.TLSKey, TLSClientCA: cfg.TLSClientCA,
-		Store: resourceStore, AgentID: agentID, Provider: awgProvider,
+		Store: resourceStore, AgentID: agentID, Provider: awgProvider, Start: awgProvider.RestoreLinks,
 		Handler: func(runtime *resource.Runtime) http.Handler {
 			return api.NewWithResources(hostInfo, store, collector, runtime, middleware.RequestID, middleware.Logging)
 		},
@@ -166,7 +173,7 @@ func Run(version string) {
 			}
 			log.Info().Msg("stopping active interfaces")
 			service.NewHandler(store, metricsAwg).StopEnabled()
-			return nil
+			return awgProvider.connectors.Close()
 		},
 	}); err != nil {
 		log.Fatal().Err(err).Msg("provider API failed")

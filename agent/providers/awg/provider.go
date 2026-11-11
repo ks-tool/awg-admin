@@ -31,6 +31,7 @@ import (
 
 	"github.com/ks-tool/vpn-agent/internal/resource"
 	"github.com/ks-tool/vpn-agent/models"
+	"github.com/ks-tool/vpn-agent/providers/proxy"
 	"github.com/ks-tool/vpn-agent/storage"
 
 	"github.com/horchestra/pack/sdk/packschema"
@@ -58,6 +59,7 @@ type Provider struct {
 	resources      resource.Store
 	secrets        *secretStore
 	links          *linkStore
+	connectors     *proxy.ConnectorManager
 	network        Network
 	definition     models.ResourceDefinition
 	validator      *packschemavalidator.Compiled
@@ -71,6 +73,10 @@ func New(store storage.Storage, secretsRoot string, network Network, version str
 		return nil, err
 	}
 	links, err := newLinkStore(filepath.Join(filepath.Dir(secretsRoot), "links"))
+	if err != nil {
+		return nil, err
+	}
+	connectors, err := proxy.NewConnectorManager(filepath.Join(filepath.Dir(secretsRoot), "connectors"))
 	if err != nil {
 		return nil, err
 	}
@@ -105,12 +111,12 @@ func New(store storage.Storage, secretsRoot string, network Network, version str
 		resources = inventory[0]
 	}
 	return &Provider{
-		version: version, store: store, resources: resources, secrets: secrets, links: links, network: network, validator: validator,
+		version: version, store: store, resources: resources, secrets: secrets, links: links, connectors: connectors, network: network, validator: validator,
 		peerDefinition: peerDefinition, peerValidator: peerValidator,
 		definition: models.ResourceDefinition{
 			APIVersion: APIVersion, Kind: "Interface", SpecSchema: raw, UISchema: uiSchema,
 			SchemaHash: "sha256:" + hex.EncodeToString(hash[:]),
-			Ports:      []models.PortDefinition{{Name: "tunnel", Title: "VPN tunnel", LinkKinds: []string{"awg"}, RemotePorts: []string{"tunnel"}}},
+			Ports:      []models.PortDefinition{{Name: "tunnel", Title: "VPN tunnel", LinkKinds: []string{"awg", models.RouteLinkKind}, RemotePorts: []string{"tunnel"}}},
 			Actions: []models.ActionDefinition{{
 				Name: "importSecret", Title: "Import existing interface secrets and hooks", ArgumentsSchema: secretSchema,
 				ResultType: models.ActionResultJSON, TimeoutSeconds: 30, Mutating: true, RequiresConfirmation: true,

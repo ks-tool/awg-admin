@@ -250,13 +250,13 @@ func (s *Service) coordinateLink(link *models.Link, source, target resolvedEndpo
 	}); err != nil {
 		return s.failLink(link, err)
 	}
-	if err := s.withAgent(link.Source.ServerID, func(ctx context.Context, client *agentclient.Client) error {
-		return client.CommitLink(ctx, source.provider, models.LinkRequest{Link: *link, Endpoint: source.endpoint, RemoteOffer: targetOffer})
+	if err := s.withAgent(link.Target.ServerID, func(ctx context.Context, client *agentclient.Client) error {
+		return client.CommitLink(ctx, target.provider, models.LinkRequest{Link: *link, Endpoint: target.endpoint, RemoteOffer: sourceOffer})
 	}); err != nil {
 		return s.failLink(link, err)
 	}
-	if err := s.withAgent(link.Target.ServerID, func(ctx context.Context, client *agentclient.Client) error {
-		return client.CommitLink(ctx, target.provider, models.LinkRequest{Link: *link, Endpoint: target.endpoint, RemoteOffer: sourceOffer})
+	if err := s.withAgent(link.Source.ServerID, func(ctx context.Context, client *agentclient.Client) error {
+		return client.CommitLink(ctx, source.provider, models.LinkRequest{Link: *link, Endpoint: source.endpoint, RemoteOffer: targetOffer})
 	}); err != nil {
 		return s.failLink(link, err)
 	}
@@ -305,15 +305,18 @@ func (s *Service) resolveEndpoint(resourceID string) (resolvedEndpoint, error) {
 				}
 			}
 		}
-		return resolvedEndpoint{}, errors.New("resource does not expose link ports")
+		return resolvedEndpoint{}, fmt.Errorf("resource %s (%s %s) does not expose link ports", resourceID, resource.APIVersion, resource.Kind)
 	}
-	return resolvedEndpoint{}, storage.ErrNotFound
+	return resolvedEndpoint{}, fmt.Errorf("resolve link endpoint %s: %w", resourceID, storage.ErrNotFound)
 }
 
 func compatibleLinkKind(source, target resolvedEndpoint) (string, error) {
 	for _, kind := range source.port.LinkKinds {
 		for _, targetKind := range target.port.LinkKinds {
 			if kind != targetKind {
+				continue
+			}
+			if kind == models.RouteLinkKind && source.endpoint.ServerID != target.endpoint.ServerID {
 				continue
 			}
 			sourceAccepts := len(source.port.RemotePorts) == 0 || containsString(source.port.RemotePorts, target.port.Name)

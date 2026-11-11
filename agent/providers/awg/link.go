@@ -33,11 +33,16 @@ import (
 )
 
 type awgLinkOffer struct {
-	PublicKey string        `json:"publicKey"`
-	Interface InterfaceSpec `json:"interface"`
+	PublicKey string                `json:"publicKey"`
+	Interface InterfaceSpec         `json:"interface"`
+	Driver    *models.RouteDriver   `json:"driver,omitempty"`
+	RoutePeer *models.InterfacePeer `json:"routePeer,omitempty"`
 }
 
 func (p *Provider) PrepareLink(_ context.Context, link models.Link, endpoint models.LinkEndpoint) (models.LinkOffer, error) {
+	if link.Kind == models.RouteLinkKind {
+		return p.prepareRouteLink(context.Background(), link, endpoint)
+	}
 	if link.Kind != "awg" {
 		return models.LinkOffer{}, errors.New("unsupported link kind")
 	}
@@ -57,6 +62,9 @@ func (p *Provider) PrepareLink(_ context.Context, link models.Link, endpoint mod
 }
 
 func (p *Provider) CommitLink(_ context.Context, link models.Link, endpoint models.LinkEndpoint, remote models.LinkOffer) error {
+	if link.Kind == models.RouteLinkKind {
+		return p.commitRouteLink(context.Background(), link, endpoint, remote)
+	}
 	if link.Kind != "awg" || remote.LinkID != link.ID {
 		return errors.New("link or offer does not match AWG provider")
 	}
@@ -157,6 +165,9 @@ func (p *Provider) CommitLink(_ context.Context, link models.Link, endpoint mode
 }
 
 func (p *Provider) DeleteLink(_ context.Context, link models.Link, endpoint models.LinkEndpoint, remote *models.LinkOffer) error {
+	if link.Kind == models.RouteLinkKind {
+		return p.deleteRouteLink(context.Background(), link, endpoint, remote)
+	}
 	state, err := p.links.get(link.ID)
 	legacy := false
 	if err != nil {

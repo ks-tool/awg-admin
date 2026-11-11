@@ -19,6 +19,7 @@ package models
 import agentmodels "github.com/ks-tool/vpn-agent/models"
 
 const ProtocolVersion = agentmodels.ProtocolVersion
+const RouteLinkKind = agentmodels.RouteLinkKind
 
 const (
 	ResourcePending  = agentmodels.ResourcePending
@@ -60,6 +61,7 @@ type LinkRequest = agentmodels.LinkRequest
 type LinkStatus = agentmodels.LinkStatus
 type LinkPhase = agentmodels.LinkPhase
 type LinkOffer = agentmodels.LinkOffer
+type RouteDriver = agentmodels.RouteDriver
 
 type ProviderRecord struct {
 	ServerID   string             `json:"serverId"`

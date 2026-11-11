@@ -39,6 +39,7 @@ type ServeOptions struct {
 	Store       resource.Store
 	AgentID     string
 	Provider    resource.Provider
+	Start       func() error
 	Handler     func(*resource.Runtime) http.Handler
 	Close       func() error
 }
@@ -50,6 +51,11 @@ func Serve(options ServeOptions) error {
 		return err
 	}
 	runtime.Start(context.Background())
+	if options.Start != nil {
+		if err := options.Start(); err != nil {
+			return err
+		}
+	}
 	handler := options.Handler
 	if handler == nil {
 		handler = func(runtime *resource.Runtime) http.Handler {

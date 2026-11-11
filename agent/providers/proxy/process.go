@@ -80,7 +80,11 @@ func (m *processManager) apply(resourceID string, config CoreConfig) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(m.core, config.Arguments(configPath)...)
+	binary := m.core
+	if len(config.Binary) > 0 {
+		binary = config.Binary
+	}
+	cmd := exec.Command(binary, config.Arguments(configPath)...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {

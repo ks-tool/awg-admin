@@ -16,7 +16,8 @@ configuration and network links.
 
 - **Map.** Servers are positioned from **Location** using a local Data Center Atlas cache, or from manually entered coordinates.
   Points show agent or VPN service health, while arrows show connections and p95 latency.
-- **Network Graph.** Interfaces can be connected by directed arrows into chains of any length. Port compatibility, duplicates,
+- **Network Graph.** Interfaces can be connected by directed arrows into chains of any length, including mixed Xray/AWG/Hysteria
+  routes. Same-protocol links work between nodes; local `route` links switch providers on one host. Compatibility, duplicates,
   self-connections and cycles are validated. To reroute an existing connection, select its arrow, press `m`, drag either endpoint
   and confirm with **Create**.
 - **Agent and providers.** Under **Manage panel → Agent**, `vpn-agent` can be installed from an OCI release or a local binary.
@@ -123,6 +124,7 @@ The Docker-based AWG userspace tunnel test is separate and requires Docker with 
 
 ```sh
 make -C agent test-e2e
+make -C agent test-provider-e2e # Xray/Hysteria chains and mixed 8-node/13-link chain
 ```
 
 ## Migration and backups

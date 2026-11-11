@@ -77,7 +77,7 @@ func Run(adapter Adapter, version, prefix, defaultCore string) {
 	log.Info().Str("provider", adapter.Name()).Str("version", version).Str("addr", cfg.Addr).Msg("starting provider API")
 	if err := Serve(ServeOptions{
 		Addr: cfg.Addr, TLSCert: cfg.TLSCert, TLSKey: cfg.TLSKey, TLSClientCA: cfg.TLSClientCA,
-		Store: resourceStore, AgentID: agentID, Provider: provider, Close: provider.Close,
+		Store: resourceStore, AgentID: agentID, Provider: provider, Start: provider.RestoreLinks, Close: provider.Close,
 	}); err != nil {
 		log.Fatal().Err(err).Msg("provider API failed")
 	}

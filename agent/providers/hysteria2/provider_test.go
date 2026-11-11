@@ -30,7 +30,7 @@ func TestHysteriaConfigAndClientURI(t *testing.T) {
 	spec := json.RawMessage(`{"name":"public","port":443,"serverName":"vpn.example.com"}`)
 	peer := proxy.Peer{Spec: proxy.PeerSpec{Name: "alice"}, Secret: "test-password-123"}
 	state := t.TempDir()
-	config, err := (Adapter{}).RenderServer(spec, []proxy.Peer{peer}, state)
+	config, err := (Adapter{}).RenderServer(spec, []proxy.Peer{peer}, nil, state)
 	if err != nil {
 		t.Fatal(err)
 	}

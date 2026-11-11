@@ -308,6 +308,14 @@ func dumpNetworkState(ctx context.Context, t *testing.T, c testcontainers.Contai
 		data, _ := io.ReadAll(output)
 		t.Logf("=== %s: %s ===\n%s", name, strings.Join(command, " "), data)
 	}
+	for _, command := range [][]string{{"sh", "-c", "for f in /data/xray/cores/*/core.log /data/hysteria/cores/*/core.log; do [ ! -f \"$f\" ] || { echo \"=== $f ===\"; cat \"$f\"; }; done"}} {
+		_, output, err := c.Exec(ctx, command)
+		if err != nil {
+			continue
+		}
+		data, _ := io.ReadAll(output)
+		t.Logf("=== %s core logs ===\n%s", name, data)
+	}
 }
 
 func dumpAgentLogs(ctx context.Context, t *testing.T, c testcontainers.Container, name string) {

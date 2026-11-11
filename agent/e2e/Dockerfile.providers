@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1
+FROM golang:1.27.1-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN mkdir -p /out
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vpn-agent ./cmd/vpn-agent \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vpn-provider-awg ./providers/awg/cmd \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vpn-provider-xray ./providers/xray/cmd \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vpn-provider-hysteria2 ./providers/hysteria2/cmd
+
+FROM debian:13-slim AS cores
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /out
+RUN set -eu; \
+    case "$TARGETARCH" in \
+      amd64) xray_asset=Xray-linux-64.zip; xray_sha=b651f7e1d9966ee2c1b1ee1bf8b52c72771824d3065dce96bbc8bcc19ed95f82; hysteria_sha=907ba8c9693edb104b20582681fb7dc15639d5b64a9cbb616a7b539190a86691 ;; \
+      arm64) xray_asset=Xray-linux-arm64-v8a.zip; xray_sha=64ed6858982a7f5eb85d88b811089063bd4f17561f4c8f44e0f1dc8e6f6430be; hysteria_sha=a68a61a84452ca250ce0368202521965ca9cc9d801a404f1dc9008ac6cf677a7 ;; \
+      *) echo "unsupported arch: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/XTLS/Xray-core/releases/download/v26.11.9/$xray_asset" -o /tmp/xray.zip; \
+    echo "$xray_sha  /tmp/xray.zip" | sha256sum -c -; \
+    unzip -j /tmp/xray.zip xray -d /out; \
+    curl -fsSL "https://github.com/HyNetworks/hysteria/releases/download/app/v2.13.0/hysteria-linux-$TARGETARCH" -o /out/hysteria; \
+    echo "$hysteria_sha  /out/hysteria" | sha256sum -c -; \
+    chmod 0755 /out/xray /out/hysteria
+
+FROM debian:13-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl dbus firewalld iproute2 iptables iputils-ping nftables procps python3 ufw \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /out/ /usr/local/bin/
+COPY --from=cores /out/ /usr/local/bin/
+COPY e2e/entrypoint-providers.sh /usr/local/bin/vpn-providers-e2e-entrypoint
+RUN chmod 0755 /usr/local/bin/vpn-providers-e2e-entrypoint
+ENV VPN_AGENT_DB=/data \
+    VPN_AGENT_ADDR=0.0.0.0:8080 \
+    VPN_AGENT_LEGACY_PROXY=http://127.0.0.1:9091 \
+    HOME=/data
+ENTRYPOINT ["/usr/local/bin/vpn-providers-e2e-entrypoint"]

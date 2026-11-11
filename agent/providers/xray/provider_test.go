@@ -27,7 +27,7 @@ import (
 func TestVLESSConfigAndClientURI(t *testing.T) {
 	spec := json.RawMessage(`{"name":"public","listen":"0.0.0.0","port":443,"network":"ws","path":"/vpn","tls":false}`)
 	peer := proxy.Peer{Spec: proxy.PeerSpec{Name: "alice"}, Secret: "123e4567-e89b-12d3-a456-426614174000"}
-	config, err := (Adapter{}).RenderServer(spec, []proxy.Peer{peer}, t.TempDir())
+	config, err := (Adapter{}).RenderServer(spec, []proxy.Peer{peer}, nil, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

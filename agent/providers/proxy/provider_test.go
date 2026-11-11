@@ -60,7 +60,7 @@ func (testAdapter) ValidateSecret(secret string) error {
 	}
 	return nil
 }
-func (testAdapter) RenderServer(raw json.RawMessage, peers []Peer, _ string) (CoreConfig, error) {
+func (testAdapter) RenderServer(raw json.RawMessage, peers []Peer, _ []Route, _ string) (CoreConfig, error) {
 	credentials := make([]map[string]string, 0, len(peers))
 	for _, peer := range peers {
 		credentials = append(credentials, map[string]string{"name": peer.Spec.Name, "secret": peer.Secret})

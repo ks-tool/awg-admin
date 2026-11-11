@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -96,7 +98,7 @@ func (Adapter) ValidateInterface(raw json.RawMessage) error {
 	return nil
 }
 
-func (a Adapter) RenderServer(raw json.RawMessage, peers []proxy.Peer, stateDir string) (proxy.CoreConfig, error) {
+func (a Adapter) RenderServer(raw json.RawMessage, peers []proxy.Peer, routes []proxy.Route, stateDir string) (proxy.CoreConfig, error) {
 	spec, err := decodeInterface(raw)
 	if err != nil {
 		return proxy.CoreConfig{}, err
@@ -122,10 +124,33 @@ func (a Adapter) RenderServer(raw json.RawMessage, peers []proxy.Peer, stateDir 
 	if len(listen) == 0 {
 		listen = "::"
 	}
+	outbounds := []map[string]any{{"name": "direct", "type": "direct"}}
+	if len(routes) > 0 {
+		outbounds = []map[string]any{{"name": "next-hop", "type": "socks5", "socks5": map[string]any{"addr": routes[0].SOCKS5}}}
+	}
+	auth := map[string]any{"type": "userpass", "userpass": users}
+	if len(users) == 0 {
+		secretPath := filepath.Join(stateDir, "auth.secret")
+		secret, err := os.ReadFile(secretPath)
+		if os.IsNotExist(err) {
+			generated, err := a.NewSecret()
+			if err != nil {
+				return proxy.CoreConfig{}, err
+			}
+			secret = []byte(generated)
+			if err := os.WriteFile(secretPath, secret, 0o600); err != nil {
+				return proxy.CoreConfig{}, err
+			}
+		} else if err != nil {
+			return proxy.CoreConfig{}, err
+		}
+		auth = map[string]any{"type": "password", "password": string(secret)}
+	}
 	document := map[string]any{
-		"listen": net.JoinHostPort(listen, strconv.Itoa(spec.Port)),
-		"tls":    map[string]any{"cert": certificateFile, "key": privateKeyFile},
-		"auth":   map[string]any{"type": "userpass", "userpass": users},
+		"listen":    net.JoinHostPort(listen, strconv.Itoa(spec.Port)),
+		"tls":       map[string]any{"cert": certificateFile, "key": privateKeyFile},
+		"auth":      auth,
+		"outbounds": outbounds,
 	}
 	bandwidth := map[string]any{}
 	if spec.UpMbps > 0 {

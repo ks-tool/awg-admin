@@ -38,7 +38,17 @@ type Peer struct {
 
 type CoreConfig struct {
 	Data      []byte
+	Binary    string
 	Arguments func(string) []string
+}
+
+type Route struct {
+	LinkID string
+	SOCKS5 string
+}
+
+type LinkAdapter interface {
+	PrepareLink(json.RawMessage, models.Link, models.LinkEndpoint, string) (Peer, models.RouteDriver, error)
 }
 
 type Adapter interface {
@@ -50,6 +60,6 @@ type Adapter interface {
 	ValidateInterface(json.RawMessage) error
 	NewSecret() (string, error)
 	ValidateSecret(string) error
-	RenderServer(json.RawMessage, []Peer, string) (CoreConfig, error)
+	RenderServer(json.RawMessage, []Peer, []Route, string) (CoreConfig, error)
 	RenderClient(json.RawMessage, Peer, string) (string, error)
 }
