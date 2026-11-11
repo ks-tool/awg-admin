@@ -768,6 +768,8 @@ export namespace models {
 	    tx: number;
 	    // Go type: time
 	    lastHandshake: any;
+	    probeAddress?: string;
+	    latencyP95Ms?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new PeerSnapshot(source);
@@ -779,6 +781,8 @@ export namespace models {
 	        this.rx = source["rx"];
 	        this.tx = source["tx"];
 	        this.lastHandshake = this.convertValues(source["lastHandshake"], null);
+	        this.probeAddress = source["probeAddress"];
+	        this.latencyP95Ms = source["latencyP95Ms"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1045,85 +1049,6 @@ export namespace models {
 	        this.protocolVersion = source["protocolVersion"];
 	        this.agentId = source["agentId"];
 	        this.providers = this.convertValues(source["providers"], ProviderDefinition);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class SystemSnapshot {
-	    // Go type: time
-	    timestamp: any;
-	    cpuPercent: number;
-	    memUsedBytes: number;
-	    memTotalBytes: number;
-	    load1: number;
-	    load5: number;
-	    load15: number;
-	    netRxBytes: number;
-	    netTxBytes: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new SystemSnapshot(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.timestamp = this.convertValues(source["timestamp"], null);
-	        this.cpuPercent = source["cpuPercent"];
-	        this.memUsedBytes = source["memUsedBytes"];
-	        this.memTotalBytes = source["memTotalBytes"];
-	        this.load1 = source["load1"];
-	        this.load5 = source["load5"];
-	        this.load15 = source["load15"];
-	        this.netRxBytes = source["netRxBytes"];
-	        this.netTxBytes = source["netTxBytes"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class MetricsSnapshot {
-	    system: SystemSnapshot;
-	    interfaces: InterfaceSnapshot[];
-	
-	    static createFrom(source: any = {}) {
-	        return new MetricsSnapshot(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.system = this.convertValues(source["system"], SystemSnapshot);
-	        this.interfaces = this.convertValues(source["interfaces"], InterfaceSnapshot);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1561,7 +1486,53 @@ export namespace models {
 		}
 	}
 	
+	export class SystemSnapshot {
+	    // Go type: time
+	    timestamp: any;
+	    cpuPercent: number;
+	    memUsedBytes: number;
+	    memTotalBytes: number;
+	    load1: number;
+	    load5: number;
+	    load15: number;
+	    netRxBytes: number;
+	    netTxBytes: number;
+
+	    static createFrom(source: any = {}) {
+	        return new SystemSnapshot(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = this.convertValues(source["timestamp"], null);
+	        this.cpuPercent = source["cpuPercent"];
+	        this.memUsedBytes = source["memUsedBytes"];
+	        this.memTotalBytes = source["memTotalBytes"];
+	        this.load1 = source["load1"];
+	        this.load5 = source["load5"];
+	        this.load15 = source["load15"];
+	        this.netRxBytes = source["netRxBytes"];
+	        this.netTxBytes = source["netTxBytes"];
+	    }
 	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class VPNService {
 	    id: number[];
 	    serverId: number[];
@@ -1733,6 +1704,22 @@ export namespace models {
 		}
 	}
 	
+	export class TunnelMetric {
+	    connectionId: string;
+	    latencyP95Ms?: number;
+	    error?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new TunnelMetric(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connectionId = source["connectionId"];
+	        this.latencyP95Ms = source["latencyP95Ms"];
+	        this.error = source["error"];
+	    }
+	}
 	export class TunnelStep {
 	    serverId: number[];
 	    ifaceId: number[];

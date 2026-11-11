@@ -51,6 +51,7 @@ import {
     createNetworkConnection,
     deleteNetworkConnection,
     getTopology,
+    getTunnelMetrics,
     listVPNPlugins,
     moveTopologyNodes,
 } from '@/services/topology';
@@ -58,7 +59,7 @@ import {createProviderLink, deleteProviderLink, listProviderLinks} from '@/servi
 import {getServerAgentStatus, type AgentStatus} from '@/services/servers';
 import {useAppStore} from '@/store';
 import {useAutoRefresh} from '@/hooks/useAutoRefresh';
-import type {PluginDescriptor, ProviderLink, Topology as TopologyData} from '@/types';
+import type {PluginDescriptor, ProviderLink, Topology as TopologyData, TunnelMetric} from '@/types';
 
 const emptyTopology: TopologyData = {servers: [], interfaces: [], services: [], connections: []};
 const nodeTypes: NodeTypes = {interface: TopologyInterfaceNode};
@@ -74,6 +75,7 @@ export default function Topology() {
     const [plugins, setPlugins] = useState<PluginDescriptor[]>([]);
     const [links, setLinks] = useState<ProviderLink[]>([]);
     const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus | null>>({});
+    const [tunnelMetrics, setTunnelMetrics] = useState<Record<string, TunnelMetric>>({});
     const [loading, setLoading] = useState(true);
     const [selection, setSelection] = useState<TopologySelection | null>(null);
     const [view, setView] = useState<TopologyView>('map');
@@ -120,6 +122,14 @@ export default function Topology() {
     useAutoRefresh(useCallback(async () => {
         await Promise.all([refreshData(), refresh()]);
     }, [refreshData, refresh]));
+    useAutoRefresh(useCallback(async () => {
+        try {
+            const metrics = await getTunnelMetrics();
+            setTunnelMetrics(Object.fromEntries(metrics.map(metric => [metric.connectionId, metric])));
+        } catch (error) {
+            console.error('Failed to refresh tunnel metrics:', error);
+        }
+    }, []));
 
     useEffect(() => {
         void Promise.all([getTopology(), listVPNPlugins(), listProviderLinks()]).then(([topologyData, pluginData, providerLinks]) => {
@@ -306,6 +316,7 @@ export default function Topology() {
                             connections={topology.connections}
                             links={links}
                             agentStatuses={agentStatuses}
+                            tunnelMetrics={tunnelMetrics}
                             totalUsers={users.length}
                             onSelect={setMetricsModalServerId}
                         />

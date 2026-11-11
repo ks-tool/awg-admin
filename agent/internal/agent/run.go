@@ -25,11 +25,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/ks-tool/vpn-agent/internal/api"
 	agentconfig "github.com/ks-tool/vpn-agent/internal/config"
+	"github.com/ks-tool/vpn-agent/internal/metrics"
 	providerremote "github.com/ks-tool/vpn-agent/internal/provider/remote"
 	"github.com/ks-tool/vpn-agent/internal/resource"
 	"github.com/ks-tool/vpn-agent/mux/middleware"
@@ -47,7 +49,8 @@ type config struct {
 	TLSKey      string `env:"TLS_KEY" flag:"tls-key" help:"TLS private key file"`
 	TLSClientCA string `env:"TLS_CLIENT_CA" flag:"tls-client-ca" help:"client CA certificate file"`
 
-	LegacyProxy string `env:"LEGACY_PROXY" flag:"legacy-proxy" help:"optional AWG provider URL for the legacy interface and metrics API"`
+	LegacyProxy     string        `env:"LEGACY_PROXY" flag:"legacy-proxy" help:"optional AWG provider URL for the legacy interface and interface metrics API"`
+	MetricsInterval time.Duration `env:"METRICS_INTERVAL" envDefault:"45s" flag:"metrics-interval" help:"system metrics and latency sampling interval"`
 }
 
 func Run(version string) {
@@ -105,8 +108,27 @@ func Run(version string) {
 	}
 	resourceRuntime.Start(context.Background())
 
+	systemMetrics := metrics.NewSystemCollector(cfg.MetricsInterval)
+	systemMetrics.SetPersistence(filepath.Join(cfg.DB, metrics.HistoryFilename))
+	if err := systemMetrics.LoadHistory(); err != nil {
+		log.Warn().Err(err).Msg("failed to load persisted system metrics")
+	}
+	latencyMetrics := metrics.NewLatencyCollector(cfg.LegacyProxy, cfg.MetricsInterval)
+	metricsCtx, stopMetrics := context.WithCancel(context.Background())
+	defer stopMetrics()
+	var metricsWG sync.WaitGroup
+	metricsWG.Add(2)
+	go func() {
+		defer metricsWG.Done()
+		systemMetrics.Run(metricsCtx)
+	}()
+	go func() {
+		defer metricsWG.Done()
+		latencyMetrics.Run(metricsCtx)
+	}()
+
 	hostInfo := GatherHostInfo(version)
-	handler, err := api.NewAgent(hostInfo, resourceRuntime, cfg.LegacyProxy, middleware.RequestID, middleware.Logging)
+	handler, err := api.NewAgent(hostInfo, resourceRuntime, cfg.LegacyProxy, systemMetrics, latencyMetrics, middleware.RequestID, middleware.Logging)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to configure legacy provider proxy")
 	}
@@ -133,6 +155,18 @@ func Run(version string) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	<-sig
+
+	stopMetrics()
+	metricsDone := make(chan struct{})
+	go func() {
+		metricsWG.Wait()
+		close(metricsDone)
+	}()
+	select {
+	case <-metricsDone:
+	case <-time.After(5 * time.Second):
+		log.Warn().Msg("timed out waiting for metrics collectors")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -24,6 +24,7 @@ import type {
     PluginDescriptor,
     PluginUser,
     Topology,
+    TunnelMetric,
     VPNService,
 } from '@/types';
 
@@ -84,6 +85,13 @@ export async function getTopology(): Promise<Topology> {
     return isDesktop()
         ? binding(() => AppBindings.GetTopology()) as Promise<Topology>
         : unwrap(await get<Topology>('/topology'));
+}
+
+export async function getTunnelMetrics(): Promise<TunnelMetric[]> {
+    const result = isDesktop()
+        ? await binding<TunnelMetric[]>(() => AppBindings.GetTunnelMetrics())
+        : unwrap(await get<TunnelMetric[]>('/topology/tunnel-metrics'));
+    return result ?? [];
 }
 
 export async function listVPNPlugins(): Promise<PluginDescriptor[]> {

@@ -18,14 +18,11 @@ package models
 
 import "time"
 
-// These types are the JSON wire format of GET /metrics (see
-// agent/internal/metrics and agent/internal/api's "metrics" handler) — kept
-// here rather than in agent/internal/metrics so the root module's
-// internal/agentclient can decode them without crossing the agent module's
-// internal/ package boundary (Go disallows importing another module's
-// internal/... packages even when, as with internal/metrics, the docs of a
-// vendored dependency might suggest otherwise — see internal/metrics's
-// package doc comment for the story that prompted this split).
+// These types are the JSON wire format of the system /metrics API and the
+// per-interface /metrics/{interface} API. MetricsSnapshot remains the internal
+// AWG-provider response consumed by the agent. The types live here rather than
+// in agent/internal/metrics so the root module's internal/agentclient can use
+// them without crossing Go's internal-package boundary.
 
 // SystemSnapshot is the latest recorded host-level sample.
 type SystemSnapshot struct {
@@ -37,11 +34,8 @@ type SystemSnapshot struct {
 	Load5         float64   `json:"load5"`
 	Load15        float64   `json:"load15"`
 	// NetRxBytes/NetTxBytes are bytes transferred *during this one
-	// collection interval* (e.g. the last 45s, see
-	// VPN_PROVIDER_AWG_METRICS_INTERVAL), not the host's cumulative since-boot
-	// counters from /proc/net/dev — those only ever climb and aren't
-	// useful for "how much traffic is this server actually moving" (see
-	// agent/internal/metrics/collector.go's collectSystem).
+	// collection interval* (e.g. the last 45s, see VPN_AGENT_METRICS_INTERVAL),
+	// not the host's cumulative since-boot counters from /proc/net/dev.
 	NetRxBytes uint64 `json:"netRxBytes"`
 	NetTxBytes uint64 `json:"netTxBytes"`
 }
@@ -52,6 +46,10 @@ type PeerSnapshot struct {
 	RxBytes       uint64    `json:"rx"`
 	TxBytes       uint64    `json:"tx"`
 	LastHandshake time.Time `json:"lastHandshake"`
+	ProbeAddress  string    `json:"probeAddress,omitempty"`
+	// LatencyP95Ms is the agent-measured 95th-percentile ICMP round trip over
+	// the last 15 minutes, nil until a probe succeeds.
+	LatencyP95Ms *float64 `json:"latencyP95Ms,omitempty"`
 }
 
 // InterfaceSnapshot groups peer snapshots under their interface name.
@@ -60,8 +58,8 @@ type InterfaceSnapshot struct {
 	Peers     []PeerSnapshot `json:"peers"`
 }
 
-// MetricsSnapshot is the full GET /metrics response: the latest known
-// value of every metric the agent has collected.
+// MetricsSnapshot is the AWG provider's internal metrics response consumed by
+// the agent; the public agent API exposes System and Interfaces separately.
 type MetricsSnapshot struct {
 	System     SystemSnapshot      `json:"system"`
 	Interfaces []InterfaceSnapshot `json:"interfaces"`
@@ -79,14 +77,9 @@ type SystemHistoryPoint struct {
 	NetTxBytes    uint64    `json:"netTxBytes"`
 }
 
-// SystemHistory is the full GET /metrics/history response: every host-level
-// sample (Points) plus every per-peer sample (Interfaces) still retained in
-// the agent's in-memory ring buffers (up to 48h, oldest first — see
-// agent/internal/metrics's package doc comment), for rendering charts instead
-// of just the latest value. History is served only through this one endpoint;
-// the per-peer series ride along here rather than on a separate route. Points
-// stays the top-level field it always was, so existing consumers that only
-// read host history are unaffected.
+// SystemHistory is the agent's host-history response. Interfaces is populated
+// only in the AWG provider's internal response and is filtered by the agent;
+// public peer history is served by /metrics/{interface}/history.
 type SystemHistory struct {
 	Points     []SystemHistoryPoint `json:"points"`
 	Interfaces []InterfaceHistory   `json:"interfaces"`

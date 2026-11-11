@@ -454,6 +454,30 @@ func (h *Handler) serverMetricsHistory(w http.ResponseWriter, r bunrouter.Reques
 	return bunrouter.JSON(w, hist)
 }
 
+func (h *Handler) serverInterfaceMetrics(w http.ResponseWriter, r bunrouter.Request) error {
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	snapshot, err := h.svc.GetServerInterfaceMetrics(sID, r.Param("ifaceID"))
+	if err != nil {
+		return handleErr(err, map[string]any{"method": r.Method, "path": r.URL.Path, "server_id": sID})
+	}
+	return bunrouter.JSON(w, snapshot)
+}
+
+func (h *Handler) serverInterfaceMetricsHistory(w http.ResponseWriter, r bunrouter.Request) error {
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	history, err := h.svc.GetServerInterfaceMetricsHistory(sID, r.Param("ifaceID"))
+	if err != nil {
+		return handleErr(err, map[string]any{"method": r.Method, "path": r.URL.Path, "server_id": sID})
+	}
+	return bunrouter.JSON(w, history)
+}
+
 func (h *Handler) serverSetMonitoring(w http.ResponseWriter, r bunrouter.Request) error {
 	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
 

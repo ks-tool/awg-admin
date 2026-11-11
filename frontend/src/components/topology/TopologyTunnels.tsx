@@ -16,21 +16,30 @@
 
 import {useId, useMemo} from 'react';
 import {projectMercator} from '@zenith-visuals/maps';
-import type {NetworkConnection, NetworkInterface, ProviderLink, TopologyServer} from '@/types';
+import type {NetworkConnection, NetworkInterface, ProviderLink, TopologyServer, TunnelMetric} from '@/types';
 import {mergeProviderLinks} from './connections';
+
+const latencyColors = {blue: '#0ea5e9', yellow: '#f59e0b', red: '#ef4444'};
+
+function latencyColor(p95?: number): string {
+    if (p95 == null || p95 <= 100) return latencyColors.blue;
+    if (p95 <= 250) return latencyColors.yellow;
+    return latencyColors.red;
+}
 
 interface TopologyTunnelsProps {
     servers: TopologyServer[];
     interfaces: NetworkInterface[];
     connections: NetworkConnection[];
     links: ProviderLink[];
+    metrics: Record<string, TunnelMetric>;
     width: number;
     height: number;
     transform: string;
     zoom: number;
 }
 
-export function TopologyTunnels({servers, interfaces, connections, links, width, height, transform, zoom}: TopologyTunnelsProps) {
+export function TopologyTunnels({servers, interfaces, connections, links, metrics, width, height, transform, zoom}: TopologyTunnelsProps) {
     const markerID = useId().replaceAll(':', '');
     const allConnections = useMemo(() => mergeProviderLinks(connections, links), [connections, links]);
     const paths = useMemo(() => {
@@ -60,26 +69,33 @@ export function TopologyTunnels({servers, interfaces, connections, links, width,
                 x: (start.x + end.x) / 2 - dy / distance * curvature,
                 y: (start.y + end.y) / 2 + dx / distance * curvature,
             };
+            const p95 = metrics[connection.id]?.latencyP95Ms;
             return [{
                 id: connection.id,
                 d: `M${start.x},${start.y} Q${control.x},${control.y} ${end.x},${end.y}`,
-                label: `${source.name}/${sourceInterface.name} → ${target.name}/${targetInterface.name}`,
+                color: latencyColor(p95),
+                label: `${source.name}/${sourceInterface.name} → ${target.name}/${targetInterface.name}${p95 == null ? '' : ` · p95 ${p95.toFixed(1)} ms`}`,
             }];
         });
-    }, [allConnections, height, interfaces, servers, width, zoom]);
+    }, [allConnections, height, interfaces, metrics, servers, width, zoom]);
 
     return (
         <svg aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-visible" width={width} height={height} style={{transform, transformOrigin: '0 0'}}>
             <defs>
-                <marker id={markerID} markerWidth={9 / zoom} markerHeight={9 / zoom} viewBox="0 0 6 6" refX={5} refY={3} orient="auto" markerUnits="userSpaceOnUse">
-                    <path d="M0,0 L6,3 L0,6 Z" fill="#0ea5e9" />
-                </marker>
+                {Object.entries(latencyColors).map(([name, color]) => (
+                    <marker key={name} id={`${markerID}-${name}`} markerWidth={9 / zoom} markerHeight={9 / zoom} viewBox="0 0 6 6" refX={5} refY={3} orient="auto" markerUnits="userSpaceOnUse">
+                        <path d="M0,0 L6,3 L0,6 Z" fill={color} />
+                    </marker>
+                ))}
             </defs>
-            {paths.map(path => (
-                <path key={path.id} d={path.d} fill="none" stroke="#0ea5e9" strokeWidth={1.5 / zoom} strokeOpacity={0.8} markerEnd={`url(#${markerID})`}>
-                    <title>{path.label}</title>
-                </path>
-            ))}
+            {paths.map(path => {
+                const marker = Object.entries(latencyColors).find(([, color]) => color === path.color)?.[0] ?? 'blue';
+                return (
+                    <path key={path.id} d={path.d} fill="none" stroke={path.color} strokeWidth={1.5 / zoom} strokeOpacity={0.8} markerEnd={`url(#${markerID}-${marker})`}>
+                        <title>{path.label}</title>
+                    </path>
+                );
+            })}
         </svg>
     );
 }

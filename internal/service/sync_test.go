@@ -41,6 +41,7 @@ type fakeAgentTLS struct {
 	mu           sync.Mutex
 	store        map[string]agentmodels.InterfaceConfig
 	replacePeers map[string]bool
+	metrics      map[string]agentmodels.InterfaceSnapshot
 	resources    map[string]models.Resource
 	schemaCalls  int
 	actionCalls  int
@@ -64,11 +65,22 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 	fa := &fakeAgentTLS{
 		store:        make(map[string]agentmodels.InterfaceConfig),
 		replacePeers: make(map[string]bool),
+		metrics:      make(map[string]agentmodels.InterfaceSnapshot),
 		resources:    make(map[string]models.Resource),
 		sources:      make(map[string]string),
 		info:         agentmodels.HostInfo{Backend: "kernel", Version: "test", InterfaceKinds: []string{"amneziawg", "wireguard"}},
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /metrics/{name}", func(w http.ResponseWriter, r *http.Request) {
+		fa.mu.Lock()
+		snapshot, ok := fa.metrics[r.PathValue("name")]
+		fa.mu.Unlock()
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(snapshot)
+	})
 	mux.HandleFunc("GET /interfaces/unmanaged", func(w http.ResponseWriter, r *http.Request) {
 		fa.mu.Lock()
 		out := append([]models.UnmanagedInterface{}, fa.unmanaged...)

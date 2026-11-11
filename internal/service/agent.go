@@ -214,9 +214,8 @@ func (s *Service) ServerHostInfo(serverID string) (*agentmodels.HostInfo, error)
 	return info, nil
 }
 
-// GetServerMetrics fetches the latest CPU/RAM/load/network/peer snapshot
-// from serverID's agent, for display on the frontend Dashboard.
-func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapshot, error) {
+// GetServerMetrics fetches the latest host snapshot from serverID's agent.
+func (s *Service) GetServerMetrics(serverID string) (*agentmodels.SystemSnapshot, error) {
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
@@ -226,7 +225,7 @@ func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapsho
 		return nil, err
 	}
 
-	var snap *agentmodels.MetricsSnapshot
+	var snap *agentmodels.SystemSnapshot
 	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
 		var mErr error
 		snap, mErr = c.Metrics(ctx)
@@ -238,11 +237,52 @@ func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapsho
 	return snap, nil
 }
 
-// GetServerMetricsHistory fetches every host-level sample plus every per-peer
-// sample still retained in serverID's agent's in-memory ring buffers (up to
-// 48h), for the Dashboard's per-server metrics chart modal. Per-peer series
-// come back in SystemHistory.Interfaces (the agent serves all history through
-// its single /metrics/history endpoint).
+func (s *Service) serverAndInterface(serverID, interfaceID string) (*models.Server, *models.Interface, error) {
+	sID, err := uuid.Parse(serverID)
+	if err != nil {
+		return nil, nil, err
+	}
+	ifaceID, err := uuid.Parse(interfaceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	srv, err := s.store.Servers().Get(sID)
+	if err != nil {
+		return nil, nil, err
+	}
+	iface, err := s.store.Servers().Interfaces(sID).Get(ifaceID)
+	return srv, iface, err
+}
+
+func (s *Service) GetServerInterfaceMetrics(serverID, interfaceID string) (*agentmodels.InterfaceSnapshot, error) {
+	srv, iface, err := s.serverAndInterface(serverID, interfaceID)
+	if err != nil {
+		return nil, err
+	}
+	var snap *agentmodels.InterfaceSnapshot
+	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		var mErr error
+		snap, mErr = c.InterfaceMetrics(ctx, iface.Interface)
+		return mErr
+	})
+	return snap, err
+}
+
+func (s *Service) GetServerInterfaceMetricsHistory(serverID, interfaceID string) (*agentmodels.InterfaceHistory, error) {
+	srv, iface, err := s.serverAndInterface(serverID, interfaceID)
+	if err != nil {
+		return nil, err
+	}
+	var history *agentmodels.InterfaceHistory
+	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		var mErr error
+		history, mErr = c.InterfaceMetricsHistory(ctx, iface.Interface)
+		return mErr
+	})
+	return history, err
+}
+
+// GetServerMetricsHistory fetches host-level samples retained by serverID's agent.
 func (s *Service) GetServerMetricsHistory(serverID string) (*agentmodels.SystemHistory, error) {
 	sID, err := uuid.Parse(serverID)
 	if err != nil {

@@ -43,6 +43,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"sort"
 	"strings"
@@ -54,6 +55,7 @@ import (
 	"github.com/ks-tool/vpn-agent/storage"
 
 	"github.com/Jipok/wgctrl-go"
+	"github.com/Jipok/wgctrl-go/wgtypes"
 	atomicfile "github.com/natefinch/atomic"
 	"github.com/rs/zerolog/log"
 )
@@ -94,18 +96,20 @@ type Collector struct {
 	awg   *wgctrl.Client
 	agent storage.Storage
 
-	interval time.Duration
-	enabled  atomic.Bool
+	interval      time.Duration
+	systemEnabled bool
+	enabled       atomic.Bool
 
 	// persistPath is where the store is checkpointed to survive restarts;
 	// empty keeps the old in-memory-only behavior.
 	persistPath string
 
-	mu      sync.Mutex
-	prevCPU cpuTotals
-	haveCPU bool
-	prevNet netStats
-	haveNet bool
+	mu             sync.Mutex
+	prevCPU        cpuTotals
+	haveCPU        bool
+	prevNet        netStats
+	haveNet        bool
+	probeAddresses map[string]map[string]string
 }
 
 // NewCollector returns a Collector that samples every interval (the task
@@ -113,8 +117,22 @@ type Collector struct {
 // history per metric, sized from those two numbers. Persistence is opt-in via
 // SetPersistence (off by default); see the package doc comment.
 func NewCollector(awg *wgctrl.Client, agentStore storage.Storage, interval time.Duration) *Collector {
+	return newCollector(awg, agentStore, interval, true)
+}
+
+// NewSystemCollector samples only host metrics for the provider-neutral agent.
+func NewSystemCollector(interval time.Duration) *Collector {
+	return newCollector(nil, nil, interval, true)
+}
+
+// NewPeerCollector samples only WireGuard peers for the AWG provider.
+func NewPeerCollector(awg *wgctrl.Client, agentStore storage.Storage, interval time.Duration) *Collector {
+	return newCollector(awg, agentStore, interval, false)
+}
+
+func newCollector(awg *wgctrl.Client, agentStore storage.Storage, interval time.Duration, systemEnabled bool) *Collector {
 	capacity := int(retentionPeriod/interval) + 1
-	c := &Collector{store: newStore(capacity), awg: awg, agent: agentStore, interval: interval}
+	c := &Collector{store: newStore(capacity), awg: awg, agent: agentStore, interval: interval, systemEnabled: systemEnabled, probeAddresses: make(map[string]map[string]string)}
 	c.enabled.Store(true)
 	return c
 }
@@ -231,10 +249,16 @@ func (c *Collector) collectOnce() {
 	}
 
 	now := time.Now()
-	if err := c.collectSystem(now); err != nil {
-		log.Warn().Err(err).Msg("failed to collect system metrics")
+	if c.systemEnabled {
+		if err := c.collectSystem(now); err != nil {
+			log.Warn().Err(err).Msg("failed to collect system metrics")
+		}
+	} else {
+		c.store.dropDB(systemDB)
 	}
-	c.collectPeers(now)
+	if c.awg != nil && c.agent != nil {
+		c.collectPeers(now)
+	}
 }
 
 func (c *Collector) collectSystem(now time.Time) error {
@@ -340,9 +364,13 @@ func (c *Collector) collectPeers(now time.Time) {
 
 		db := cfg.Interface
 		livePeers := make(map[string]struct{}, len(dev.Peers))
+		addresses := make(map[string]string, len(dev.Peers))
 		for _, peer := range dev.Peers {
 			key := hex.EncodeToString(peer.PublicKey[:])
 			livePeers[key] = struct{}{}
+			if address := tunnelProbeAddress(peer); len(address) > 0 {
+				addresses[key] = address
+			}
 
 			c.store.write(db, key+"/rx", now, float64(peer.ReceiveBytes))
 			c.store.write(db, key+"/tx", now, float64(peer.TransmitBytes))
@@ -353,12 +381,35 @@ func (c *Collector) collectPeers(now time.Time) {
 			}
 			c.store.write(db, key+"/handshake", now, float64(handshake))
 		}
+		c.mu.Lock()
+		c.probeAddresses[db] = addresses
+		c.mu.Unlock()
 		// Evict metrics for peers no longer on the device (deleted) so they stop
 		// showing in the peer metrics/history, instead of lingering until they
 		// age past the retention window. Backstop to the immediate drop in the
 		// apply path (RetainPeers); also covers peers removed directly on the box.
 		c.store.retainPeers(db, livePeers)
 	}
+}
+
+func tunnelProbeAddress(peer wgtypes.Peer) string {
+	best := -1
+	var address net.IP
+	for _, network := range peer.AllowedIPs {
+		ip := network.IP.To4()
+		if ip == nil || !ip.IsGlobalUnicast() {
+			continue
+		}
+		ones, _ := network.Mask.Size()
+		if ones > 0 && ones > best {
+			best = ones
+			address = ip
+		}
+	}
+	if address == nil {
+		return ""
+	}
+	return address.String()
 }
 
 // RetainPeers evicts an interface's peer metrics for every peer whose hex public
@@ -369,6 +420,13 @@ func (c *Collector) collectPeers(now time.Time) {
 // that should remain. No-op if the interface has no recorded metrics.
 func (c *Collector) RetainPeers(iface string, keep map[string]struct{}) {
 	c.store.retainPeers(iface, keep)
+	c.mu.Lock()
+	for key := range c.probeAddresses[iface] {
+		if _, ok := keep[key]; !ok {
+			delete(c.probeAddresses[iface], key)
+		}
+	}
+	c.mu.Unlock()
 }
 
 // ForgetInterface immediately drops all retained peer metrics for the named
@@ -380,6 +438,9 @@ func (c *Collector) RetainPeers(iface string, keep map[string]struct{}) {
 // no recorded metrics.
 func (c *Collector) ForgetInterface(name string) {
 	c.store.dropDB(name)
+	c.mu.Lock()
+	delete(c.probeAddresses, name)
+	c.mu.Unlock()
 }
 
 // Snapshot returns the most recently recorded value of every metric this
@@ -531,6 +592,9 @@ func (c *Collector) queryInterfaces() []models.InterfaceSnapshot {
 
 func (c *Collector) queryInterface(db string) models.InterfaceSnapshot {
 	snap := models.InterfaceSnapshot{Interface: db}
+	c.mu.Lock()
+	addresses := c.probeAddresses[db]
+	c.mu.Unlock()
 
 	peers := make(map[string]*models.PeerSnapshot)
 	peerOf := func(key string) *models.PeerSnapshot {
@@ -563,7 +627,8 @@ func (c *Collector) queryInterface(db string) models.InterfaceSnapshot {
 		}
 	}
 
-	for _, p := range peers {
+	for key, p := range peers {
+		p.ProbeAddress = addresses[key]
 		snap.Peers = append(snap.Peers, *p)
 	}
 	return snap

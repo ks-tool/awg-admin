@@ -106,13 +106,19 @@ export function GetProviderSchema(arg1:string,arg2:string):Promise<models.Provid
 
 export function GetServer(arg1:string):Promise<models.Server>;
 
-export function GetServerMetrics(arg1:string):Promise<models.MetricsSnapshot>;
+export function GetServerInterfaceMetrics(arg1:string,arg2:string):Promise<models.InterfaceSnapshot>;
+
+export function GetServerInterfaceMetricsHistory(arg1:string,arg2:string):Promise<models.InterfaceHistory>;
+
+export function GetServerMetrics(arg1:string):Promise<models.SystemSnapshot>;
 
 export function GetServerMetricsHistory(arg1:string):Promise<models.SystemHistory>;
 
 export function GetServerProfile(arg1:string,arg2:string,arg3:number):Promise<service.ProfileDump>;
 
 export function GetTopology():Promise<models.Topology>;
+
+export function GetTunnelMetrics():Promise<Array<models.TunnelMetric>>;
 
 export function GetUser(arg1:string):Promise<models.User>;
 

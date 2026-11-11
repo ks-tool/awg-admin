@@ -78,6 +78,7 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 
 	protected.WithGroup("/topology", func(gr *bunrouter.Group) {
 		gr.GET("", h.topologyGet)
+		gr.GET("/tunnel-metrics", h.topologyTunnelMetrics)
 		gr.GET("/plugins", h.topologyPluginList)
 		gr.POST("/servers", h.topologyServerCreate)
 		gr.PUT("/servers/:serverID", h.topologyServerUpdate)
@@ -188,6 +189,8 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 
 				gr.WithGroup("/:ifaceID", func(gr *bunrouter.Group) {
 					gr.GET("", h.interfaceGet)
+					gr.GET("/metrics", h.serverInterfaceMetrics)
+					gr.GET("/metrics/history", h.serverInterfaceMetricsHistory)
 					gr.PUT("/config", h.interfaceConfigUpdate)
 					gr.POST("/force-replace-peers", h.interfaceForceReplacePeers)
 					gr.DELETE("", h.interfaceDelete)

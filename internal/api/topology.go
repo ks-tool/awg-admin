@@ -37,6 +37,14 @@ func (h *Handler) topologyGet(w http.ResponseWriter, r bunrouter.Request) error 
 	return bunrouter.JSON(w, topology)
 }
 
+func (h *Handler) topologyTunnelMetrics(w http.ResponseWriter, r bunrouter.Request) error {
+	metrics, err := h.svc.GetTunnelMetrics()
+	if err != nil {
+		return handleErr(err, topologyFields(r))
+	}
+	return bunrouter.JSON(w, metrics)
+}
+
 func (h *Handler) topologyPluginList(w http.ResponseWriter, r bunrouter.Request) error {
 	plugins, err := h.svc.ListVPNPlugins()
 	if err != nil {

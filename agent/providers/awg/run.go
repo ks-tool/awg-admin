@@ -135,7 +135,7 @@ func Run(version string) {
 	}
 	resourceRuntime.Start(context.Background())
 
-	collector := metrics.NewCollector(metricsAwg, store, cfg.MetricsInterval)
+	collector := metrics.NewPeerCollector(metricsAwg, store, cfg.MetricsInterval)
 	collector.SetPersistence(filepath.Join(cfg.DB, metrics.HistoryFilename))
 	if err := collector.LoadHistory(); err != nil {
 		log.Warn().Err(err).Msg("failed to load persisted metrics history")

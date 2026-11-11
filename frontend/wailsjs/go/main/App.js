@@ -206,6 +206,14 @@ export function GetServer(arg1) {
   return window['go']['main']['App']['GetServer'](arg1);
 }
 
+export function GetServerInterfaceMetrics(arg1, arg2) {
+  return window['go']['main']['App']['GetServerInterfaceMetrics'](arg1, arg2);
+}
+
+export function GetServerInterfaceMetricsHistory(arg1, arg2) {
+  return window['go']['main']['App']['GetServerInterfaceMetricsHistory'](arg1, arg2);
+}
+
 export function GetServerMetrics(arg1) {
   return window['go']['main']['App']['GetServerMetrics'](arg1);
 }
@@ -220,6 +228,10 @@ export function GetServerProfile(arg1, arg2, arg3) {
 
 export function GetTopology() {
   return window['go']['main']['App']['GetTopology']();
+}
+
+export function GetTunnelMetrics() {
+  return window['go']['main']['App']['GetTunnelMetrics']();
 }
 
 export function GetUser(arg1) {

@@ -232,6 +232,16 @@ export const bindingsClient = {
         }
     },
 
+    async getServerInterfaceMetricsHistory(serverId: string, interfaceId: string): Promise<ApiResponse<models.InterfaceHistory>> {
+        try {
+            const data = await AppBindings.GetServerInterfaceMetricsHistory(serverId, interfaceId);
+            return { data };
+        } catch (error) {
+            console.error('Bindings GetServerInterfaceMetricsHistory failed:', error);
+            return { data: null as never, error: extractErrorMessage(error) };
+        }
+    },
+
     async listInterfaces(serverId: string): Promise<ApiResponse<models.Interface[]>> {
         try {
             const data = await AppBindings.ListInterfaces(serverId);

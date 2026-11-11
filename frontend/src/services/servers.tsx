@@ -20,7 +20,7 @@ import {getCurrentApiMode} from './apiMode';
 import {bindingsClient} from './bindingsClient';
 import {throwIfPassphraseRequired} from './sshErrors';
 import {reportError} from './errorReporting';
-import type {Agent, ImportPreview, Interface, Server, ServerInfo, SSHConfig, SystemHistory, UnmanagedInterface} from '@/types';
+import type {Agent, ImportPreview, Interface, InterfaceHistory, Server, ServerInfo, SSHConfig, SystemHistory, UnmanagedInterface} from '@/types';
 
 export interface ServerInput {
     name: string;
@@ -247,6 +247,24 @@ export async function getServerMetricsHistory(serverId: string): Promise<SystemH
     const {data, error} = await get<SystemHistory>(`/servers/${serverId}/metrics/history`);
     if (error) {
         console.error(`Failed to fetch metrics history for server ${serverId}:`, error);
+        return null;
+    }
+    return data;
+}
+
+export async function getServerInterfaceMetricsHistory(serverId: string, interfaceId: string): Promise<InterfaceHistory | null> {
+    const client = getClient();
+    if (client) {
+        const {data, error} = await client.getServerInterfaceMetricsHistory(serverId, interfaceId);
+        if (error) {
+            console.error(`Failed to fetch interface metrics history for ${serverId}/${interfaceId} (bindings):`, error);
+            return null;
+        }
+        return data as unknown as InterfaceHistory;
+    }
+    const {data, error} = await get<InterfaceHistory>(`/servers/${serverId}/interfaces/${interfaceId}/metrics/history`);
+    if (error) {
+        console.error(`Failed to fetch interface metrics history for ${serverId}/${interfaceId}:`, error);
         return null;
     }
     return data;

@@ -592,6 +592,20 @@ export interface Tunnel {
 }
 
 //////////
+// source: tunnelmetric.go
+
+/**
+ * TunnelMetric is the source-to-destination p95 round-trip latency for one
+ * topology connection. A nil LatencyP95Ms means that no successful ICMP sample
+ * is available yet; Error describes a per-source collection failure.
+ */
+export interface TunnelMetric {
+  connectionId: string;
+  latencyP95Ms?: number /* float64 */;
+  error?: string;
+}
+
+//////////
 // source: user.go
 
 export interface User {

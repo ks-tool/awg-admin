@@ -33,7 +33,7 @@ import {AgentDeployment} from '@/components/server/AgentDeployment';
 import {ResourceManager} from '@/components/resources/ResourceManager';
 import ServerDetail from '@/pages/ServerDetail';
 import {TopologyServerManage} from '@/components/topology/TopologyServerManage';
-import {getServerMetricsHistory} from '@/services/servers';
+import {getServerInterfaceMetricsHistory, getServerMetricsHistory} from '@/services/servers';
 import {useAppStore} from '@/store';
 import {byName, cn, formatBytes} from '@/lib/utils';
 import {b64ToHex, isPeerConnected} from '@/lib/peers';
@@ -247,16 +247,22 @@ export function ServerMetricsModal({serverId, serverName, topologyServer, topolo
     useEffect(() => {
         if (manageTab !== 'metrics') return;
         let cancelled = false;
-        getServerMetricsHistory(serverId).then((hist) => {
-            if (!cancelled) {
-                setHistory(hist ?? null);
-                setLoading(false);
-            }
+        const interfaceIds = legacyServer?.interfaces ?? [];
+        void Promise.all([
+            getServerMetricsHistory(serverId),
+            Promise.all(interfaceIds.map(id => getServerInterfaceMetricsHistory(serverId, id))),
+        ]).then(([system, interfaceHistories]) => {
+            if (cancelled) return;
+            setHistory(system ? {
+                ...system,
+                interfaces: interfaceHistories.filter(history => history !== null),
+            } : null);
+            setLoading(false);
         });
         return () => {
             cancelled = true;
         };
-    }, [serverId, manageTab]);
+    }, [serverId, manageTab, legacyServer]);
 
     // Restrict every series (system points + each peer's points) to the
     // selected window. The cutoff is relative to the newest retained sample —
