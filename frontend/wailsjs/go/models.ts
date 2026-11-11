@@ -1497,11 +1497,11 @@ export namespace models {
 	    load15: number;
 	    netRxBytes: number;
 	    netTxBytes: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SystemSnapshot(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.timestamp = this.convertValues(source["timestamp"], null);
@@ -1708,11 +1708,11 @@ export namespace models {
 	    connectionId: string;
 	    latencyP95Ms?: number;
 	    error?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TunnelMetric(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.connectionId = source["connectionId"];
