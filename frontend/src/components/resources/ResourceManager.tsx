@@ -369,9 +369,11 @@ function ResourceEditor({state, manifest, schemas, busy, onStateChange, onClose,
                 <span className="ml-2 font-mono text-xs text-muted-foreground">{definition.apiVersion}</span>
             </div>
             {!state.resource && <button type="button" onClick={() => setStep('provider')} disabled={busy} className={cn(buttons.secondary, 'mb-4')}>{t('common.back')}</button>}
-            <FormField label={t('resources.name')}>
-                <input required value={name} disabled={busy || !!state.resource} onChange={event => setName(event.target.value)} className={inputs.primary} />
-            </FormField>
+            <div className="mb-4">
+                <FormField label={t('resources.name')}>
+                    <input required value={name} disabled={busy || !!state.resource} onChange={event => setName(event.target.value)} className={inputs.primary} />
+                </FormField>
+            </div>
             <SchemaForm schema={definition.specSchema} uiSchema={definition.uiSchema} formData={formData} onChange={setFormData} onSubmit={spec => onSave(name.trim(), spec)} submitLabel={busy ? t('common.saving') : t('common.save')} disabled={busy || !name.trim()} />
         </Modal>
     );

@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	packcmd "github.com/horchestra/pack/cmd"
 	"github.com/horchestra/pack/pkg/render"
@@ -42,6 +43,7 @@ const (
 )
 
 var embeddedPackApply = packcmd.Apply
+var packTargetLockMu sync.Mutex
 
 type packRelease struct {
 	name        string
@@ -277,7 +279,31 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 		options.Env["VPN_ADMIN_OCI_USERNAME"] = item.registry.Username
 		options.Env["VPN_ADMIN_OCI_PASSWORD"] = item.registry.Password
 	}
-	return embeddedPackApply(ctx, options)
+	packTargetLockMu.Lock()
+	defer packTargetLockMu.Unlock()
+	lockPath := filepath.Join(root, item.step+".lock.json")
+	cachedLock, err := os.ReadFile(lockPath)
+	if err == nil {
+		if err := os.WriteFile(filepath.Join(dir, "release.lock.json"), cachedLock, 0o600); err != nil {
+			return fmt.Errorf("restore pack target lock: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("read pack target lock: %w", err)
+	}
+	if err := embeddedPackApply(ctx, options); err != nil {
+		return err
+	}
+	generatedLock, err := os.ReadFile(filepath.Join(dir, "release.lock.json"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read generated pack target lock: %w", err)
+	}
+	if err := os.WriteFile(lockPath, generatedLock, 0o600); err != nil {
+		return fmt.Errorf("save pack target lock: %w", err)
+	}
+	return nil
 }
 
 func packFirewallRules(interfaceNames []string) []string {

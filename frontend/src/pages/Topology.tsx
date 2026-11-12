@@ -111,7 +111,7 @@ export default function Topology() {
     }, []);
 
     const refreshAgentStatuses = useCallback(async (servers: TopologyData['servers']) => {
-        const entries = await Promise.all(servers.filter(server => server.legacy).map(async server => [
+        const entries = await Promise.all(servers.map(async server => [
             server.id,
             await getServerAgentStatus(server.id),
         ] as const));
@@ -257,16 +257,17 @@ export default function Topology() {
     }, [topology.interfaces, topology.servers]);
 
     useEffect(() => {
-        if (!selectedConnection || connectionToCreate || connectionToMove || connectionToDelete) return;
+        if (view !== 'graph' || connectionToCreate || connectionToMove || connectionToDelete) return;
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+            if (event.key === 'Escape') {
+                setMoveMode(false);
+                return;
+            }
+            if (!selectedConnection) return;
             if (event.key.toLowerCase() === 'm') {
                 event.preventDefault();
                 setMoveMode(current => !current);
-                return;
-            }
-            if (event.key === 'Escape') {
-                setMoveMode(false);
                 return;
             }
             if (event.key !== 'Delete' && event.key !== 'Backspace') return;
@@ -274,9 +275,9 @@ export default function Topology() {
             setMoveMode(false);
             setConnectionToDelete(selectedConnection);
         };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedConnection, connectionToCreate, connectionToMove, connectionToDelete]);
+        window.addEventListener('keydown', handleKeyDown, true);
+        return () => window.removeEventListener('keydown', handleKeyDown, true);
+    }, [view, selectedConnection, connectionToCreate, connectionToMove, connectionToDelete]);
     const confirmDeleteConnection = useCallback(async () => {
         if (!connectionToDelete) return;
         setDeletingConnection(true);

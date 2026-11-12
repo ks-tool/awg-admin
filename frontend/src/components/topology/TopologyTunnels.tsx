@@ -14,7 +14,8 @@
   limitations under the License.
 */
 
-import {useId, useMemo} from 'react';
+import {useId, useMemo, useState, type PointerEvent as ReactPointerEvent} from 'react';
+import {useTranslation} from 'react-i18next';
 import {projectMercator} from '@zenith-visuals/maps';
 import type {NetworkConnection, NetworkInterface, ProviderLink, TopologyServer, TunnelMetric} from '@/types';
 import {mergeProviderLinks} from './connections';
@@ -40,7 +41,9 @@ interface TopologyTunnelsProps {
 }
 
 export function TopologyTunnels({servers, interfaces, connections, links, metrics, width, height, transform, zoom}: TopologyTunnelsProps) {
+    const {t} = useTranslation();
     const markerID = useId().replaceAll(':', '');
+    const [hovered, setHovered] = useState<{id: string; x: number; y: number} | null>(null);
     const allConnections = useMemo(() => mergeProviderLinks(connections, links), [connections, links]);
     const paths = useMemo(() => {
         if (width === 0) return [];
@@ -69,33 +72,64 @@ export function TopologyTunnels({servers, interfaces, connections, links, metric
                 x: (start.x + end.x) / 2 - dy / distance * curvature,
                 y: (start.y + end.y) / 2 + dx / distance * curvature,
             };
-            const p95 = metrics[connection.id]?.latencyP95Ms;
+            const metric = metrics[connection.id];
+            const p95 = metric?.latencyP95Ms;
+            const tooltip = [`${source.name}/${sourceInterface.name} → ${target.name}/${targetInterface.name}`];
+            if (p95 == null) {
+                tooltip.push(metric?.error ? `${t('topology.tunnelMeasurementError')}: ${metric.error}` : t('topology.tunnelNoMetrics'));
+            } else {
+                tooltip.push(`p95 ${p95.toFixed(1)} ms`);
+                if (p95 > 250) tooltip.push(t('topology.tunnelHighLatency'));
+            }
             return [{
                 id: connection.id,
                 d: `M${start.x},${start.y} Q${control.x},${control.y} ${end.x},${end.y}`,
                 color: latencyColor(p95),
-                label: `${source.name}/${sourceInterface.name} → ${target.name}/${targetInterface.name}${p95 == null ? '' : ` · p95 ${p95.toFixed(1)} ms`}`,
+                tooltip,
             }];
         });
-    }, [allConnections, height, interfaces, metrics, servers, width, zoom]);
+    }, [allConnections, height, interfaces, metrics, servers, t, width, zoom]);
+    const hoveredPath = hovered ? paths.find(path => path.id === hovered.id) : undefined;
+    const showTooltip = (event: ReactPointerEvent<SVGGElement>, id: string) => {
+        const bounds = event.currentTarget.ownerSVGElement?.parentElement?.getBoundingClientRect();
+        if (!bounds) return;
+        setHovered({id, x: event.clientX - bounds.left, y: event.clientY - bounds.top});
+    };
 
     return (
-        <svg aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-visible" width={width} height={height} style={{transform, transformOrigin: '0 0'}}>
-            <defs>
-                {Object.entries(latencyColors).map(([name, color]) => (
-                    <marker key={name} id={`${markerID}-${name}`} markerWidth={9 / zoom} markerHeight={9 / zoom} viewBox="0 0 6 6" refX={5} refY={3} orient="auto" markerUnits="userSpaceOnUse">
-                        <path d="M0,0 L6,3 L0,6 Z" fill={color} />
-                    </marker>
-                ))}
-            </defs>
-            {paths.map(path => {
-                const marker = Object.entries(latencyColors).find(([, color]) => color === path.color)?.[0] ?? 'blue';
-                return (
-                    <path key={path.id} d={path.d} fill="none" stroke={path.color} strokeWidth={1.5 / zoom} strokeOpacity={0.8} markerEnd={`url(#${markerID}-${marker})`}>
-                        <title>{path.label}</title>
-                    </path>
-                );
-            })}
-        </svg>
+        <>
+            <svg aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 overflow-visible" width={width} height={height} style={{transform, transformOrigin: '0 0'}}>
+                <defs>
+                    {Object.entries(latencyColors).map(([name, color]) => (
+                        <marker key={name} id={`${markerID}-${name}`} markerWidth={9 / zoom} markerHeight={9 / zoom} viewBox="0 0 6 6" refX={5} refY={3} orient="auto" markerUnits="userSpaceOnUse">
+                            <path d="M0,0 L6,3 L0,6 Z" fill={color} />
+                        </marker>
+                    ))}
+                </defs>
+                {paths.map(path => {
+                    const marker = Object.entries(latencyColors).find(([, color]) => color === path.color)?.[0] ?? 'blue';
+                    return (
+                        <g
+                            key={path.id}
+                            onPointerEnter={event => showTooltip(event, path.id)}
+                            onPointerMove={event => showTooltip(event, path.id)}
+                            onPointerLeave={() => setHovered(current => current?.id === path.id ? null : current)}
+                        >
+                            <path d={path.d} fill="none" stroke={path.color} strokeWidth={1.5 / zoom} strokeOpacity={0.8} markerEnd={`url(#${markerID}-${marker})`} pointerEvents="stroke" />
+                            <path d={path.d} fill="none" stroke="transparent" strokeWidth={12 / zoom} pointerEvents="stroke" />
+                        </g>
+                    );
+                })}
+            </svg>
+            {hovered && hoveredPath && (
+                <div
+                    data-testid="tunnel-tooltip"
+                    className="pointer-events-none absolute z-20 max-w-80 -translate-x-1/2 translate-y-3 rounded-lg border border-l-2 bg-popover px-3 py-2 text-xs whitespace-pre-line text-popover-foreground shadow-xl"
+                    style={{left: hovered.x, top: hovered.y, borderLeftColor: hoveredPath.color}}
+                >
+                    {hoveredPath.tooltip.map((line, index) => <div key={index} className={index === 0 ? 'font-semibold' : 'mt-1'}>{line}</div>)}
+                </div>
+            )}
+        </>
     );
 }

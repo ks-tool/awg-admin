@@ -184,6 +184,40 @@ func TestApplyPackUsesHostTarget(t *testing.T) {
 	}
 }
 
+func TestApplyPackReusesTargetLock(t *testing.T) {
+	original := embeddedPackApply
+	t.Cleanup(func() { embeddedPackApply = original })
+	cache := t.TempDir()
+	lock := []byte("{\"targets\":{\"host\":{\"source\":\"" + packTargetSource + "\",\"sha256\":\"abc\"}}}\n")
+	called := 0
+	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
+		called++
+		path := filepath.Join(options.Dir, "release.lock.json")
+		if called == 1 {
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Fatalf("first apply unexpectedly has a target lock: %v", err)
+			}
+		} else {
+			restored, err := os.ReadFile(path)
+			if err != nil || string(restored) != string(lock) {
+				t.Fatalf("restored target lock = %q, %v", restored, err)
+			}
+		}
+		return os.WriteFile(path, lock, 0o600)
+	}
+	item := packRelease{name: "VPN firewall", step: "firewall", pack: &firewallPack{}, values: map[string]any{}, firewall: []string{"i:awg0"}}
+	srv := models.Server{SSH: models.SSHConfig{Host: "192.0.2.1", KeyData: "private-key"}}
+	for range 2 {
+		if err := applyPack(context.Background(), srv, item, "", "", cache); err != nil {
+			t.Fatal(err)
+		}
+	}
+	persistent, err := os.ReadFile(filepath.Join(cache, "releases", "firewall.lock.json"))
+	if err != nil || string(persistent) != string(lock) {
+		t.Fatalf("persistent target lock = %q, %v", persistent, err)
+	}
+}
+
 func TestApplyPackRejectsUnsupportedSSHSettings(t *testing.T) {
 	item := packRelease{values: map[string]any{"artifact": "https://example.test/agent"}}
 	if err := applyPack(context.Background(), models.Server{SSH: models.SSHConfig{Password: "secret"}}, item, "", "", t.TempDir()); err == nil || !strings.Contains(err.Error(), "key authentication") {

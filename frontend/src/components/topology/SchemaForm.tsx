@@ -14,10 +14,36 @@
   limitations under the License.
 */
 
+import type {ReactNode} from 'react';
 import Form, {type IChangeEvent} from '@rjsf/core';
 import validator from '@rjsf/validator-ajv8';
-import type {RJSFSchema, UiSchema} from '@rjsf/utils';
+import {TranslatableString, type IconButtonProps, type RJSFSchema, type UiSchema} from '@rjsf/utils';
+import {ArrowDown, ArrowUp, Copy, Plus, Trash2, X} from 'lucide-react';
 import {buttons} from '@/components/common/controls';
+
+function arrayButton(props: IconButtonProps, label: TranslatableString, icon: ReactNode) {
+    return (
+        <button
+            type="button"
+            id={props.id}
+            className={`btn ${label === TranslatableString.RemoveButton ? 'btn-danger' : ''} ${props.className ?? ''}`}
+            onClick={props.onClick}
+            disabled={props.disabled}
+            title={props.registry.translateString(label)}
+        >
+            {icon}
+        </button>
+    );
+}
+
+const buttonTemplates = {
+    AddButton: (props: IconButtonProps) => <div className="flex justify-end">{arrayButton(props, TranslatableString.AddButton, <Plus size={16} />)}</div>,
+    CopyButton: (props: IconButtonProps) => arrayButton(props, TranslatableString.CopyButton, <Copy size={16} />),
+    MoveUpButton: (props: IconButtonProps) => arrayButton(props, TranslatableString.MoveUpButton, <ArrowUp size={16} />),
+    MoveDownButton: (props: IconButtonProps) => arrayButton(props, TranslatableString.MoveDownButton, <ArrowDown size={16} />),
+    RemoveButton: (props: IconButtonProps) => arrayButton(props, TranslatableString.RemoveButton, <Trash2 size={16} />),
+    ClearButton: (props: IconButtonProps) => arrayButton(props, TranslatableString.ClearButton, <X size={16} />),
+};
 
 interface SchemaFormProps {
     schema: Record<string, unknown>;
@@ -45,6 +71,7 @@ export function SchemaForm({schema, uiSchema, formData, submitLabel, disabled, o
                 formData={formData}
                 validator={validator}
                 disabled={disabled}
+                templates={{ButtonTemplates: buttonTemplates}}
                 onChange={handleChange}
                 onSubmit={handleSubmit}
             >

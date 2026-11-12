@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
 	"uuid"
 )
 
@@ -113,4 +112,41 @@ func TestFirewallSyncAfterDeploySkipsInitialInterfaces(t *testing.T) {
 	}
 	svc.markFirewallApplied(srv.ID)
 	svc.scheduleFirewallSync(srv.ID)
+}
+
+func TestSyncServerFirewallPolicy(t *testing.T) {
+	svc, srv, agent := newTestServerWithAgent(t)
+	agent.mu.Lock()
+	agent.awg = true
+	agent.mu.Unlock()
+	if err := svc.store.Servers().Interfaces(srv.ID).Set(&models.Interface{ID: uuid.New(),
+		Interface: "awg0", Address: "10.0.0.1/24"}); err != nil {
+		t.Fatal(err)
+	}
+	applied := make(chan []string, 1)
+	svc.applyFirewall = func(_ context.Context, _ models.Server, names []string, _, _ string) error {
+		applied <- names
+		return nil
+	}
+
+	if err := svc.syncServer(srv.ID.String(), false); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case names := <-applied:
+		t.Fatalf("startup sync applied firewall rules: %#v", names)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	if err := svc.SyncServer(srv.ID.String()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case names := <-applied:
+		if !reflect.DeepEqual(names, []string{"awg0"}) {
+			t.Fatalf("manual sync firewall interfaces = %#v", names)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("manual sync did not apply firewall rules")
+	}
 }

@@ -39,12 +39,12 @@ const mapTheme = {
     typography: {fontFamily: 'var(--font-sans)'},
 };
 
-const serviceStatusColors = ['#ef4444', '#f59e0b', '#22c55e'];
+const serviceStatusColors = ['#ef4444', '#a1a1aa', '#f59e0b', '#22c55e'];
 
 function serviceStatusValue(status: string): number {
     if (status === 'error') return 0;
-    if (status === 'running') return 2;
-    return 1;
+    if (status === 'running') return 3;
+    return 2;
 }
 
 function serviceStatusColor(status: string): string {
@@ -53,7 +53,8 @@ function serviceStatusColor(status: string): string {
 
 function agentStatusValue(status: AgentStatus): number {
     if (status === 'down') return 0;
-    if (status === 'ok') return 2;
+    if (status === 'ok') return 3;
+    if (status === 'degraded') return 2;
     return 1;
 }
 
