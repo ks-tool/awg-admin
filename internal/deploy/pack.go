@@ -36,7 +36,7 @@ import (
 
 const (
 	packTargetName   = "host"
-	packTargetSource = "https://github.com/horchestra/targets/releases/download/host/v0.2.0/pack-target-host_{os}_{arch}.tar.gz"
+	packTargetSource = "https://github.com/horchestra/targets/releases/download/host/v0.2.2/pack-target-host_{os}_{arch}.tar.gz"
 	packMirrorURL    = "http://127.0.0.1:8081"
 )
 

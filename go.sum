@@ -220,8 +220,8 @@ github.com/hashicorp/golang-lru/v2 v2.0.7 h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs
 github.com/hashicorp/golang-lru/v2 v2.0.7/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/hexops/gotextdiff v1.0.3 h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUqJM=
 github.com/hexops/gotextdiff v1.0.3/go.mod h1:pSWU5MAI3yDq+fZBTazCSJysOMbxWL1BSow5/V2vxeg=
-github.com/horchestra/pack v0.4.1 h1:McZi8FxNXrTjivfauup6NmzaJ5hw3F+fBi3p5HHJd3M=
-github.com/horchestra/pack v0.4.1/go.mod h1:NEO9/Aah796m+Eahb6O+y0DJC8p1tu6Nlu/03UqEPNY=
+github.com/horchestra/pack v0.5.1 h1:0NBQp+ABTPu+ocVH9b4flTP8fmBalyO/bU+iw3LUxyc=
+github.com/horchestra/pack v0.5.1/go.mod h1:NEO9/Aah796m+Eahb6O+y0DJC8p1tu6Nlu/03UqEPNY=
 github.com/horchestra/pack/sdk v1.1.0 h1:boxb0e5JLCtKb1oa3PqC5FrkTWaIPK7pJyqq1T6Qo1M=
 github.com/horchestra/pack/sdk v1.1.0/go.mod h1:aAG+C2kEc1rGLUfR7jRBKt1R5QFi5W3D4nt/FuesovY=
 github.com/huandu/xstrings v1.5.0 h1:2ag3IFq9ZDANvthTwTiqSSZLjDc+BedvHPAp5tJy2TI=
