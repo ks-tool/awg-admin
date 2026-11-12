@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"time"
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/deploy"
@@ -87,8 +89,23 @@ func (s *Service) DeployProvider(id string, provider models.ProviderDeployment, 
 	if err != nil {
 		return err
 	}
-	if len(provider.Name) == 0 || len(provider.Artifact) == 0 {
-		return errors.New("provider name and OCI artifact are required")
+	if len(provider.BinaryPath) > 0 {
+		const prefix = "vpn-provider-"
+		base := filepath.Base(provider.BinaryPath)
+		if !filepath.IsAbs(provider.BinaryPath) || len(base) <= len(prefix) || base[:len(prefix)] != prefix {
+			return errors.New("local provider binary must be an absolute path to vpn-provider-<name>")
+		}
+		provider.Name = base[len(prefix):]
+		info, err := os.Stat(provider.BinaryPath)
+		if err != nil {
+			return fmt.Errorf("read local provider binary: %w", err)
+		}
+		if !info.Mode().IsRegular() || info.Size() == 0 {
+			return errors.New("local provider binary must be a non-empty regular file")
+		}
+	}
+	if len(provider.Name) == 0 || (len(provider.Artifact) == 0) == (len(provider.BinaryPath) == 0) {
+		return errors.New("provider name and exactly one OCI artifact or local binary are required")
 	}
 	registry, err = s.resolveRegistry(registry)
 	if err != nil {
@@ -101,6 +118,9 @@ func (s *Service) DeployProvider(id string, provider models.ProviderDeployment, 
 		err := deploy.ProviderToPack(context.Background(), *srv, provider, registry, s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID), func(step string) {
 			s.deployStatus.setStep(sID, step)
 		})
+		if err == nil {
+			err = s.waitForProvider(id, provider.Name, 20*time.Second)
+		}
 		s.deployStatus.finish(sID, err)
 		if err != nil {
 			return
@@ -126,6 +146,9 @@ func (s *Service) RemoveProvider(id, name string) error {
 	s.deployStatus.setStep(sID, "remove_provider_"+name)
 	go func() {
 		err := deploy.RemoveProviderFromPack(context.Background(), *srv, name, s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID))
+		if err == nil {
+			err = s.removeCachedProvider(sID, name)
+		}
 		s.deployStatus.finish(sID, err)
 		if err == nil {
 			if err := s.SyncServer(id); err != nil {

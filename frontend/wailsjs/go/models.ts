@@ -153,7 +153,7 @@ export namespace models {
 	export class AgentDeployment {
 	    artifact?: string;
 	    binaryPath?: string;
-	    registry?: Registry;
+	    registry: Registry;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentDeployment(source);
@@ -241,7 +241,7 @@ export namespace models {
 	    message: string;
 	    observedGeneration?: number;
 	    // Go type: time
-	    lastTransitionTime?: any;
+	    lastTransitionTime: any;
 	
 	    static createFrom(source: any = {}) {
 	        return new Condition(source);
@@ -509,7 +509,7 @@ export namespace models {
 	    inSync: boolean;
 	    lastSyncError?: string;
 	    // Go type: time
-	    lastSyncedAt?: any;
+	    lastSyncedAt: any;
 	    tunnel?: number[];
 	
 	    static createFrom(source: any = {}) {
@@ -1204,7 +1204,8 @@ export namespace models {
 	
 	export class ProviderDeployment {
 	    name: string;
-	    artifact: string;
+	    artifact?: string;
+	    binaryPath?: string;
 	    options?: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
@@ -1215,6 +1216,7 @@ export namespace models {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.artifact = source["artifact"];
+	        this.binaryPath = source["binaryPath"];
 	        this.options = source["options"];
 	    }
 	}

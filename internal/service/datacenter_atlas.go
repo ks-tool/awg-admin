@@ -57,7 +57,7 @@ type datacenterAtlas struct {
 }
 
 func defaultLocationGeocoder() locationGeocoder {
-	cachePath := ""
+	var cachePath string
 	if home, err := os.UserHomeDir(); err == nil {
 		cachePath = filepath.Join(config.AdminCachePath(home), datacenterAtlasCacheName)
 	}
@@ -82,7 +82,7 @@ func (a *datacenterAtlas) Geocode(ctx context.Context, location string) (float64
 	if query == "" {
 		return 0, 0, fmt.Errorf("location is empty")
 	}
-	countryQuery := ""
+	var countryQuery string
 	if len(locationParts) == 2 {
 		countryQuery = atlasNormalize(locationParts[1])
 	}
@@ -236,7 +236,7 @@ func atlasNormalize(value string) string {
 }
 
 func atlasContainsAll(value, query string) bool {
-	for _, token := range strings.Fields(query) {
+	for token := range strings.FieldsSeq(query) {
 		if !strings.Contains(value, token) {
 			return false
 		}

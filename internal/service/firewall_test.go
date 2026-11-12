@@ -31,9 +31,8 @@ import (
 func TestFirewallSyncCoalescesChangesAndReloadsInterfaces(t *testing.T) {
 	svc, srv := newValidationTestServer(t)
 	interfaces := svc.store.Servers().Interfaces(srv.ID)
-	if err := interfaces.Set(&models.Interface{ID: uuid.New(), InterfaceConfig: agentmodels.InterfaceConfig{
-		Interface: "awg0", Address: "10.0.0.1/24",
-	}}); err != nil {
+	if err := interfaces.Set(&models.Interface{ID: uuid.New(),
+		Interface: "awg0", Address: "10.0.0.1/24"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,9 +59,8 @@ func TestFirewallSyncCoalescesChangesAndReloadsInterfaces(t *testing.T) {
 		t.Fatal("firewall sync did not start")
 	}
 
-	if err := interfaces.Set(&models.Interface{ID: uuid.New(), InterfaceConfig: agentmodels.InterfaceConfig{
-		Interface: "awg1", Address: "10.0.1.1/24",
-	}}); err != nil {
+	if err := interfaces.Set(&models.Interface{ID: uuid.New(),
+		Interface: "awg1", Address: "10.0.1.1/24"}); err != nil {
 		t.Fatal(err)
 	}
 	svc.scheduleFirewallSync(srv.ID)
@@ -105,9 +103,8 @@ func TestFirewallSyncCoalescesChangesAndReloadsInterfaces(t *testing.T) {
 
 func TestFirewallSyncAfterDeploySkipsInitialInterfaces(t *testing.T) {
 	svc, srv := newValidationTestServer(t)
-	if err := svc.store.Servers().Interfaces(srv.ID).Set(&models.Interface{ID: uuid.New(), InterfaceConfig: agentmodels.InterfaceConfig{
-		Interface: "awg0", Address: "10.0.0.1/24",
-	}}); err != nil {
+	if err := svc.store.Servers().Interfaces(srv.ID).Set(&models.Interface{ID: uuid.New(),
+		Interface: "awg0", Address: "10.0.0.1/24"}); err != nil {
 		t.Fatal(err)
 	}
 	svc.applyFirewall = func(context.Context, models.Server, []string, string, string) error {

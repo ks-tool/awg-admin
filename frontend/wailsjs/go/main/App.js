@@ -342,6 +342,10 @@ export function RefreshAgentSourceCache(arg1) {
   return window['go']['main']['App']['RefreshAgentSourceCache'](arg1);
 }
 
+export function RefreshProviderManifest(arg1) {
+  return window['go']['main']['App']['RefreshProviderManifest'](arg1);
+}
+
 export function RefreshVPNServiceStatus(arg1) {
   return window['go']['main']['App']['RefreshVPNServiceStatus'](arg1);
 }

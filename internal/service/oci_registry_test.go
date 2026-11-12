@@ -116,16 +116,21 @@ func TestRegistrySourceLifecycleKeepsPasswordOutOfList(t *testing.T) {
 	}
 }
 
-func TestRegistrySourceAcceptsLocalAgentBinaryOnly(t *testing.T) {
+func TestRegistrySourceAcceptsLocalBinaries(t *testing.T) {
 	svc := newTestService(t)
-	source, err := svc.CreateRegistrySource("/opt/vpn-agent", models.RegistrySourceAgent, "", "", false)
-	if err != nil || source.URL != "/opt/vpn-agent" {
-		t.Fatalf("local source = %#v, %v", source, err)
+	for _, test := range []struct {
+		sourceType string
+		path       string
+	}{
+		{sourceType: models.RegistrySourceAgent, path: "/opt/vpn-agent"},
+		{sourceType: models.RegistrySourceProvider, path: "/opt/vpn-provider-awg"},
+	} {
+		source, err := svc.CreateRegistrySource(test.path, test.sourceType, "", "", false)
+		if err != nil || source.URL != test.path {
+			t.Fatalf("local source = %#v, %v", source, err)
+		}
 	}
-	if _, err := svc.CreateRegistrySource("relative/vpn-agent", models.RegistrySourceAgent, "", "", false); err == nil {
+	if _, err := svc.CreateRegistrySource("relative/vpn-provider-awg", models.RegistrySourceProvider, "", "", false); err == nil {
 		t.Fatal("relative local path was accepted")
-	}
-	if _, err := svc.CreateRegistrySource("/opt/provider", models.RegistrySourceProvider, "", "", false); err == nil {
-		t.Fatal("local provider source was accepted")
 	}
 }

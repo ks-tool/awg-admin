@@ -33,7 +33,7 @@ const (
 )
 
 // RegistrySource is a reusable agent OCI repository, provider OCI catalog or
-// local agent binary. Password is stored in the admin database, but list and
+// local agent/provider binary. Password is stored in the admin database, but list and
 // get responses clear it and expose HasPassword.
 type RegistrySource struct {
 	ID          uuid.UUID `json:"id"`
@@ -48,14 +48,14 @@ type RegistrySource struct {
 // RegistryRequest identifies an untagged OCI repository or repository prefix.
 type RegistryRequest struct {
 	Repository string   `json:"repository"`
-	Registry   Registry `json:"registry,omitempty"`
+	Registry   Registry `json:"registry"`
 }
 
 // AgentDeployment selects either an OCI release or a local vpn-agent binary.
 type AgentDeployment struct {
 	Artifact   string   `json:"artifact,omitempty"`
 	BinaryPath string   `json:"binaryPath,omitempty"`
-	Registry   Registry `json:"registry,omitempty"`
+	Registry   Registry `json:"registry"`
 }
 
 // ProviderRepository is a provider found under an OCI repository prefix.

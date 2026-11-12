@@ -22,6 +22,7 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"sync"
 
@@ -85,9 +86,7 @@ func (r *Registry) Get(id string) (Plugin, error) {
 func (r *Registry) List(ctx context.Context) []models.PluginDescriptor {
 	r.mu.RLock()
 	plugins := make(map[string]Plugin, len(r.plugins))
-	for id, p := range r.plugins {
-		plugins[id] = p
-	}
+	maps.Copy(plugins, r.plugins)
 	r.mu.RUnlock()
 
 	result := make([]models.PluginDescriptor, 0, len(plugins))

@@ -37,10 +37,12 @@ const base = (serverId: string, provider: string) => `/servers/${encodeURICompon
 const resourcePath = (serverId: string, provider: string, kind: string, name: string) =>
     `${base(serverId, provider)}/resources/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`;
 
-export async function getProviderManifest(serverId: string): Promise<ProviderManifest> {
-    return isDesktop()
-        ? binding(() => AppBindings.GetProviderManifest(serverId))
-        : unwrap(await get<ProviderManifest>(`/servers/${encodeURIComponent(serverId)}/providers/manifest`));
+export async function getProviderManifest(serverId: string, refresh = false): Promise<ProviderManifest> {
+    if (isDesktop()) {
+        return binding(() => refresh ? AppBindings.RefreshProviderManifest(serverId) : AppBindings.GetProviderManifest(serverId));
+    }
+    const suffix = refresh ? '?refresh=true' : '';
+    return unwrap(await get<ProviderManifest>(`/servers/${encodeURIComponent(serverId)}/providers/manifest${suffix}`));
 }
 
 export async function getProviderSchema(serverId: string, provider: string): Promise<ProviderDefinition> {

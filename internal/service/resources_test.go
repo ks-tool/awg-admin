@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
@@ -81,6 +82,51 @@ func TestProviderResourceLifecycleAndSchemaCache(t *testing.T) {
 	resources, err = svc.ListProviderResources(serverID, "test")
 	if err != nil || len(resources) != 0 {
 		t.Fatalf("resource was not deleted: %+v, %v", resources, err)
+	}
+}
+
+func TestRefreshProviderManifestReplacesCachedProviders(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	agent.mu.Lock()
+	agent.awg = true
+	agent.mu.Unlock()
+	manifest, err := svc.GetProviderManifest(server.ID.String())
+	if err != nil || len(manifest.Providers) != 2 {
+		t.Fatalf("initial manifest: %+v, %v", manifest, err)
+	}
+
+	agent.mu.Lock()
+	agent.awg = false
+	agent.mu.Unlock()
+	cached, err := svc.GetProviderManifest(server.ID.String())
+	if err != nil || len(cached.Providers) != 2 {
+		t.Fatalf("expected the previous cached manifest: %+v, %v", cached, err)
+	}
+	refreshed, err := svc.RefreshProviderManifest(server.ID.String())
+	if err != nil || len(refreshed.Providers) != 1 || refreshed.Providers[0].Name != "test" {
+		t.Fatalf("refreshed manifest: %+v, %v", refreshed, err)
+	}
+	cached, err = svc.GetProviderManifest(server.ID.String())
+	if err != nil || len(cached.Providers) != 1 || cached.Providers[0].Name != "test" {
+		t.Fatalf("removed provider returned from cache: %+v, %v", cached, err)
+	}
+}
+
+func TestWaitForProviderRequiresManifestRegistration(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	agent.mu.Lock()
+	agent.awg = true
+	agent.mu.Unlock()
+	if err := svc.waitForProvider(server.ID.String(), "awg", time.Second); err != nil {
+		t.Fatalf("registered provider was not accepted: %v", err)
+	}
+
+	agent.mu.Lock()
+	agent.awg = false
+	agent.mu.Unlock()
+	err := svc.waitForProvider(server.ID.String(), "awg", 0)
+	if err == nil || !strings.Contains(err.Error(), "did not appear in agent manifest") {
+		t.Fatalf("unregistered provider reported a successful deployment: %v", err)
 	}
 }
 
@@ -223,6 +269,35 @@ func TestServerMigrationCompletesOnlyWithAWGProvider(t *testing.T) {
 	}
 }
 
+func TestMigrationNormalizesLegacyAWGAPIVersion(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	agent.mu.Lock()
+	agent.awg = true
+	interfaceID := uuid.New()
+	agent.resources["awg0"] = models.Resource{
+		ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "awg/v1alpha1", Kind: "Interface", Name: "awg0", Generation: 1,
+		Spec:   json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`),
+		Status: models.ResourceStatus{ObservedGeneration: 1, Phase: models.ResourceReady},
+	}
+	agent.mu.Unlock()
+
+	resources, err := svc.ListProviderResources(server.ID.String(), "awg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resources) != 1 || resources[0].APIVersion != "awg.ks-tool.dev/v1" {
+		t.Fatalf("unexpected migrated resources: %+v", resources)
+	}
+	stored, err := svc.store.Resources(server.ID).Get(interfaceID.String())
+	if err != nil || stored.APIVersion != "awg.ks-tool.dev/v1" {
+		t.Fatalf("stored resource was not normalized: %+v, %v", stored, err)
+	}
+	iface, err := svc.store.Servers().Interfaces(server.ID).Get(interfaceID)
+	if err != nil || iface.Provider != "awg" || iface.ListenPort != 51820 {
+		t.Fatalf("legacy interface projection is incorrect: %+v, %v", iface, err)
+	}
+}
+
 func TestMigratedResourcesAreSubmittedInterfaceFirst(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
 	agent.mu.Lock()
@@ -233,7 +308,7 @@ func TestMigratedResourcesAreSubmittedInterfaceFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	interfaceID := uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")
-	iface := &models.Interface{ID: interfaceID, InterfaceConfig: agentmodels.InterfaceConfig{Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, PrivateKey: privateKey}}
+	iface := &models.Interface{ID: interfaceID, Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, PrivateKey: privateKey}
 	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +365,7 @@ func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	ifaceID := uuid.New()
-	iface := &models.Interface{ID: ifaceID, InterfaceConfig: agentmodels.InterfaceConfig{Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, PrivateKey: interfaceKey}}
+	iface := &models.Interface{ID: ifaceID, Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, PrivateKey: interfaceKey}
 	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +450,7 @@ func TestDeleteUserRevokesAdoptedAWGPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	interfaceID := uuid.New()
-	iface := &models.Interface{ID: interfaceID, InterfaceConfig: agentmodels.InterfaceConfig{Interface: "awg0", Address: "10.0.0.1/24", PrivateKey: privateKey}}
+	iface := &models.Interface{ID: interfaceID, Interface: "awg0", Address: "10.0.0.1/24", PrivateKey: privateKey}
 	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
 		t.Fatal(err)
 	}
@@ -478,5 +553,34 @@ func TestServerStatusDoesNotRequireLegacyAWGAPI(t *testing.T) {
 	status, err := svc.ServerAgentStatus(server.ID.String())
 	if err != nil || status != models.AgentStatusOK {
 		t.Fatalf("provider-only agent status = %q, %v", status, err)
+	}
+}
+
+func TestMissingAWGProviderDoesNotFallBackToLegacyInterfaceAPI(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	server.Unmanaged = true
+	if err := svc.store.Servers().Set(server); err != nil {
+		t.Fatal(err)
+	}
+	iface := &models.Interface{ID: uuid.New(), Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820}
+	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
+		t.Fatal(err)
+	}
+	svc.pushInterface(server.ID, iface)
+	stored, err := svc.store.Servers().Interfaces(server.ID).Get(iface.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stored.LastSyncError, `provider not found in agent manifest: awg`) {
+		t.Fatalf("unexpected sync error: %q", stored.LastSyncError)
+	}
+	if strings.Contains(stored.LastSyncError, `interface ""`) {
+		t.Fatalf("sync error hides the missing provider: %q", stored.LastSyncError)
+	}
+	agent.mu.Lock()
+	legacyCalls := len(agent.store)
+	agent.mu.Unlock()
+	if legacyCalls != 0 {
+		t.Fatal("missing provider fell back to the legacy interface API")
 	}
 }

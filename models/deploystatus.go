@@ -20,7 +20,7 @@ package models
 // by the frontend through Service.GetDeployStatus.
 type DeployStatus struct {
 	// Step is a machine-readable deployment key such as "install_agent" or
-	// "install_provider_awg"; the frontend localizes it.
+	// "install_provider_awg"; the frontend localizes the operation and substitutes the provider name.
 	Step string `json:"step"`
 	Done bool   `json:"done"`
 	// Error is the deploy's final error message, set only once Done is

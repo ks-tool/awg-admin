@@ -18,6 +18,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 	"uuid"
@@ -77,6 +78,15 @@ func (s *Service) pushProviderInterface(serverID uuid.UUID, iface *models.Interf
 	}
 	if storage.IsNotFound(err) {
 		if _, schemaErr := s.GetProviderSchema(serverID.String(), "awg"); schemaErr != nil {
+			if errors.Is(schemaErr, ErrProviderNotFound) {
+				srv, srvErr := s.store.Servers().Get(serverID)
+				if srvErr != nil {
+					return true, srvErr
+				}
+				if srv.Unmanaged {
+					return true, schemaErr
+				}
+			}
 			return false, nil
 		}
 		spec, specErr := legacyInterfaceSpec(iface)
@@ -275,7 +285,7 @@ func (s *Service) syncLegacyResource(serverID string, resource models.Resource) 
 		if iface != nil {
 			cfg = iface.InterfaceConfig
 		}
-		if resource.APIVersion == "awg.ks-tool.dev/v1" {
+		if providerFromAPIVersion(resource.APIVersion) == "awg" {
 			if err := json.Unmarshal(resource.Spec, &cfg); err != nil {
 				return err
 			}
@@ -325,7 +335,7 @@ func (s *Service) syncLegacyResource(serverID string, resource models.Resource) 
 		if err != nil {
 			return err
 		}
-		if resource.APIVersion != "awg.ks-tool.dev/v1" {
+		if providerFromAPIVersion(resource.APIVersion) != "awg" {
 			for peerIndex := range user.Peers {
 				peer := &user.Peers[peerIndex]
 				if peer.ResourceName != resource.Name && (len(peer.ResourceName) > 0 || peer.PrivateKey.String() != spec.PublicKey) {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/horchestra/pack/sdk"
 	"github.com/horchestra/pack/sdk/packschema"
+	sdkschema "github.com/horchestra/pack/sdk/schema"
 )
 
 func TestPackGenerates(t *testing.T) {
@@ -45,6 +46,45 @@ func TestPackGenerates(t *testing.T) {
 		return
 	}
 	t.Fatal("systemd unit is missing from pack content")
+}
+
+func TestTLSIsZero(t *testing.T) {
+	if !(TLS{}).IsZero() {
+		t.Fatal("empty TLS must be zero")
+	}
+	secret := packschema.Secret{SecretRef: &packschema.SecretRef{Name: "tls", Key: "ca"}}
+	for name, value := range map[string]TLS{
+		"ca": {CA: secret}, "certificate": {Certificate: secret}, "privateKey": {PrivateKey: secret},
+	} {
+		if value.IsZero() {
+			t.Errorf("TLS with %s must not be zero", name)
+		}
+	}
+}
+
+func TestSelfDeployValuesDoNotRequireTLS(t *testing.T) {
+	config := &Config{SelfDeploy: true}
+	config.SetDefaults()
+	raw, err := sdk.Schema(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := sdkschema.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := document.Compile("pack://" + config.Meta().Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := make(map[string]any, len(config.Env))
+	for key, value := range config.Env {
+		env[key] = value
+	}
+	values := map[string]any{"env": env, "unit": config.Unit}
+	if violations := compiled.Validate(values); len(violations) > 0 {
+		t.Fatalf("values without TLS do not validate: %+v", violations)
+	}
 }
 
 func TestSelfDeployPackUsesBinaryContent(t *testing.T) {

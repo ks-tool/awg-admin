@@ -24,11 +24,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/internal/config"
 	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 )
 
 func providerCacheRoot() (string, error) {
@@ -132,11 +134,19 @@ func (s *Service) cacheServerProviderManifest(serverID string, manifest *models.
 		if desired[record.Definition.Name] {
 			continue
 		}
-		if err := s.store.Providers().Delete(id, record.Definition.Name); err != nil {
+		if err := s.store.Providers().Delete(id, record.Definition.Name); err != nil && !storage.IsNotFound(err) {
 			return err
 		}
 	}
 	return nil
+}
+
+func (s *Service) removeCachedProvider(serverID uuid.UUID, name string) error {
+	err := s.store.Providers().Delete(serverID, name)
+	if storage.IsNotFound(err) {
+		return nil
+	}
+	return err
 }
 
 func (s *Service) fetchProviderManifest(serverID string) (*models.Manifest, error) {
@@ -174,16 +184,47 @@ func (r *providerRegistry) endRefresh(serverID string) {
 	r.mu.Unlock()
 }
 
+func (s *Service) RefreshProviderManifest(serverID string) (*models.Manifest, error) {
+	manifest, err := s.fetchProviderManifest(serverID)
+	if err != nil {
+		return nil, err
+	}
+	for _, provider := range manifest.Providers {
+		s.providerRegistry.store(manifest.AgentID, provider.Version, provider)
+	}
+	return manifest, nil
+}
+
 func (s *Service) refreshProviderManifest(serverID string) {
 	if !s.providerRegistry.beginRefresh(serverID) {
 		return
 	}
 	defer s.providerRegistry.endRefresh(serverID)
-	manifest, err := s.fetchProviderManifest(serverID)
-	if err != nil {
-		return
-	}
-	for _, provider := range manifest.Providers {
-		s.providerRegistry.store(manifest.AgentID, provider.Version, provider)
+	_, _ = s.RefreshProviderManifest(serverID)
+}
+
+func (s *Service) waitForProvider(serverID, name string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for {
+		manifest, err := s.RefreshProviderManifest(serverID)
+		if err == nil {
+			for _, provider := range manifest.Providers {
+				if provider.Name == name {
+					return nil
+				}
+			}
+			lastErr = errors.New("provider not found in agent manifest: " + name)
+		} else {
+			lastErr = err
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return errors.New("provider " + name + " did not appear in agent manifest after deployment: " + lastErr.Error())
+		}
+		if remaining > 250*time.Millisecond {
+			remaining = 250 * time.Millisecond
+		}
+		time.Sleep(remaining)
 	}
 }

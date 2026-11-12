@@ -98,11 +98,11 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	}
 	if srv.Unmanaged {
 		if _, err := s.fetchProviderManifest(id); err != nil {
-			log.Warn().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
+			log.Error().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
 			return models.AgentStatusUnmanaged, nil
 		}
 		if err := s.completeServerMigration(srv); err != nil {
-			log.Warn().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
+			log.Error().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
 			return models.AgentStatusUnmanaged, nil
 		}
 	}
@@ -247,8 +247,7 @@ func (s *Service) UpdateServer(id string, in ServerInput) (*models.Server, error
 	}
 
 	if err = s.ensureTunnel(srv); err != nil {
-		var passErr *sshclient.PassphraseRequiredError
-		if errors.As(err, &passErr) {
+		if _, ok := errors.AsType[*sshclient.PassphraseRequiredError](err); ok {
 			return nil, err
 		}
 		// any other dial error (host unreachable, etc.) is already logged by

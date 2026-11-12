@@ -152,7 +152,7 @@ export interface AuthCredentials {
 export interface DeployStatus {
   /**
    * Step is a machine-readable deployment key such as "install_agent" or
-   * "install_provider_awg"; the frontend localizes it.
+   * "install_provider_awg"; the frontend localizes the operation and substitutes the provider name.
    */
   step: string;
   done: boolean;
@@ -323,7 +323,7 @@ export const RegistrySourceAgent = "agent";
 export const RegistrySourceProvider = "provider";
 /**
  * RegistrySource is a reusable agent OCI repository, provider OCI catalog or
- * local agent binary. Password is stored in the admin database, but list and
+ * local agent/provider binary. Password is stored in the admin database, but list and
  * get responses clear it and expose HasPassword.
  */
 export interface RegistrySource {

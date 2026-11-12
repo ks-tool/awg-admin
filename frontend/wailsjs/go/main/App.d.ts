@@ -174,6 +174,8 @@ export function ReconcileServer(arg1:string):Promise<service.ReconcileReport>;
 
 export function RefreshAgentSourceCache(arg1:string):Promise<void>;
 
+export function RefreshProviderManifest(arg1:string):Promise<models.Manifest>;
+
 export function RefreshVPNServiceStatus(arg1:string):Promise<models.VPNService>;
 
 export function RemoveProvider(arg1:string,arg2:string):Promise<void>;

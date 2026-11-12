@@ -40,7 +40,6 @@ func (p *providerRemovalPack) Meta() sdk.Meta {
 func (p *providerRemovalPack) PackRoot() packschema.Root {
 	commands := [][]string{
 		{"rm", "-f", "/usr/local/bin/vpn-provider-" + p.name, "/var/lib/vpn-agent/providers.d/" + p.name + ".conf"},
-		{"systemctl", "restart", "vpn-agent"},
 	}
 	return packschema.Root{Packages: map[string]packschema.OSInstall{
 		"debian": {Commands: commands},

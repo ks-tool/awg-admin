@@ -138,11 +138,8 @@ func normalizeRegistrySourceURL(address, sourceType string) (string, error) {
 		}
 		return ref.withoutTag(), nil
 	}
-	if sourceType != models.RegistrySourceAgent {
-		return "", fmt.Errorf("provider source must be an OCI catalog URL")
-	}
 	if !filepath.IsAbs(address) {
-		return "", fmt.Errorf("agent source must be an OCI repository URL or an absolute local binary path")
+		return "", fmt.Errorf("source must be an OCI URL or an absolute local binary path")
 	}
 	return filepath.Clean(address), nil
 }

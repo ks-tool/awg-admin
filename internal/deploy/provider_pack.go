@@ -25,43 +25,53 @@ import (
 )
 
 type providerPack struct {
-	name string
-}
-
-type providerPackValues struct {
-	Artifact   string         `json:"artifact" jsonschema:"required,format=uri"`
+	name       string
+	contentDir string
+	Artifact   string         `json:"artifact,omitempty" jsonschema:"format=uri"`
 	Deployment map[string]any `json:"deployment"`
+	SelfDeploy bool           `json:"-"`
 }
 
 func (p *providerPack) SetDefaults() {}
 
+func (p *providerPack) setContentDir(dir string) { p.contentDir = dir }
+
 func (p *providerPack) Meta() sdk.Meta {
-	return sdk.Meta{Name: "vpn-provider-" + p.name, Version: "1.0.0", Description: "Deployable VPN provider", License: "Apache-2.0"}
+	return sdk.Meta{Name: "vpn-provider-" + p.name, Version: "1.0.0", Description: "Deployable VPN provider", License: "Apache-2.0", Dir: p.contentDir}
 }
 
 func (p *providerPack) PackRoot() packschema.Root {
 	binary := "/usr/local/bin/vpn-provider-" + p.name
 	config := "/etc/vpn-provider-" + p.name + "/deploy.json"
-	return packschema.Root{Packages: map[string]packschema.OSInstall{
+	hooks := make([]packschema.Hook, 0, 2)
+	for _, phase := range []packschema.Phase{packschema.PostInstall, packschema.PostUpgrade} {
+		hooks = append(hooks, packschema.Hook{Name: "deploy-provider", Phase: phase, Idempotent: true, Command: []string{binary, "deploy", "--config", config}})
+	}
+	content := packschema.File{Path: binary, URL: "{{ .artifact }}", Mode: "0755"}
+	if p.SelfDeploy {
+		content.URL = ""
+		content.Source = p.Meta().Name
+	}
+	return packschema.Root{Hooks: hooks, Packages: map[string]packschema.OSInstall{
 		"debian": {
 			Prepare: []string{"ca-certificates"},
 			Content: []packschema.File{
-				{Path: binary, URL: "{{ .artifact }}", Mode: "0755"},
+				content,
 				{Path: config, Values: "deployment", Format: "json", Mode: "0600"},
 			},
-			Commands: [][]string{{binary, "deploy", "--config", config}},
-			Services: []string{"vpn-agent"},
 		},
 	}}
 }
 
 func newProviderPack(provider models.ProviderDeployment) (sdk.Pack, map[string]any, error) {
-	if len(provider.Name) == 0 || len(provider.Artifact) == 0 {
-		return nil, nil, fmt.Errorf("provider name and artifact are required")
+	if len(provider.Name) == 0 || (len(provider.Artifact) == 0) == (len(provider.BinaryPath) == 0) {
+		return nil, nil, fmt.Errorf("provider name and exactly one OCI artifact or local binary are required")
 	}
 	values := map[string]any{
-		"artifact":   provider.Artifact,
 		"deployment": map[string]any{"agentDB": remoteDBPath, "options": provider.Options},
 	}
-	return &providerPack{name: provider.Name}, values, nil
+	if len(provider.Artifact) > 0 {
+		values["artifact"] = provider.Artifact
+	}
+	return &providerPack{name: provider.Name, SelfDeploy: len(provider.BinaryPath) > 0}, values, nil
 }

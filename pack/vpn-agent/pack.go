@@ -41,7 +41,7 @@ WantedBy=multi-user.target
 type Config struct {
 	Artifact   string            `json:"artifact,omitempty" jsonschema:"format=uri"`
 	Env        map[string]string `json:"env,omitempty"`
-	TLS        TLS               `json:"tls,omitempty"`
+	TLS        TLS               `json:"tls,omitzero,omitempty"`
 	Unit       string            `json:"unit"`
 	SelfDeploy bool              `json:"-"`
 }
@@ -50,6 +50,10 @@ type TLS struct {
 	CA          packschema.Secret `json:"ca" jsonschema:"required"`
 	Certificate packschema.Secret `json:"certificate" jsonschema:"required"`
 	PrivateKey  packschema.Secret `json:"privateKey" jsonschema:"required"`
+}
+
+func (t TLS) IsZero() bool {
+	return t.CA.IsZero() && t.Certificate.IsZero() && t.PrivateKey.IsZero()
 }
 
 func (c *Config) SetDefaults() {
@@ -92,6 +96,8 @@ if [ -n "$legacy_unit" ] || [ -e /usr/local/bin/awg-agent ]; then
 	systemctl reset-failed awg-agent.service 2>/dev/null || true
 fi`},
 			},
+			{Name: "restart-agent", Phase: packschema.PostInstall, Idempotent: true, Timeout: "30s", Command: []string{"sh", "-c", "systemctl enable vpn-agent && systemctl restart vpn-agent"}},
+			{Name: "restart-agent", Phase: packschema.PostUpgrade, Idempotent: true, Timeout: "30s", Command: []string{"sh", "-c", "systemctl enable vpn-agent && systemctl restart vpn-agent"}},
 		},
 		Packages: map[string]packschema.OSInstall{
 			"debian": {
@@ -104,7 +110,6 @@ fi`},
 					{Path: "/etc/vpn-agent/server.pem", Values: "tls/certificate", Format: "text", Mode: "0600"},
 					{Path: "/etc/vpn-agent/server-key.pem", Values: "tls/privateKey", Format: "text", Mode: "0600"},
 				},
-				Services: []string{"vpn-agent"},
 			},
 		},
 	}

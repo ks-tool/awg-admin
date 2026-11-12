@@ -58,10 +58,14 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
     const [unlocking, setUnlocking] = useState(false);
     const [unlockError, setUnlockError] = useState('');
     const busy = starting || deploying;
+    const providerStep = /^(install|remove)_provider_(.+)$/.exec(step);
+    const stepText = providerStep
+        ? t(`servers.deploySteps.${providerStep[1]}_provider`, {name: providerStep[2]})
+        : t(`servers.deploySteps.${step}`, step);
 
-    const loadManifest = useCallback(async () => {
+    const loadManifest = useCallback(async (refresh = false) => {
         try {
-            setManifest(await getProviderManifest(server.id));
+            setManifest(await getProviderManifest(server.id, refresh));
         } catch {
             setManifest(null);
         }
@@ -130,7 +134,7 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
                     return;
                 }
                 toast.success(request?.kind === 'remove' ? t('servers.providerRemovedSuccess') : t('servers.deployedSuccess'));
-                await loadManifest();
+                await loadManifest(true);
                 onChanged();
             } catch (error) {
                 if (!cancelled) handleError(error);
@@ -195,7 +199,7 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
                 )}
             </div>
 
-            {busy && step && <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><RefreshCw size={12} className="animate-spin" />{t(`servers.deploySteps.${step}`, step)}</div>}
+            {busy && step && <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><RefreshCw size={12} className="animate-spin" />{stepText}</div>}
             {deployError && !busy && <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">{deployError}</p>}
 
             {addingAgent && (

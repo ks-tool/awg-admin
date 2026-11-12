@@ -22,7 +22,6 @@ import (
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 func TestDistributedLinkCoordinationAndRecovery(t *testing.T) {
@@ -138,7 +137,7 @@ func TestDeleteProviderLinkClearsMigratedLegacyTunnel(t *testing.T) {
 	tunnelID := uuid.New()
 	ids := []uuid.UUID{uuid.New(), uuid.New()}
 	for _, id := range ids {
-		iface := &models.Interface{ID: id, Tunnel: &tunnelID, InterfaceConfig: agentmodels.InterfaceConfig{Interface: "awg" + id.String()[:4], Address: "10.0.0.1/24", ListenPort: 51820}}
+		iface := &models.Interface{ID: id, Tunnel: &tunnelID, Interface: "awg" + id.String()[:4], Address: "10.0.0.1/24", ListenPort: 51820}
 		if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
 			t.Fatal(err)
 		}

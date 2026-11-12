@@ -36,6 +36,11 @@ function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
+function providerNameFromBinary(path: string): string {
+    const name = path.split(/[\\/]/).pop() ?? '';
+    return name.startsWith('vpn-provider-') ? name.slice('vpn-provider-'.length) : '';
+}
+
 export function ArtifactDeploymentModal(props: Props) {
     const {kind, busy, onClose} = props;
     const {t} = useTranslation();
@@ -142,6 +147,15 @@ export function ArtifactDeploymentModal(props: Props) {
                 return;
             }
             props.onDeploy({artifact: `${repository}:${tag}`, registry});
+            return;
+        }
+        if (localBinary) {
+            const name = providerNameFromBinary(localBinary);
+            if (!name) {
+                toast.error(t('servers.localProviderNameRequired'));
+                return;
+            }
+            props.onDeploy({name, binaryPath: localBinary, options: name === 'awg' ? {userspace} : {}}, {});
             return;
         }
         if (!providerName || !repository || !tag) {

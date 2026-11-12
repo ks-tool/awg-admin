@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"slices"
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
@@ -76,13 +77,7 @@ func (i *interfaces) Set(iface *models.Interface) error {
 			return fmt.Errorf("server: %w", err)
 		}
 
-		exists := false
-		for _, id := range srv.Interfaces {
-			if id == iface.ID {
-				exists = true
-				break
-			}
-		}
+		exists := slices.Contains(srv.Interfaces, iface.ID)
 		if !exists {
 			// Brand new interface: peers are managed separately, never
 			// accepted on create. On update, leave iface.Peers as the
@@ -155,10 +150,8 @@ func (i *interfaces) Import(iface *models.Interface, peers []storage.ImportPeer)
 		if ib.Get(idKey(iface.ID)) != nil {
 			return fmt.Errorf("interface %s: %w", iface.ID, storage.ErrAlreadyExists)
 		}
-		for _, id := range srv.Interfaces {
-			if id == iface.ID {
-				return fmt.Errorf("interface %s: %w", iface.ID, storage.ErrAlreadyExists)
-			}
+		if slices.Contains(srv.Interfaces, iface.ID) {
+			return fmt.Errorf("interface %s: %w", iface.ID, storage.ErrAlreadyExists)
 		}
 
 		ub := tx.Bucket(bktUsers)

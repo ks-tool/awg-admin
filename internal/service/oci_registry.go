@@ -131,7 +131,7 @@ func parseOCIRepository(repository string) (ociRepository, error) {
 	if strings.Contains(path, "@") || strings.Contains(path[strings.LastIndex(path, "/")+1:], ":") {
 		return ociRepository{}, fmt.Errorf("OCI repository %q must not include a tag or digest", repository)
 	}
-	for _, segment := range strings.Split(path, "/") {
+	for segment := range strings.SplitSeq(path, "/") {
 		if len(segment) == 0 || segment == "." || segment == ".." || strings.ContainsAny(segment, " ?#") {
 			return ociRepository{}, fmt.Errorf("invalid OCI repository %q", repository)
 		}
@@ -296,7 +296,7 @@ func bearerChallenge(challenge string) map[string]string {
 	if !ok || !strings.EqualFold(scheme, "Bearer") {
 		return out
 	}
-	for _, part := range strings.Split(rest, ",") {
+	for part := range strings.SplitSeq(rest, ",") {
 		key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
 		if ok {
 			out[strings.ToLower(key)] = strings.Trim(value, `"`)
@@ -306,7 +306,7 @@ func bearerChallenge(challenge string) map[string]string {
 }
 
 func nextRegistryPage(link string) string {
-	for _, part := range strings.Split(link, ",") {
+	for part := range strings.SplitSeq(link, ",") {
 		section := strings.Split(strings.TrimSpace(part), ";")
 		if len(section) < 2 || !strings.Contains(strings.Join(section[1:], ";"), `rel="next"`) {
 			continue

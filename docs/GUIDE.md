@@ -118,6 +118,7 @@ important to distinguish the two independent extension mechanisms.
 
 - stores desired `Resource` objects and provider registrations under `VPN_AGENT_DB`;
 - starts each provider as a child process, restarts it after failure and stops it during shutdown;
+- watches `providers.d`, loads and unloads providers without an agent restart, and restarts only the provider whose registration changed;
 - obtains manifests and JSON schemas through the provider API;
 - reconciles resources and participates in link `prepare`/`commit`/`delete`;
 - exposes host info, system metrics and ICMP latency.
@@ -297,8 +298,8 @@ service plugin's **Apply**.
 
 **Settings → Agent and provider sources** defines each source with one URL and the **Agent** or **Provider** type. An agent
 source is a full OCI repository such as `oci://ghcr.io/ks-tool/vpn-agent`, or an absolute path to a local `vpn-agent` binary.
-A provider source is an OCI catalog prefix such as `oci://ghcr.io/ks-tool/vpn-providers`. In standalone mode, local paths refer
-to the admin server, not the computer running the browser. OCI sources can also store a username/password and enable plain
+A provider source is an OCI catalog prefix such as `oci://ghcr.io/ks-tool/vpn-providers`, or an absolute path to a local
+`vpn-provider-<name>` binary. In standalone mode, local paths refer to the admin server, not the computer running the browser. OCI sources can also store a username/password and enable plain
 HTTP. The password is stored in BoltDB, omitted from list/get API responses and never shown again in the form; an empty password
 field during editing preserves the old password. HTTPS is the default; enable plain HTTP only on a trusted network.
 
@@ -313,8 +314,9 @@ newest tags in descending semver order. A local source needs no version: its sav
 ### Independent provider installation
 
 Install the agent first. Then click **+** under **Installed providers** and use the drop-down lists to select a source, provider
-and one of the 10 newest versions. For official GHCR, providers are discovered from `providers/<name>/v*` release tags in
-`ks-tool/vpn-agent`; a private registry must support OCI `_catalog` for automatic listing.
+and one of the 10 newest versions. A local source derives the name from `vpn-provider-<name>` and uploads the file directly,
+without a version. For official GHCR, providers are discovered from `providers/<name>/v*` release tags in `ks-tool/vpn-agent`;
+a private registry must support OCI `_catalog` for automatic listing.
 
 Each provider is installed independently of the agent. The generic admin pack downloads the selected binary and invokes
 `deploy --config`; the provider owns all further installation work. AWG accepts `{"userspace": true}`. Xray and Hysteria 2 accept

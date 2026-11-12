@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/ks-tool/vpn-admin/models"
 	"github.com/uptrace/bunrouter"
 )
 
@@ -28,7 +29,13 @@ func resourceFields(r bunrouter.Request) map[string]any {
 }
 
 func (h *Handler) providerManifest(w http.ResponseWriter, r bunrouter.Request) error {
-	manifest, err := h.svc.GetProviderManifest(r.Param("serverID"))
+	var manifest *models.Manifest
+	var err error
+	if r.URL.Query().Get("refresh") == "true" {
+		manifest, err = h.svc.RefreshProviderManifest(r.Param("serverID"))
+	} else {
+		manifest, err = h.svc.GetProviderManifest(r.Param("serverID"))
+	}
 	if err != nil {
 		return handleErr(err, resourceFields(r))
 	}

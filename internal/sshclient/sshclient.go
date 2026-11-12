@@ -215,8 +215,7 @@ func authMethod(cfg models.SSHConfig, passphrase string) (ssh.AuthMethod, error)
 	if keyData != nil {
 		signer, err := parseSigner(keyData, passphrase)
 		if err != nil {
-			var passErr *PassphraseRequiredError
-			if errors.As(err, &passErr) {
+			if passErr, ok := errors.AsType[*PassphraseRequiredError](err); ok {
 				return nil, passErr
 			}
 			return nil, fmt.Errorf("parse private key (%s): %w", keySource, err)
@@ -257,8 +256,7 @@ func parseSigner(keyData []byte, passphrase string) (ssh.Signer, error) {
 	if len(passphrase) == 0 {
 		signer, err := ssh.ParsePrivateKey(keyData)
 		if err != nil {
-			var missing *ssh.PassphraseMissingError
-			if errors.As(err, &missing) {
+			if _, ok := errors.AsType[*ssh.PassphraseMissingError](err); ok {
 				return nil, &PassphraseRequiredError{Err: err}
 			}
 			return nil, err

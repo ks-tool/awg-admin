@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 	"uuid"
 
@@ -330,12 +331,7 @@ func compatibleLinkKind(source, target resolvedEndpoint) (string, error) {
 }
 
 func containsString(values []string, value string) bool {
-	for _, item := range values {
-		if item == value {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, value)
 }
 
 func hasLinkCycle(links []models.Link, sourceID, targetID string) bool {

@@ -26,7 +26,6 @@ import (
 	"github.com/ks-tool/vpn-admin/internal/plugin"
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage/boltdb"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
 )
 
 type topologyGeocoderFunc func(context.Context, string) (float64, float64, error)
@@ -265,8 +264,8 @@ func TestTopologyProjectsExistingInventory(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.Servers().Interfaces(serverID).Set(&models.Interface{
-		ID:              interfaceID,
-		InterfaceConfig: agentmodels.InterfaceConfig{Interface: "awg0", Address: "10.20.0.1/24"},
+		ID:        interfaceID,
+		Interface: "awg0", Address: "10.20.0.1/24",
 	}); err != nil {
 		t.Fatal(err)
 	}

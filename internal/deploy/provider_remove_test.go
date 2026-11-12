@@ -39,10 +39,13 @@ func TestRemoveProviderFromPack(t *testing.T) {
 			t.Fatal(err)
 		}
 		text := string(data)
-		for _, expected := range []string{"/usr/local/bin/vpn-provider-awg", "/var/lib/vpn-agent/providers.d/awg.conf", "systemctl", "restart"} {
+		for _, expected := range []string{"/usr/local/bin/vpn-provider-awg", "/var/lib/vpn-agent/providers.d/awg.conf"} {
 			if !strings.Contains(text, expected) {
 				t.Fatalf("removal pack does not contain %q:\n%s", expected, text)
 			}
+		}
+		if strings.Contains(text, "systemctl") {
+			t.Fatalf("provider removal still restarts the agent:\n%s", text)
 		}
 		return nil
 	}

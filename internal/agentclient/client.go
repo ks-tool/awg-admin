@@ -460,7 +460,7 @@ func markIdempotent(req *http.Request) {
 }
 
 func responseError(resp *http.Response, name string) error {
-	if resp.StatusCode == http.StatusNotFound {
+	if resp.StatusCode == http.StatusNotFound && len(name) > 0 {
 		return &NotFoundError{Interface: name}
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -36,9 +37,11 @@ import (
 
 const (
 	packTargetName   = "host"
-	packTargetSource = "https://github.com/horchestra/targets/releases/download/host/v0.2.2/pack-target-host_{os}_{arch}.tar.gz"
+	packTargetSource = "https://github.com/horchestra/targets/releases/download/host/v0.2.3/pack-target-host_{os}_{arch}.tar.gz"
 	packMirrorURL    = "http://127.0.0.1:8081"
 )
+
+var embeddedPackApply = packcmd.Apply
 
 type packRelease struct {
 	name        string
@@ -126,15 +129,14 @@ func ProviderToPack(ctx context.Context, srv models.Server, provider models.Prov
 		onStep("install_provider_" + provider.Name)
 	}
 	item := packRelease{
-		name: provider.Name, step: "provider_" + provider.Name, binary: pack.Meta().Name, pack: pack, values: values, registry: registry,
+		name: provider.Name, step: "provider_" + provider.Name, binary: pack.Meta().Name, localBinary: provider.BinaryPath,
+		pack: pack, values: values, registry: registry,
 	}
 	if err := applyPack(ctx, srv, item, passphrase, sudoPassword, config.AdminCachePath(home)); err != nil {
 		return fmt.Errorf("install %s provider: %w", provider.Name, err)
 	}
 	return nil
 }
-
-var embeddedPackApply = packcmd.Apply
 
 func applyPack(ctx context.Context, srv models.Server, item packRelease, passphrase, sudoPassword, cache string) error {
 	if len(srv.SSH.Password) > 0 && len(srv.SSH.Key) == 0 && len(srv.SSH.KeyData) == 0 {
@@ -152,17 +154,34 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 		return err
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
+
+	var binary []byte
+	var contentPack interface{ setContentDir(string) }
+
+	if len(item.localBinary) > 0 {
+		binary, err = os.ReadFile(item.localBinary)
+		if err != nil {
+			return fmt.Errorf("read local binary: %w", err)
+		}
+		contentPack, _ = item.pack.(interface{ setContentDir(string) })
+		if contentPack != nil {
+			contentDir := filepath.Join(dir, "content")
+			if err := os.MkdirAll(contentDir, 0o700); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(contentDir, item.binary), binary, 0o600); err != nil {
+				return fmt.Errorf("prepare local binary: %w", err)
+			}
+			contentPack.setContentDir(dir)
+		}
+	}
 	if err := sdk.Generate(filepath.Join(dir, "packs"), item.pack); err != nil {
 		return err
 	}
-	if len(item.localBinary) > 0 {
-		binary, err := os.ReadFile(item.localBinary)
-		if err != nil {
-			return fmt.Errorf("read local agent binary: %w", err)
-		}
-		path := filepath.Join(dir, "packs", item.pack.Meta().Name, "templates", "vpn-agent")
+	if len(item.localBinary) > 0 && contentPack == nil {
+		path := filepath.Join(dir, "packs", item.pack.Meta().Name, "templates", item.binary)
 		if err := os.WriteFile(path, binary, 0o600); err != nil {
-			return fmt.Errorf("prepare local agent binary: %w", err)
+			return fmt.Errorf("prepare local binary: %w", err)
 		}
 	}
 	if err := writePackJSON(filepath.Join(dir, "release.yaml"), map[string]any{
@@ -174,10 +193,10 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 		return err
 	}
 	values := make(map[string]any, len(item.values))
-	for key, value := range item.values {
-		values[key] = value
-	}
-	registry := ""
+
+	maps.Copy(values, item.values)
+
+	var registry string
 	if artifact, ok := item.values["artifact"].(string); ok {
 		artifactURL, artifactRegistry, err := packArtifactURL(artifact, item.binary)
 		if err != nil {

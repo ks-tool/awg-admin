@@ -133,7 +133,7 @@ type Interface struct {
 	// not touched by the agent itself.
 	InSync        bool      `json:"inSync"`
 	LastSyncError string    `json:"lastSyncError,omitempty"`
-	LastSyncedAt  time.Time `json:"lastSyncedAt,omitempty"`
+	LastSyncedAt  time.Time `json:"lastSyncedAt"`
 
 	// Tunnel groups the interfaces that together form one multi-hop tunnel
 	// (see Service.BuildTunnel / the tunnel wizard): every interface a tunnel

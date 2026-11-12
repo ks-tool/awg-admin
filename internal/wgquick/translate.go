@@ -145,7 +145,7 @@ func Translate(name string, conf *Conf) (*Translation, error) {
 				}
 			}
 			seenRoute[cidr] = true
-			suffix := ""
+			var suffix string
 			if tableMode == tableNumber {
 				suffix = " table " + strconv.Itoa(table)
 			}

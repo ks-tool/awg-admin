@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"strconv"
 	"strings"
@@ -61,9 +62,7 @@ func (s *Service) addProviderPeer(userID uuid.UUID, in AddPeerInput, server *mod
 	}
 	resourceName := fmt.Sprintf("%s-%s-%s", name, provider, models.NewDeterministicUUID(userID.String() + ":" + in.InterfaceID.String() + ":" + identifier.String()).String()[:8])
 	spec := make(map[string]any, len(in.Spec)+5)
-	for key, value := range in.Spec {
-		spec[key] = value
-	}
+	maps.Copy(spec, in.Spec)
 	user, err := s.store.Users().Get(userID)
 	if err != nil {
 		return nil, err

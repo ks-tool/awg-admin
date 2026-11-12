@@ -49,8 +49,11 @@ func TestAgentPackValues(t *testing.T) {
 
 func TestAgentPackLegacyMigrationHooks(t *testing.T) {
 	root := (&vpnagentpack.Config{}).PackRoot()
-	if root.Readiness == nil || len(root.Hooks) != 2 {
+	if root.Readiness == nil || len(root.Hooks) != 4 {
 		t.Fatalf("unexpected agent pack hooks: %#v", root.Hooks)
+	}
+	if len(root.Packages["debian"].Services) > 0 {
+		t.Fatalf("agent must restart once after content delivery, not through Services: %#v", root.Packages["debian"].Services)
 	}
 	stop, remove := root.Hooks[0], root.Hooks[1]
 	if stop.Name != "stop-legacy-agent" || string(stop.Phase) != "preInstall" || !stop.Idempotent {
@@ -64,6 +67,12 @@ func TestAgentPackLegacyMigrationHooks(t *testing.T) {
 	}
 	if !strings.Contains(remove.Command[2], "rm -f /usr/local/bin/awg-agent") || !strings.Contains(remove.Command[2], `rm -f "$legacy_unit"`) {
 		t.Fatalf("remove command = %q", remove.Command[2])
+	}
+	for index, phase := range []string{"postInstall", "postUpgrade"} {
+		restart := root.Hooks[index+2]
+		if restart.Name != "restart-agent" || string(restart.Phase) != phase || strings.Join(restart.Command, " ") != "sh -c systemctl enable vpn-agent && systemctl restart vpn-agent" {
+			t.Fatalf("unexpected restart hook: %#v", restart)
+		}
 	}
 }
 

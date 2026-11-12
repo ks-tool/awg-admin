@@ -56,6 +56,25 @@ func TestProviderDefinitionCacheUsesAPIVersionFileNames(t *testing.T) {
 	}
 }
 
+func TestRemoveCachedProviderSurvivesRestartWithoutAgent(t *testing.T) {
+	svc := newTestService(t)
+	serverID := uuid.New()
+	manifest := &models.Manifest{Providers: []models.ProviderDefinition{{Name: "awg", Version: "dev"}}}
+	if err := svc.cacheServerProviderManifest(serverID.String(), manifest); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.removeCachedProvider(serverID, "awg"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.removeCachedProvider(serverID, "awg"); err != nil {
+		t.Fatalf("repeated removal must be idempotent: %v", err)
+	}
+	restarted := New(svc.store)
+	if _, err := restarted.cachedProviderManifest(serverID.String()); !os.IsNotExist(err) {
+		t.Fatalf("removed provider returned after restart without an agent: %v", err)
+	}
+}
+
 func TestCachedProviderManifestTracksServerProviderRemoval(t *testing.T) {
 	svc := newTestService(t)
 	serverID := uuid.New().String()

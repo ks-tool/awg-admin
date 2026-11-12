@@ -77,8 +77,7 @@ func TestGetServerProfileRejectsUnknownKind(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for an unknown profile kind")
 	}
-	var ve *ValidationError
-	if !errors.As(err, &ve) {
+	if _, ok := errors.AsType[*ValidationError](err); !ok {
 		t.Fatalf("expected a *ValidationError (→ HTTP 400), got %T: %v", err, err)
 	}
 }

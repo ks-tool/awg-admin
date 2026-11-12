@@ -125,8 +125,7 @@ func (s *Service) planImport(serverID, ifaceName, peerMap string) (*importPlan, 
 		return nil
 	})
 	if err != nil {
-		var notFound *agentclient.NotFoundError
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*agentclient.NotFoundError](err); ok {
 			return nil, invalidInput("no wg-quick config for %q on the server (looked for /etc/amnezia/amneziawg/%s.conf and /etc/wireguard/%s.conf)", ifaceName, ifaceName, ifaceName)
 		}
 		return nil, fmt.Errorf("read %s config from agent: %w", ifaceName, err)

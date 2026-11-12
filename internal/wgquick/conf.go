@@ -314,7 +314,7 @@ func (c *Conf) validate() error {
 
 func splitList(value string) []string {
 	var out []string
-	for _, part := range strings.Split(value, ",") {
+	for part := range strings.SplitSeq(value, ",") {
 		if part = strings.TrimSpace(part); part != "" {
 			out = append(out, part)
 		}

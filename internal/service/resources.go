@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"sync"
@@ -29,6 +30,8 @@ import (
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/models"
 )
+
+var ErrProviderNotFound = errors.New("provider not found in agent manifest")
 
 type schemaCacheKey struct {
 	agentID  string
@@ -70,11 +73,9 @@ func (r *providerRegistry) store(agentID, version string, definition models.Prov
 func (s *Service) GetProviderManifest(serverID string) (*models.Manifest, error) {
 	manifest, err := s.cachedProviderManifest(serverID)
 	if err == nil {
-		s.providerRefresh.Add(1)
-		go func() {
-			defer s.providerRefresh.Done()
+		s.providerRefresh.Go(func() {
 			s.refreshProviderManifest(serverID)
-		}()
+		})
 		return manifest, nil
 	}
 	if !os.IsNotExist(err) {
@@ -96,7 +97,7 @@ func (s *Service) GetProviderSchema(serverID, providerName string) (*models.Prov
 		}
 	}
 	if provider == nil {
-		return nil, errors.New("provider not found in agent manifest")
+		return nil, fmt.Errorf("%w: %s", ErrProviderNotFound, providerName)
 	}
 	if len(provider.Resources) > 0 {
 		return provider, nil
@@ -143,11 +144,14 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 	}); err != nil {
 		return nil, err
 	}
-	result := append([]models.Resource(nil), resources...)
+	result := make([]models.Resource, 0, len(resources))
 	remote := make(map[string]struct{}, len(resources))
 	for _, item := range resources {
 		key := item.Kind + "\x00" + item.Name
 		remote[key] = struct{}{}
+		if apiVersion, ok := supported[item.Kind]; ok {
+			item.APIVersion = apiVersion
+		}
 		if localItem, ok := localByName[key]; ok {
 			if err := s.migrateProviderResourceSecret(serverID, definition, localItem); err != nil {
 				return nil, err
@@ -156,6 +160,7 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 		if err := s.saveProviderResource(serverID, item); err != nil {
 			return nil, err
 		}
+		result = append(result, item)
 	}
 	sort.SliceStable(local, func(i, j int) bool {
 		if local[i].Kind == local[j].Kind {
@@ -202,6 +207,7 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 		if err := s.migrateProviderResourceSecret(serverID, definition, item); err != nil {
 			return nil, err
 		}
+		created.APIVersion = apiVersion
 		if err := s.saveProviderResource(serverID, *created); err != nil {
 			return nil, err
 		}

@@ -27,12 +27,13 @@ export interface AgentInfo {
 // source: deployment.go
 
 /**
- * ProviderDeployment selects a provider and its OCI binary release. The
- * provider's own pack defines dependencies, values and runtime registration.
+ * ProviderDeployment selects a provider and either its OCI binary release or a
+ * local binary. The provider's own pack defines dependencies, values and runtime registration.
  */
 export interface ProviderDeployment {
   name: string;
-  artifact: string;
+  artifact?: string;
+  binaryPath?: string;
   /**
    * Options contains provider-specific installation settings interpreted by
    * that provider's pack, for example {"userspace": true} for AWG.

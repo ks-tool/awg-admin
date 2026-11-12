@@ -19,6 +19,7 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 	"uuid"
 
@@ -226,10 +227,8 @@ func (s *Service) findServerByInterface(ifaceID uuid.UUID) (*models.Server, erro
 		return nil, err
 	}
 	for i := range servers {
-		for _, id := range servers[i].Interfaces {
-			if id == ifaceID {
-				return &servers[i], nil
-			}
+		if slices.Contains(servers[i].Interfaces, ifaceID) {
+			return &servers[i], nil
 		}
 	}
 	return nil, errors.New("no server owns this interface")
