@@ -108,13 +108,22 @@ func (srv *fakeSSHServer) addr() string {
 // ever being told explicitly.
 func (srv *fakeSSHServer) killNewestConn(t *testing.T) {
 	t.Helper()
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
-	if len(srv.conns) == 0 {
-		t.Fatal("no server-side connections accepted yet")
-	}
-	if err := srv.conns[len(srv.conns)-1].Close(); err != nil {
-		t.Fatalf("close server-side conn: %v", err)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		srv.mu.Lock()
+		if len(srv.conns) > 0 {
+			conn := srv.conns[len(srv.conns)-1]
+			srv.mu.Unlock()
+			if err := conn.Close(); err != nil {
+				t.Fatalf("close server-side conn: %v", err)
+			}
+			return
+		}
+		srv.mu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatal("no server-side connections accepted yet")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
