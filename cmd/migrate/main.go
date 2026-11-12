@@ -73,7 +73,7 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `awg-migrate: backup, restore and manually migrate vpn-admin's BoltDB.
+	_, _ = fmt.Fprint(w, `awg-migrate: backup, restore and manually migrate vpn-admin's BoltDB.
 
 Usage:
   awg-migrate <command> [flags]
@@ -175,7 +175,7 @@ func parseCommandConfig(name string, cfg any, args []string) *pflag.FlagSet {
 		case "v2":
 			synopsis = "[--db <v1-path>] [--out <v2-path>] [--force]"
 		}
-		fmt.Fprintf(flags.Output(), "Usage:\n  awg-migrate %s %s\n\nFlags:\n", name, synopsis)
+		_, _ = fmt.Fprintf(flags.Output(), "Usage:\n  awg-migrate %s %s\n\nFlags:\n", name, synopsis)
 		flags.PrintDefaults()
 	}
 	_ = flags.Parse(args)
