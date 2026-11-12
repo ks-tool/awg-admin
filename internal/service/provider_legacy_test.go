@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func TestLegacyPeerSpecAllocatesAddressAndOmitsEmptyDNS(t *testing.T) {

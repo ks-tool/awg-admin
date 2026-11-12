@@ -26,7 +26,7 @@ import (
 	"testing"
 
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // fakeAgent mimics agent/internal/api/handlers.go's actual routes/status

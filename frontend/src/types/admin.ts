@@ -21,7 +21,7 @@ import { type Key, type InterfaceConfig } from "./agent"
 
 /**
  * AgentReleaseAsset is one downloadable vpn-agent binary published in a GitHub
- * release (tagged agent/v*), offered by the "GitHub releases" picker in the
+ * release (tagged v*), offered by the "GitHub releases" picker in the
  * Add-agent-source UI so an official binary can be turned into a URL
  * AgentSource without pasting a URL by hand. Assembled by
  * Service.ListAgentReleases from the public GitHub releases API — it is derived,
@@ -34,8 +34,7 @@ export interface AgentReleaseAsset {
    */
   name: string;
   /**
-   * Version is the release version: the agent/v* tag with the "agent/" prefix
-   * stripped, e.g. "v1.0.0".
+   * Version is the release tag, e.g. "v2.0.0".
    */
   version: string;
   /**
@@ -340,7 +339,7 @@ export interface RegistrySource {
  */
 export interface RegistryRequest {
   repository: string;
-  registry?: Registry;
+  registry: Registry;
 }
 /**
  * AgentDeployment selects either an OCI release or a local vpn-agent binary.
@@ -348,7 +347,7 @@ export interface RegistryRequest {
 export interface AgentDeployment {
   artifact?: string;
   binaryPath?: string;
-  registry?: Registry;
+  registry: Registry;
 }
 /**
  * ProviderRepository is a provider found under an OCI repository prefix.
@@ -467,7 +466,7 @@ export interface Interface extends InterfaceConfig {
    */
   inSync: boolean;
   lastSyncError?: string;
-  lastSyncedAt?: number /* time.Time */;
+  lastSyncedAt: number /* time.Time */;
   /**
    * Tunnel groups the interfaces that together form one multi-hop tunnel
    * (see Service.BuildTunnel / the tunnel wizard): every interface a tunnel

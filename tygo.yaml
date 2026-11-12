@@ -7,7 +7,7 @@ type_mappings:
   uuid.UUID: string
 
 packages:
-  - path: github.com/ks-tool/vpn-agent/models
+  - path: github.com/ks-tool/vpn-agent/v2/models
     output_path: ./frontend/src/types/agent.ts
     exclude_files:
       - resources.go

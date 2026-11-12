@@ -32,7 +32,7 @@ import (
 	"strings"
 
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // NotFoundError is returned by Get/Delete when the agent has no interface

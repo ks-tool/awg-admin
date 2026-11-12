@@ -19,7 +19,7 @@ package models
 import (
 	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 type User struct {

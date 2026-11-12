@@ -16,7 +16,7 @@
 
 package models
 
-import agentmodels "github.com/ks-tool/vpn-agent/models"
+import agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 
 const ProtocolVersion = agentmodels.ProtocolVersion
 const RouteLinkKind = agentmodels.RouteLinkKind

@@ -2,7 +2,7 @@
 
 Agent and provider installation is packaged with `pack/sdk`. Binary releases live in GHCR as multi-architecture OCI artifacts:
 
-- `oci://ghcr.io/ks-tool/vpn-agent:v1.2.3`, tagged `agent/v1.2.3`;
+- `oci://ghcr.io/ks-tool/vpn-agent:v2.0.0`, tagged `v2.0.0`;
 - `oci://ghcr.io/ks-tool/vpn-providers/awg:v1.2.3`, tagged `providers/awg/v1.2.3`.
 
 The pack's `artifact` value points to that OCI reference. The Manage panel's **Agent** tab deploys the agent and each optional provider through independent `pack apply` calls in the admin process; the agent itself does not install packages or run pack. Each provider's pack lives beside its implementation (`agent/providers/awg/deploy` for AWG) and owns its dependencies, values and registration. The external `host` target is refreshed automatically; no external `pack` command is used. The target supports Debian and Fedora on `amd64` and `arm64`. It opens its own SSH connection for the duration of the deployment and starts a temporary host agent and OCI proxy. The managed server downloads the binary for its platform from GHCR through that loopback proxy. The AWG pack persists `net.ipv4.ip_forward=1`; during provider deployment, the host target accepts input on every stored VPN interface through firewalld, ufw or iptables (for example, `iptables -A INPUT -i awg0 -j ACCEPT`). Successful AWG interface changes also trigger a lightweight firewall-only pack, without downloading the provider again or restarting the agent. SSH key authentication is required, and a non-root SSH user needs passwordless sudo. Pack state, the downloaded target and cached bundles are stored under `~/.vpn-admin/cache`. Generate the standalone bundle sources with:

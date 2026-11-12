@@ -30,7 +30,7 @@ import (
 	"github.com/ks-tool/vpn-admin/internal/pki"
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage/boltdb"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // fakeAgentTLS is a minimal stand-in for the real agent's HTTP API, served

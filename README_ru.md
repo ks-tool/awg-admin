@@ -55,10 +55,10 @@ link, host-info и metrics API. Systemd управляет только `vpn-age
 По умолчанию агент слушает loopback и доступен через SSH-туннель; также поддерживается прямое подключение по mTLS. При
 `discover: true` агент получает определения ресурсов и JSON-схемы через `GET /v1/manifest` провайдера.
 
-Агент и провайдеры находятся в отдельном Go-модуле `agent/` с module path `github.com/ks-tool/vpn-agent`. Корневой модуль
-подключает его через локальный `replace`. Релизы публикуются как мультиархитектурные OCI-артефакты:
+Агент и провайдеры находятся в отдельном репозитории `github.com/ks-tool/vpn-agent` с module path `github.com/ks-tool/vpn-agent/v2`. Корневой модуль
+подключает tagged-релиз. Бинарники агента публикуются в GitHub Releases, а агент и провайдеры также выпускаются как мультиархитектурные OCI-артефакты:
 
-- `agent/v1.2.3` → `ghcr.io/ks-tool/vpn-agent:v1.2.3`;
+- `v2.0.0` → `ghcr.io/ks-tool/vpn-agent:v2.0.0`;
 - `providers/awg/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/awg:v1.2.3`;
 - `providers/xray/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/xray:v1.2.3`;
 - `providers/hysteria2/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/hysteria2:v1.2.3`.

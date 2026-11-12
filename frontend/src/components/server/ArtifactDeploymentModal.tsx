@@ -139,7 +139,7 @@ export function ArtifactDeploymentModal(props: Props) {
     const submit = () => {
         if (props.kind === 'agent') {
             if (localBinary) {
-                props.onDeploy({binaryPath: localBinary});
+                props.onDeploy({binaryPath: localBinary, registry});
                 return;
             }
             if (!repository || !tag) {

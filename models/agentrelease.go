@@ -17,7 +17,7 @@
 package models
 
 // AgentReleaseAsset is one downloadable vpn-agent binary published in a GitHub
-// release (tagged agent/v*), offered by the "GitHub releases" picker in the
+// release (tagged v*), offered by the "GitHub releases" picker in the
 // Add-agent-source UI so an official binary can be turned into a URL
 // AgentSource without pasting a URL by hand. Assembled by
 // Service.ListAgentReleases from the public GitHub releases API — it is derived,
@@ -26,8 +26,7 @@ type AgentReleaseAsset struct {
 	// Name is the release-relative asset filename, e.g.
 	// "vpn-agent-userspace_linux_amd64".
 	Name string `json:"name"`
-	// Version is the release version: the agent/v* tag with the "agent/" prefix
-	// stripped, e.g. "v1.0.0".
+	// Version is the release tag, e.g. "v2.0.0".
 	Version string `json:"version"`
 	// Arch is the target CPU architecture parsed from the asset name
 	// ("amd64"/"arm64"), or "" if it couldn't be determined.

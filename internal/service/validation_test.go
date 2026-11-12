@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // newValidationTestServer gives a Service with one server and no reachable agent

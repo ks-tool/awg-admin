@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // TestSetPeerDisabledTogglesDeviceConfig verifies the peer-deactivation toggle

@@ -16,6 +16,6 @@
 
 package models
 
-import agentmodels "github.com/ks-tool/vpn-agent/models"
+import agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 
 type ProviderDeployment = agentmodels.ProviderDeployment

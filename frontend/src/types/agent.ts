@@ -199,6 +199,19 @@ export interface InterfaceHistory {
 }
 
 //////////
+// source: route.go
+
+export const RouteLinkKind = "route";
+export interface RouteDriver {
+  binary: string;
+  args: string[];
+  config: any /* json.RawMessage */;
+  socks5?: string;
+  tun?: string;
+  routeId?: string;
+}
+
+//////////
 // source: wg.go
 
 export type Key = string;

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // PeerMap is the operator-supplied assignment of a conf's peers to vpn-admin

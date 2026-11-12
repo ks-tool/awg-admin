@@ -20,7 +20,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func TestGetTunnelMetricsMatchesDestinationPublicKey(t *testing.T) {

@@ -30,12 +30,10 @@ import (
 )
 
 const (
-	// agentReleasesRepo keeps the historical GitHub binary releases available to
-	// legacy deployment presets. New agents and providers are published as OCI
-	// artifacts from ks-tool/vpn-agent and installed through pack.
-	agentReleasesRepo = "ks-tool/vpn-admin"
-	// agentReleasesTagPrefix marks the agent releases apart from the admin ones.
-	agentReleasesTagPrefix = "agent/v"
+	// agentReleasesRepo publishes the agent's GitHub binary releases and OCI artifacts.
+	agentReleasesRepo = "ks-tool/vpn-agent"
+	// agentReleasesTagPrefix selects agent releases; provider tags contain a path prefix.
+	agentReleasesTagPrefix = "v"
 	// agentReleasesLimit caps how many of the newest agent releases are offered.
 	agentReleasesLimit = 5
 	// agentReleasesMaxBody bounds how much of the GitHub API response is read, so
@@ -46,7 +44,7 @@ const (
 )
 
 // ListAgentReleases fetches the newest agent releases from GitHub (tagged
-// agent/v*) and flattens their downloadable vpn-agent binaries into
+// v*) and flattens their downloadable vpn-agent binaries into
 // AgentReleaseAssets — newest release first — ready to become URL
 // AgentSources via the "GitHub releases" picker. It reaches the public GitHub
 // API unauthenticated (no credentials involved); a failure (offline, rate
@@ -114,7 +112,7 @@ func fetchAgentReleases(ctx context.Context) ([]models.AgentReleaseAsset, error)
 
 	assets := make([]models.AgentReleaseAsset, 0, len(agent)*4)
 	for _, r := range agent {
-		version := strings.TrimPrefix(r.TagName, "agent/") // "agent/v1.0.0" -> "v1.0.0"
+		version := r.TagName
 		// Deterministic within-release order (userspace before kernel, amd64
 		// before arm64) so the list doesn't jitter between fetches.
 		sort.SliceStable(r.Assets, func(i, j int) bool { return r.Assets[i].Name < r.Assets[j].Name })

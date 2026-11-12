@@ -22,7 +22,7 @@ import (
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // hostPeerIPs returns the /32 (host) AllowedIPs of an interface's peers — the

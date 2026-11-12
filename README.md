@@ -55,10 +55,10 @@ manages only `vpn-agent`; separate provider units are unnecessary.
 By default the agent listens on loopback and is reached through an SSH tunnel; direct mTLS is also supported. With
 `discover: true`, the agent obtains resource definitions and JSON schemas through the provider's `GET /v1/manifest` endpoint.
 
-The agent and providers live in a separate Go module under `agent/`, with module path `github.com/ks-tool/vpn-agent`. The root
-module uses it through a local `replace`. Releases are published as multi-architecture OCI artifacts:
+The agent and providers live in the separate `github.com/ks-tool/vpn-agent` repository, with module path `github.com/ks-tool/vpn-agent/v2`. The root
+module uses a tagged release. Agent binaries are published on GitHub Releases, and agents and providers are also published as multi-architecture OCI artifacts:
 
-- `agent/v1.2.3` → `ghcr.io/ks-tool/vpn-agent:v1.2.3`;
+- `v2.0.0` → `ghcr.io/ks-tool/vpn-agent:v2.0.0`;
 - `providers/awg/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/awg:v1.2.3`;
 - `providers/xray/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/xray:v1.2.3`;
 - `providers/hysteria2/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/hysteria2:v1.2.3`.
