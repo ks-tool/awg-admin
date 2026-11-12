@@ -26,16 +26,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 const (
-	// agentReleasesRepo is the GitHub repo whose "agent/v*" releases publish the
-	// awg-agent binaries (see .goreleaser.agent.yaml). The admin app itself
-	// releases under plain "v*" tags on the same repo, which are filtered out.
-	agentReleasesRepo = "ks-tool/awg-admin"
-	// agentReleasesTagPrefix marks the agent releases apart from the admin ones.
-	agentReleasesTagPrefix = "agent/v"
+	// agentReleasesRepo publishes the agent's GitHub binary releases and OCI artifacts.
+	agentReleasesRepo = "ks-tool/vpn-agent"
+	// agentReleasesTagPrefix selects agent releases; provider tags contain a path prefix.
+	agentReleasesTagPrefix = "v"
 	// agentReleasesLimit caps how many of the newest agent releases are offered.
 	agentReleasesLimit = 5
 	// agentReleasesMaxBody bounds how much of the GitHub API response is read, so
@@ -46,7 +44,7 @@ const (
 )
 
 // ListAgentReleases fetches the newest agent releases from GitHub (tagged
-// agent/v*) and flattens their downloadable awg-agent binaries into
+// v*) and flattens their downloadable vpn-agent binaries into
 // AgentReleaseAssets — newest release first — ready to become URL
 // AgentSources via the "GitHub releases" picker. It reaches the public GitHub
 // API unauthenticated (no credentials involved); a failure (offline, rate
@@ -78,7 +76,7 @@ func fetchAgentReleases(ctx context.Context) ([]models.AgentReleaseAsset, error)
 		return nil, err
 	}
 	// GitHub requires a User-Agent; the Accept header pins the API version.
-	req.Header.Set("User-Agent", "awg-admin")
+	req.Header.Set("User-Agent", "vpn-admin")
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -114,7 +112,7 @@ func fetchAgentReleases(ctx context.Context) ([]models.AgentReleaseAsset, error)
 
 	assets := make([]models.AgentReleaseAsset, 0, len(agent)*4)
 	for _, r := range agent {
-		version := strings.TrimPrefix(r.TagName, "agent/") // "agent/v1.0.0" -> "v1.0.0"
+		version := r.TagName
 		// Deterministic within-release order (userspace before kernel, amd64
 		// before arm64) so the list doesn't jitter between fetches.
 		sort.SliceStable(r.Assets, func(i, j int) bool { return r.Assets[i].Name < r.Assets[j].Name })
@@ -137,11 +135,11 @@ func fetchAgentReleases(ctx context.Context) ([]models.AgentReleaseAsset, error)
 }
 
 // isAgentBinaryAsset reports whether a release asset is a downloadable
-// awg-agent binary (as opposed to checksums.txt, signatures, etc.). It matches
-// both the versionless name scheme ("awg-agent_linux_amd64") and a versioned
-// one ("awg-agent_1.2.3_linux_amd64").
+// vpn-agent binary (as opposed to checksums.txt, signatures, etc.). It matches
+// both the versionless name scheme ("vpn-agent_linux_amd64") and a versioned
+// one ("vpn-agent_1.2.3_linux_amd64").
 func isAgentBinaryAsset(name string) bool {
-	if !strings.HasPrefix(name, "awg-agent") || !strings.Contains(name, "linux") {
+	if !strings.HasPrefix(name, "vpn-agent") || !strings.Contains(name, "linux") {
 		return false
 	}
 	return strings.Contains(name, "amd64") || strings.Contains(name, "arm64")

@@ -18,17 +18,17 @@ package service
 
 import (
 	"context"
+	"uuid"
 
-	"github.com/ks-tool/awg-admin/internal/agentclient"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 // ListUnmanagedInterfaces returns the live WireGuard/AmneziaWG devices on
 // serverID's host that its agent has no config for — interfaces brought up
-// outside awg-admin (wg-quick/awg-quick, `ip link`), invisible to the normal
+// outside vpn-admin (wg-quick/awg-quick, `ip link`), invisible to the normal
 // interface list because that reads the database. The agent scans on every
 // call, so an interface raised a moment ago shows up. Shown read-only in the
 // server's interface list; the way to take one over is PreviewImport /
@@ -87,7 +87,7 @@ func (s *Service) rejectUnmanagedName(sID uuid.UUID, name string) error {
 	}
 	for _, u := range list {
 		if u.Name == name {
-			return invalidInput("interface name %q is already used on the server by an interface awg-admin doesn't manage (%s); import it instead of creating a new one", name, u.Kind)
+			return invalidInput("interface name %q is already used on the server by an interface vpn-admin doesn't manage (%s); import it instead of creating a new one", name, u.Kind)
 		}
 	}
 	return nil

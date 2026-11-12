@@ -20,12 +20,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
-	"github.com/ks-tool/awg-admin/storage"
-
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func openTestDB(t *testing.T) *BoltDB {
@@ -59,14 +58,13 @@ func TestImportWritesInterfaceUsersAndPeersAtomically(t *testing.T) {
 	}
 
 	ifKey, k1, k2, k3 := mustKey(t), mustKey(t), mustKey(t), mustKey(t)
-	iface := &models.Interface{ID: uuid.New(), InterfaceConfig: agentmodels.InterfaceConfig{
+	iface := &models.Interface{ID: uuid.New(),
 		Interface: "wg0", PrivateKey: ifKey, Address: "10.0.0.1/24", ListenPort: 51820,
 		Peers: []agentmodels.InterfacePeer{
 			{Key: k1.PublicKey(), AllowedIPs: []string{"10.0.0.2/32"}},
 			{Key: k2.PublicKey(), AllowedIPs: []string{"10.0.0.3/32"}},
 			{Key: k3.PublicKey(), AllowedIPs: []string{"10.0.0.4/32"}}, // embedded: no user
-		},
-	}}
+		}}
 	peers := []storage.ImportPeer{
 		{UserName: "alice", Peer: models.Peer{Name: "laptop", PrivateKey: k1}},
 		{UserName: "bob", Peer: models.Peer{Name: "pc", PrivateKey: k2}},
@@ -126,10 +124,9 @@ func TestImportAmbiguousUserWritesNothing(t *testing.T) {
 		}
 	}
 	k1, k2 := mustKey(t), mustKey(t)
-	iface := &models.Interface{ID: uuid.New(), InterfaceConfig: agentmodels.InterfaceConfig{
+	iface := &models.Interface{ID: uuid.New(),
 		Interface: "wg0", PrivateKey: mustKey(t), Address: "10.0.0.1/24", ListenPort: 51820,
-		Peers: []agentmodels.InterfacePeer{{Key: k1.PublicKey()}, {Key: k2.PublicKey()}},
-	}}
+		Peers: []agentmodels.InterfacePeer{{Key: k1.PublicKey()}, {Key: k2.PublicKey()}}}
 	peers := []storage.ImportPeer{
 		{UserName: "dave", Peer: models.Peer{Name: "new", PrivateKey: k1}},  // would be created…
 		{UserName: "carol", Peer: models.Peer{Name: "amb", PrivateKey: k2}}, // …but this one is ambiguous
@@ -159,7 +156,7 @@ func TestImportRejectsExistingInterfaceID(t *testing.T) {
 	if err := db.Servers().Set(srv); err != nil {
 		t.Fatal(err)
 	}
-	iface := &models.Interface{ID: uuid.New(), InterfaceConfig: agentmodels.InterfaceConfig{Interface: "wg0", PrivateKey: mustKey(t)}}
+	iface := &models.Interface{ID: uuid.New(), Interface: "wg0", PrivateKey: mustKey(t)}
 	if err := db.Servers().Interfaces(srv.ID).Set(iface); err != nil {
 		t.Fatal(err)
 	}

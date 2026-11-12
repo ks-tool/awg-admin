@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ks-tool/awg-admin/internal/service"
-	"github.com/ks-tool/awg-admin/storage/boltdb"
+	"github.com/ks-tool/vpn-admin/internal/service"
+	"github.com/ks-tool/vpn-admin/storage/boltdb"
 )
 
 func newTestServiceForAPI(t *testing.T) *service.Service {

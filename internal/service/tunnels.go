@@ -23,11 +23,10 @@ import (
 	"sort"
 	"strconv"
 	"time"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
-
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 const (

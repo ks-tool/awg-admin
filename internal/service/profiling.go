@@ -21,11 +21,10 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"uuid"
 
-	"github.com/ks-tool/awg-admin/internal/agentclient"
-	"github.com/ks-tool/awg-admin/models"
-
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 // validProfileKinds is the allowlist of pprof profile names the admin will

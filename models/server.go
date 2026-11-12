@@ -19,9 +19,9 @@ package models
 import (
 	"fmt"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 type Server struct {
@@ -33,6 +33,9 @@ type Server struct {
 	Agent Agent     `json:"agent"`
 
 	Interfaces []uuid.UUID `json:"interfaces,omitempty"`
+	// Unmanaged marks inventory migrated from v1 until a v2 agent with the
+	// required provider successfully adopts its resources.
+	Unmanaged bool `json:"unmanaged,omitempty"`
 }
 
 type ServerInfo struct {
@@ -45,7 +48,7 @@ type SSHConfig struct {
 	Host string `json:"host"`
 	Port uint16 `json:"port,omitempty"`
 	User string `json:"user,omitempty"`
-	// Key is a path to the private key file on the machine running awg-admin,
+	// Key is a path to the private key file on the machine running vpn-admin,
 	// not the key body itself. Mutually exclusive with KeyData; KeyData takes
 	// precedence when both are set (see internal/sshclient).
 	Key string `json:"key,omitempty"`
@@ -72,9 +75,8 @@ type Agent struct {
 	ProfilingEnabled bool `json:"profilingEnabled,omitempty"`
 }
 
-// AgentStatus is the tri-state health of a server's agent shown on the
-// dashboard (see Service.ServerAgentStatus), color-coded on the frontend:
-// green / red / amber.
+// AgentStatus is the health and migration state of a server's agent shown on
+// the dashboard (see Service.ServerAgentStatus), color-coded on the frontend.
 type AgentStatus string
 
 const (
@@ -88,13 +90,16 @@ const (
 	// AgentStatusDegraded (amber): the SSH tunnel is up but the agent behind it
 	// isn't responding, or the state is otherwise indeterminate.
 	AgentStatusDegraded AgentStatus = "degraded"
+	// AgentStatusUnmanaged (amber): v1 inventory is waiting for a v2 agent with
+	// the AWG provider to adopt it.
+	AgentStatusUnmanaged AgentStatus = "unmanaged"
 )
 
 // AgentTLS holds the mTLS material for direct (non-tunnelled) communication
-// with the agent on a public ("white") IP. CA is kept so awg-admin can
+// with the agent on a public ("white") IP. CA is kept so vpn-admin can
 // re-issue Server/Client certs later (e.g. on renewal) without invalidating
 // the other side. Server is deployed to the agent; Client is used by
-// awg-admin itself when dialing the agent directly.
+// vpn-admin itself when dialing the agent directly.
 type AgentTLS struct {
 	CA     CertKeyPair `json:"ca"`
 	Server CertKeyPair `json:"server"`
@@ -114,18 +119,21 @@ type Interface struct {
 	ID uuid.UUID `json:"id"`
 
 	// json:",inline" flattens the fields under jsonv2 (this module builds with
-	// GOEXPERIMENT=jsonv2), matching the YAML "inline" convention. tstype
+	// ), matching the YAML "inline" convention. tstype
 	// additionally tells tygo to emit "extends InterfaceConfig" on the
 	// generated TS type instead of a nested field — tygo only understands
 	// plain v1 json tag semantics and doesn't infer this on its own.
 	agentmodels.InterfaceConfig `json:",inline" tstype:",extends"`
+
+	Provider     string `json:"provider,omitempty"`
+	ResourceName string `json:"resourceName,omitempty"`
 
 	// Sync status of this interface's config against the agent. Updated
 	// after every push attempt (see internal/service's agent push wiring);
 	// not touched by the agent itself.
 	InSync        bool      `json:"inSync"`
 	LastSyncError string    `json:"lastSyncError,omitempty"`
-	LastSyncedAt  time.Time `json:"lastSyncedAt,omitempty"`
+	LastSyncedAt  time.Time `json:"lastSyncedAt"`
 
 	// Tunnel groups the interfaces that together form one multi-hop tunnel
 	// (see Service.BuildTunnel / the tunnel wizard): every interface a tunnel

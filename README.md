@@ -1,114 +1,139 @@
 <p align="center">
-  <img src="docs/logo.png" alt="Amnezia-WG Admin" width="128" height="128">
+  <img src="docs/logo.png" alt="VPN Admin" width="128" height="128">
 </p>
 
-# Amnezia-WG Admin (awg-admin)
+# VPN Admin (vpn-admin)
 
 [Русская версия](README_ru.md)
 
-**Amnezia-WG Admin** is a centralized management application for AmneziaWG and WireGuard infrastructures. It stores the
-configuration of managed servers, users, and VPN peers, and applies that configuration through an agent running on each
-server.
+**VPN Admin** is a visual control plane for VPN infrastructure. It combines a geographic server map, a network topology editor,
+user management and settings in one workspace. The core is not tied to a particular VPN protocol: extensions handle service
+configuration and network links.
 
-A single instance can manage multiple servers simultaneously. The local database serves as the source of truth, while
-agents are responsible for reconciling the actual server state with the stored configuration.
+> **Installation, operations, plugins and migration:** [docs/GUIDE.md](docs/GUIDE.md)
 
-> 📖 **Installation, configuration, and full documentation:** [docs/GUIDE.md](docs/GUIDE.md)
+## Features
 
-## Overview
+- **Map.** Servers are positioned from **Location** using a local Data Center Atlas cache, or from manually entered coordinates.
+  Points show agent or VPN service health, while arrows show connections and p95 latency.
+- **Network Graph.** Interfaces can be connected by directed arrows into chains of any length, including mixed Xray/AWG/Hysteria
+  routes. Same-protocol links work between nodes; local `route` links switch providers on one host. Compatibility, duplicates,
+  self-connections and cycles are validated. To reroute an existing connection, select its arrow, press `m`, drag either endpoint
+  and confirm with **Create**.
+- **Agent and providers.** Under **Manage panel → Agent**, `vpn-agent` can be installed from an OCI release or a local binary.
+  VPN providers are installed and removed independently of the agent. Public GHCR and private OCI registries are supported.
+- **Interfaces through JSON Schema.** Under **Manage panel → Interfaces**, a wizard first selects an installed provider and then
+  builds its `Interface` form through RJSF. Schemas are always read from `~/.vpn-admin/cache/<apiVersion>.<kind>.spec` when
+  available and refreshed in the background. Peers are not created here: a user selects the required interface and the peer
+  form uses that provider's `Peer` schema. Unmanaged `wg-quick`/`awg-quick` interfaces can be imported from the same tab.
+- **VPN service plugins.** A separate plugin API models a service as “application + configuration”, passes topology to the plugin
+  and provides independent JSON schemas for configuration and users.
+- **AWG, Xray and Hysteria 2.** AWG supports obfuscation, kernel/userspace modes and WireGuard client configs. Xray provides
+  VLESS over TCP or WebSocket with optional TLS; Hysteria 2 provides QUIC listeners with multiple username/password peers.
+  The proxy providers generate client URIs and manage their own core processes and listener firewall rules.
 
-Amnezia-WG Admin provides centralized administration of AmneziaWG and WireGuard deployments without manually editing
-configuration files or connecting to every server over SSH.
-
-After a server has been added, the application can automatically deploy an agent over SSH. All subsequent management
-operations are performed through the agent API, either over an SSH tunnel or directly via mTLS. If the actual server
-state diverges from the stored configuration, the application reconciles the differences by reapplying the required
-changes.
-
-Users and VPN peers are managed independently. Each user may own one or more peers. When a peer is created, the
-application automatically generates cryptographic keys, assigns addresses, applies AmneziaWG parameters, and produces
-client configuration files together with QR codes.
-
-Multiple servers can be organized into multi-hop VPN topologies, allowing selected nodes to operate as intermediate
-routers or Internet exit nodes.
-
-The application collects runtime information from managed servers, including CPU load, memory usage, and WireGuard peer
-statistics. The entire infrastructure configuration can be exported to a portable backup and restored on another
-installation.
-
-Amnezia-WG Admin is available as both a desktop application and a standalone web server. Both deployment modes share the
-same data model, business logic, and user interface.
+VPN Admin is available as a Wails desktop application and as a standalone web server. Both modes share the same data model,
+business logic and frontend.
 
 ## Architecture
 
-Amnezia-WG Admin consists of three components: the administrative application, the agent, and the frontend.
-
 ### Admin app
 
-The administrative application stores the infrastructure configuration, manages servers, users, and VPN peers, and
-coordinates communication with remote agents.
+The root Go module contains the desktop/standalone application, HTTP API, BoltDB storage, the agent pack and deployment
+coordination. The React frontend is in `frontend/`.
 
-It is available in two deployment modes: a Wails-based desktop application and a standalone web server. Both variants
-share the same business logic and user interface, differing only in their runtime environment and frontend transport.
+The local `~/.vpn-admin/db` database stores servers, SSH and mTLS material, users and peers, the abstract topology, plugin
+services, provider resources, links, OCI sources and the standalone account. Servers and interfaces migrated from v1 are
+projected into the shared topology with their original UUIDs.
 
-The source code is located in the root Go module and the `frontend/` directory.
+### Agent and providers
 
-### Agent
+`vpn-agent` is a provider-neutral HTTP service on each managed host. It stores desired resources and provider registrations,
+runs providers as child processes, restarts them after failures and exposes resource, link, host-info and metrics APIs. Systemd
+manages only `vpn-agent`; separate provider units are unnecessary.
 
-The agent is a lightweight HTTP service running on every managed server.
+By default the agent listens on loopback and is reached through an SSH tunnel; direct mTLS is also supported. With
+`discover: true`, the agent obtains resource definitions and JSON schemas through the provider's `GET /v1/manifest` endpoint.
 
-It manages AmneziaWG and WireGuard interfaces, stores their local configuration, and exposes the API used by the
-administrative application. WireGuard operations are performed through the `wgctrl-go` library.
+The agent and providers live in the separate `github.com/ks-tool/vpn-agent` repository, with module path `github.com/ks-tool/vpn-agent/v2`. The root
+module uses a tagged release. Agent binaries are published on GitHub Releases, and agents and providers are also published as multi-architecture OCI artifacts:
 
-By default, the agent listens only on the loopback interface and is intended to be accessed through an SSH tunnel.
-Direct mTLS connections are also supported when SSH tunneling is not desirable.
+- `v2.0.0` → `ghcr.io/ks-tool/vpn-agent:v2.0.0`;
+- `providers/awg/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/awg:v1.2.3`;
+- `providers/xray/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/xray:v1.2.3`;
+- `providers/hysteria2/v1.2.3` → `ghcr.io/ks-tool/vpn-providers/hysteria2:v1.2.3`.
 
-The source code is located in the `agent/` directory.
+### Two extension layers
 
-### Frontend
+An **agent provider** runs on the managed server and owns protocol-specific resources. The admin does not import provider code
+or know its dependencies. It downloads the selected binary and invokes the standard `deploy --config` command with opaque
+options. The provider installs its core and dependencies and writes its own agent registration. Resource APIs use domain
+versions such as `awg.ks-tool.dev/v1` and `xray.ks-tool.dev/v1`. The admin coordinates `prepare`/`commit`/`delete` only for
+links between compatible resource ports.
 
-The user interface is implemented as a React 19 and TypeScript single-page application.
+A **deployment plugin** is called by the admin process and receives the service, server, interface and related connections. It
+implements `apply`, `delete`, `status` and service-user CRUD. External plugins are executables using JSON over stdio, not Go
+`.so` files. Manifests are loaded from `~/.vpn-admin/plugins`; `VPN_ADMIN_PLUGINS_DIR` overrides that directory.
 
-At startup, the frontend detects its runtime environment and automatically selects the appropriate transport: the Wails
-API for the desktop application or the standalone server's HTTP API. The user experience remains identical in both
-deployment modes.
+These mechanisms complement each other: a provider manages resources through the agent API, while a plugin deploys an abstract
+VPN service from the topology model.
 
-The source code is located in the `frontend/` directory.
+### Deployment through pack
 
-### Data storage
+The admin embeds `pack apply` in its own process; neither an external `pack` command nor ansible-target is used. The external
+`host` target is downloaded automatically and supports Debian and Fedora on `amd64` and `arm64`. The agent and each provider are
+applied in independent operations. A provider is optional, not a required part of the agent.
 
-All infrastructure metadata is stored locally in a BoltDB database (`~/.awg-admin`).
+For OCI installation, the target server downloads its platform binary through a temporary loopback OCI proxy. For a local agent
+binary, the binary is shipped as pack content. Every provider then performs its own `deploy`; there is no provider-name switch
+in the admin. Providers manage listener firewalls through firewalld, ufw or iptables during resource reconciliation. See
+[pack/README.md](pack/README.md) for the agent pack.
 
-The database contains information about managed servers, SSH credentials, users, VPN peers, and their relationships. It
-serves as the single source of truth for the administrative application.
+### Metrics
 
-The agent stores only its local interface configuration and has no knowledge of the infrastructure as a whole.
+The agent collects system metrics and ICMP latency; the AWG provider collects peer traffic and handshakes. Their APIs are
+separate:
+
+- `GET /metrics` and `GET /metrics/history` — system;
+- `GET /metrics/{interface}` and `GET /metrics/{interface}/history` — interface and peers.
+
+Latency is the p95 of successful ICMP probes over a 15-minute sliding window. Map arrows are blue up to 100 ms, yellow between
+100 and 250 ms, and red above 250 ms; arrows remain blue when no measurement is available. Topology metric requests run in
+parallel per source server and do not block graph loading.
 
 ## Building from source
 
-Building the project requires Go **1.26.2** or later and Node.js **24** or later.
-
-The following `Makefile` targets are available:
+Requirements: Go **1.27.1** or later and Node.js **24** or later.
 
 ```sh
-make server      # standalone web server
-make run-server  # local development server (go run)
-make desktop     # Wails desktop application
-make agent       # Linux agent
-make migrate     # awg-migrate utility
+make server       # standalone web server
+make run-server   # local development server through go run
+make desktop      # Wails desktop application
+make agent        # provider-neutral Linux agent
+make provider-awg # Linux AWG provider
+make -C agent build-provider-xray
+make -C agent build-provider-hysteria2
+make migrate      # awg-migrate utility
+make test         # unit tests for both Go modules
 ```
 
-Build artifacts are written to the `build/bin/` directory. The `make run-server` target is intended for local
-development and starts the application without producing a standalone executable.
+Build artifacts are written to `build/bin/`. Targets that include the UI build the frontend automatically. Wails CLI is invoked
+through `go tool wails`.
 
-Building the desktop application requires the Wails CLI:
+The Docker-based AWG userspace tunnel test is separate and requires Docker with `/dev/net/tun` and `NET_ADMIN`:
 
 ```sh
-go tool wails
+make -C agent test-e2e
+make -C agent test-provider-e2e # Xray/Hysteria chains and mixed 8-node/13-link chain
 ```
 
-Targets that include the user interface automatically build the frontend, so a separate Node.js build step is usually
-unnecessary.
+## Migration and backups
+
+v1-to-v2 migration is manual through `awg-migrate v2`. It creates a separate database and leaves the source unchanged. See
+[docs/migrate_v2.md](docs/migrate_v2.md) for resource adoption and rollback.
+
+**Settings → Backup** exports a complete JSON dump of the admin database. It contains secrets and must be protected like the
+database itself.
 
 ## License
 

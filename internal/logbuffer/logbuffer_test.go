@@ -42,7 +42,7 @@ func TestWriteReportsFullLengthAndStripsNewline(t *testing.T) {
 
 func TestRingDropsOldest(t *testing.T) {
 	b := New(3)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := fmt.Fprintf(b, "line-%d\n", i); err != nil {
 			t.Fatalf("Write: %v", err)
 		}
@@ -73,11 +73,11 @@ func TestLinesReturnsSnapshotCopy(t *testing.T) {
 func TestConcurrentWritesAreRaceFree(t *testing.T) {
 	b := New(100)
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < 50; j++ {
+			for j := range 50 {
 				_, _ = fmt.Fprintf(b, "w%d-%d\n", id, j)
 			}
 		}(i)

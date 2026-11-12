@@ -24,6 +24,24 @@ export interface AgentInfo {
 }
 
 //////////
+// source: deployment.go
+
+/**
+ * ProviderDeployment selects a provider and either its OCI binary release or a
+ * local binary. The provider's own pack defines dependencies, values and runtime registration.
+ */
+export interface ProviderDeployment {
+  name: string;
+  artifact?: string;
+  binaryPath?: string;
+  /**
+   * Options contains provider-specific installation settings interpreted by
+   * that provider's pack, for example {"userspace": true} for AWG.
+   */
+  options?: { [key: string]: any};
+}
+
+//////////
 // source: host.go
 
 /**
@@ -35,8 +53,8 @@ export interface AgentInfo {
  */
 export interface HostInfo {
   /**
-   * Backend identifies which link backend this agent build drives: "kernel"
-   * (amneziawg-dkms over netlink) or "userspace" (in-process amneziawg-go).
+   * Backend identifies the link backend reported by a provider: "kernel",
+   * "userspace", or "external" for the provider-neutral agent.
    */
   backend: string;
   /**
@@ -92,11 +110,8 @@ export interface SystemSnapshot {
   load15: number /* float64 */;
   /**
    * NetRxBytes/NetTxBytes are bytes transferred *during this one
-   * collection interval* (e.g. the last 45s, see
-   * AWG_AGENT_METRICS_INTERVAL), not the host's cumulative since-boot
-   * counters from /proc/net/dev — those only ever climb and aren't
-   * useful for "how much traffic is this server actually moving" (see
-   * agent/internal/metrics/collector.go's collectSystem).
+   * collection interval* (e.g. the last 45s, see VPN_AGENT_METRICS_INTERVAL),
+   * not the host's cumulative since-boot counters from /proc/net/dev.
    */
   netRxBytes: number /* uint64 */;
   netTxBytes: number /* uint64 */;
@@ -109,6 +124,12 @@ export interface PeerSnapshot {
   rx: number /* uint64 */;
   tx: number /* uint64 */;
   lastHandshake: number /* time.Time */;
+  probeAddress?: string;
+  /**
+   * LatencyP95Ms is the agent-measured 95th-percentile ICMP round trip over
+   * the last 15 minutes, nil until a probe succeeds.
+   */
+  latencyP95Ms?: number /* float64 */;
 }
 /**
  * InterfaceSnapshot groups peer snapshots under their interface name.
@@ -118,8 +139,8 @@ export interface InterfaceSnapshot {
   peers: PeerSnapshot[];
 }
 /**
- * MetricsSnapshot is the full GET /metrics response: the latest known
- * value of every metric the agent has collected.
+ * MetricsSnapshot is the AWG provider's internal metrics response consumed by
+ * the agent; the public agent API exposes System and Interfaces separately.
  */
 export interface MetricsSnapshot {
   system: SystemSnapshot;
@@ -139,14 +160,9 @@ export interface SystemHistoryPoint {
   netTxBytes: number /* uint64 */;
 }
 /**
- * SystemHistory is the full GET /metrics/history response: every host-level
- * sample (Points) plus every per-peer sample (Interfaces) still retained in
- * the agent's in-memory ring buffers (up to 48h, oldest first — see
- * agent/internal/metrics's package doc comment), for rendering charts instead
- * of just the latest value. History is served only through this one endpoint;
- * the per-peer series ride along here rather than on a separate route. Points
- * stays the top-level field it always was, so existing consumers that only
- * read host history are unaffected.
+ * SystemHistory is the agent's host-history response. Interfaces is populated
+ * only in the AWG provider's internal response and is filtered by the agent;
+ * public peer history is served by /metrics/{interface}/history.
  */
 export interface SystemHistory {
   points: SystemHistoryPoint[];
@@ -180,6 +196,19 @@ export interface PeerHistory {
 export interface InterfaceHistory {
   interface: string;
   peers: PeerHistory[];
+}
+
+//////////
+// source: route.go
+
+export const RouteLinkKind = "route";
+export interface RouteDriver {
+  binary: string;
+  args: string[];
+  config: any /* json.RawMessage */;
+  socks5?: string;
+  tun?: string;
+  routeId?: string;
 }
 
 //////////
@@ -262,7 +291,7 @@ export interface InterfacePeer {
   /**
    * Disabled deactivates this peer: it's kept in the stored InterfaceConfig
    * but omitted from the device config applied via wgctrl (ToAmneziaConfig /
-   * ToWireguardPeers), so with ReplacePeers the peer is removed from the live
+   * ToWireguardPeers), so reconciliation removes the peer from the live
    * interface and can't connect until reactivated. Zero value (false) keeps
    * the peer active, so configs written before this field existed stay up.
    */

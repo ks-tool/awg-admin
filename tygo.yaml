@@ -7,8 +7,11 @@ type_mappings:
   uuid.UUID: string
 
 packages:
-  - path: github.com/ks-tool/awg-admin/agent/models
+  - path: github.com/ks-tool/vpn-agent/v2/models
     output_path: ./frontend/src/types/agent.ts
+    exclude_files:
+      - resources.go
+      - unmanaged.go
     frontmatter: |
       /*
         Copyright © 2026 Alexey Shulutkov <github@shulutkov.ru>
@@ -25,8 +28,11 @@ packages:
         See the License for the specific language governing permissions and
         limitations under the License.
        */
-  - path: github.com/ks-tool/awg-admin/models
+  - path: github.com/ks-tool/vpn-admin/models
     output_path: ./frontend/src/types/admin.ts
+    exclude_files:
+      - resources.go
+      - packdeployment.go
     frontmatter: |
       /*
         Copyright © 2026 Alexey Shulutkov <github@shulutkov.ru>

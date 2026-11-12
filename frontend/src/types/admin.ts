@@ -20,8 +20,8 @@ import { type Key, type InterfaceConfig } from "./agent"
 // source: agentrelease.go
 
 /**
- * AgentReleaseAsset is one downloadable awg-agent binary published in a GitHub
- * release (tagged agent/v*), offered by the "GitHub releases" picker in the
+ * AgentReleaseAsset is one downloadable vpn-agent binary published in a GitHub
+ * release (tagged v*), offered by the "GitHub releases" picker in the
  * Add-agent-source UI so an official binary can be turned into a URL
  * AgentSource without pasting a URL by hand. Assembled by
  * Service.ListAgentReleases from the public GitHub releases API — it is derived,
@@ -30,12 +30,11 @@ import { type Key, type InterfaceConfig } from "./agent"
 export interface AgentReleaseAsset {
   /**
    * Name is the release-relative asset filename, e.g.
-   * "awg-agent-userspace_linux_amd64".
+   * "vpn-agent-userspace_linux_amd64".
    */
   name: string;
   /**
-   * Version is the release version: the agent/v* tag with the "agent/" prefix
-   * stripped, e.g. "v1.0.0".
+   * Version is the release tag, e.g. "v2.0.0".
    */
   version: string;
   /**
@@ -44,8 +43,8 @@ export interface AgentReleaseAsset {
    */
   arch: string;
   /**
-   * Userspace is true for the userspace agent binary (awg-agent-userspace),
-   * false for the kernel one (awg-agent). It maps straight onto
+   * Userspace is true for the userspace agent binary (vpn-agent-userspace),
+   * false for the kernel one (vpn-agent). It maps straight onto
    * AgentSource.Userspace so a source created from this asset skips (or keeps)
    * the AmneziaWG kernel-module pre-check on deploy correctly.
    */
@@ -69,7 +68,7 @@ export interface AgentReleaseAsset {
 // source: agentsource.go
 
 /**
- * AgentSource is a named, reusable place to fetch the awg-agent binary
+ * AgentSource is a named, reusable place to fetch the vpn-agent binary
  * from when deploying it to a server (see Service.DeployAgent) — shown as
  * a preset in the "Deploy agent" UI instead of typing a URL every time.
  */
@@ -79,7 +78,7 @@ export interface AgentSource {
   url?: string;
   /**
    * Path, when set instead of URL, is a path to the agent binary already
-   * present on the filesystem of the machine running awg-admin (desktop:
+   * present on the filesystem of the machine running vpn-admin (desktop:
    * the user's own machine; standalone server: that server's host) — read
    * directly and uploaded over SSH the same way a CacheLocally URL preset
    * is, without ever downloading anything. Exactly one of URL or Path is
@@ -91,15 +90,15 @@ export interface AgentSource {
    * CacheLocally, when false (the default), has the *managed server*
    * download URL itself over SSH (curl/wget — see internal/sshclient's
    * DownloadFile) so the binary's bytes never pass through the machine
-   * running awg-admin. When true, awg-admin downloads URL once into a
+   * running vpn-admin. When true, vpn-admin downloads URL once into a
    * local cache (keyed by ID) and uploads it the traditional way on
    * every deploy that uses this source — for servers without outbound
-   * internet access to URL, at the cost of awg-admin's own bandwidth.
+   * internet access to URL, at the cost of vpn-admin's own bandwidth.
    */
   cacheLocally?: boolean;
   /**
    * Image, when set instead of URL/Path, is a Docker image reference (e.g.
-   * ghcr.io/ks-tool/awg-agent-userspace:latest). Deploying such a source runs
+   * ghcr.io/ks-tool/vpn-agent-userspace:latest). Deploying such a source runs
    * the agent as a Docker container on the server (see deploy.ToAgent's docker
    * path) rather than as a systemd unit — for hosts using the userspace
    * amneziawg-go image. Exactly one of URL, Path or Image is set; CacheLocally
@@ -108,7 +107,7 @@ export interface AgentSource {
   image?: string;
   /**
    * Userspace marks a URL/Path source as the *userspace* agent binary
-   * (awg-agent-userspace), which runs over systemd with no kernel module. The
+   * (vpn-agent-userspace), which runs over systemd with no kernel module. The
    * systemd deploy then skips its AmneziaWG-kernel-module pre-check (which
    * otherwise fails fast, as it must for the kernel agent — see
    * deploy.deploySystemd). Meaningless for an Image source (a Docker image is
@@ -122,7 +121,7 @@ export interface AgentSource {
 
 /**
  * AuthCredentials is the single admin account used to log in to the
- * standalone web-server mode (cmd/awg-admin.go). The Wails desktop app
+ * standalone web-server mode (cmd/vpn-admin.go). The Wails desktop app
  * never reads this — it already runs as a local single-user process with
  * no network exposure, so it has nothing to authenticate against.
  */
@@ -146,18 +145,13 @@ export interface AuthCredentials {
 // source: deploystatus.go
 
 /**
- * DeployStatus reports the progress of an in-flight (or just-finished)
- * Service.DeployAgent call for one server, polled by the frontend (see
- * Service.GetDeployStatus) to show step-by-step progress instead of a
- * plain spinner.
+ * DeployStatus reports an agent or provider deployment for one server, polled
+ * by the frontend through Service.GetDeployStatus.
  */
 export interface DeployStatus {
   /**
-   * Step is one of internal/deploy.ToAgent's step-name keys ("connect",
-   * "upload_binary", "upload_unit", "upload_env", "upload_tls",
-   * "start_service") — deliberately not human-readable text, so the
-   * frontend localizes it itself rather than displaying whatever
-   * language the backend happens to log in.
+   * Step is a machine-readable deployment key such as "install_agent" or
+   * "install_provider_awg"; the frontend localizes the operation and substitutes the provider name.
    */
   step: string;
   done: boolean;
@@ -312,6 +306,58 @@ export interface ImportPreviewHooks {
 }
 
 //////////
+// source: registry.go
+
+/**
+ * Registry contains per-deployment OCI registry settings. SourceID selects a
+ * saved registry; inline credentials are supported for one-off operations.
+ */
+export interface Registry {
+  sourceId?: string;
+  username?: string;
+  password?: string;
+  plainHttp?: boolean;
+}
+export const RegistrySourceAgent = "agent";
+export const RegistrySourceProvider = "provider";
+/**
+ * RegistrySource is a reusable agent OCI repository, provider OCI catalog or
+ * local agent/provider binary. Password is stored in the admin database, but list and
+ * get responses clear it and expose HasPassword.
+ */
+export interface RegistrySource {
+  id: string;
+  url: string;
+  type: string;
+  username?: string;
+  password?: string;
+  hasPassword?: boolean;
+  plainHttp?: boolean;
+}
+/**
+ * RegistryRequest identifies an untagged OCI repository or repository prefix.
+ */
+export interface RegistryRequest {
+  repository: string;
+  registry: Registry;
+}
+/**
+ * AgentDeployment selects either an OCI release or a local vpn-agent binary.
+ */
+export interface AgentDeployment {
+  artifact?: string;
+  binaryPath?: string;
+  registry: Registry;
+}
+/**
+ * ProviderRepository is a provider found under an OCI repository prefix.
+ */
+export interface ProviderRepository {
+  name: string;
+  repository: string;
+}
+
+//////////
 // source: server.go
 
 export interface Server {
@@ -321,6 +367,11 @@ export interface Server {
   ssh: SSHConfig;
   agent: Agent;
   interfaces?: string[];
+  /**
+   * Unmanaged marks inventory migrated from v1 until a v2 agent with the
+   * required provider successfully adopts its resources.
+   */
+  unmanaged?: boolean;
 }
 export interface ServerInfo {
   description?: string;
@@ -332,7 +383,7 @@ export interface SSHConfig {
   port?: number /* uint16 */;
   user?: string;
   /**
-   * Key is a path to the private key file on the machine running awg-admin,
+   * Key is a path to the private key file on the machine running vpn-admin,
    * not the key body itself. Mutually exclusive with KeyData; KeyData takes
    * precedence when both are set (see internal/sshclient).
    */
@@ -363,9 +414,8 @@ export interface Agent {
   profilingEnabled?: boolean;
 }
 /**
- * AgentStatus is the tri-state health of a server's agent shown on the
- * dashboard (see Service.ServerAgentStatus), color-coded on the frontend:
- * green / red / amber.
+ * AgentStatus is the health and migration state of a server's agent shown on
+ * the dashboard (see Service.ServerAgentStatus), color-coded on the frontend.
  */
 export type AgentStatus = string;
 /**
@@ -385,11 +435,16 @@ export const AgentStatusDown: AgentStatus = "down";
  */
 export const AgentStatusDegraded: AgentStatus = "degraded";
 /**
+ * AgentStatusUnmanaged (amber): v1 inventory is waiting for a v2 agent with
+ * the AWG provider to adopt it.
+ */
+export const AgentStatusUnmanaged: AgentStatus = "unmanaged";
+/**
  * AgentTLS holds the mTLS material for direct (non-tunnelled) communication
- * with the agent on a public ("white") IP. CA is kept so awg-admin can
+ * with the agent on a public ("white") IP. CA is kept so vpn-admin can
  * re-issue Server/Client certs later (e.g. on renewal) without invalidating
  * the other side. Server is deployed to the agent; Client is used by
- * awg-admin itself when dialing the agent directly.
+ * vpn-admin itself when dialing the agent directly.
  */
 export interface AgentTLS {
   ca: CertKeyPair;
@@ -402,6 +457,8 @@ export interface CertKeyPair {
 }
 export interface Interface extends InterfaceConfig {
   id: string;
+  provider?: string;
+  resourceName?: string;
   /**
    * Sync status of this interface's config against the agent. Updated
    * after every push attempt (see internal/service's agent push wiring);
@@ -409,7 +466,7 @@ export interface Interface extends InterfaceConfig {
    */
   inSync: boolean;
   lastSyncError?: string;
-  lastSyncedAt?: number /* time.Time */;
+  lastSyncedAt: number /* time.Time */;
   /**
    * Tunnel groups the interfaces that together form one multi-hop tunnel
    * (see Service.BuildTunnel / the tunnel wizard): every interface a tunnel
@@ -420,6 +477,89 @@ export interface Interface extends InterfaceConfig {
    * the dashboard counts distinct tunnel ids.
    */
   tunnel?: string;
+}
+
+//////////
+// source: topology.go
+
+/**
+ * Topology is the protocol-neutral desired network configuration. VPN service
+ * configs are opaque to the core and interpreted only by their plugin.
+ */
+export interface Topology {
+  servers: TopologyServer[];
+  interfaces: NetworkInterface[];
+  services: VPNService[];
+  connections: NetworkConnection[];
+}
+export interface TopologyServer {
+  id: string;
+  name: string;
+  address?: string;
+  description?: string;
+  location?: string;
+  locationError?: string;
+  legacy?: boolean;
+  latitude?: number /* float64 */;
+  longitude?: number /* float64 */;
+  coordinatesManual?: boolean;
+  x: number /* float64 */;
+  y: number /* float64 */;
+}
+export interface NetworkInterface {
+  id: string;
+  serverId: string;
+  name: string;
+  address?: string;
+  legacy?: boolean;
+  serviceId?: string;
+  x: number /* float64 */;
+  y: number /* float64 */;
+}
+export interface VPNService {
+  id: string;
+  serverId: string;
+  interfaceId?: string;
+  pluginId: string;
+  name: string;
+  config: { [key: string]: any};
+  status: string;
+  statusMessage?: string;
+  lastAppliedAt?: number /* time.Time */;
+}
+export interface NetworkConnection {
+  id: string;
+  sourceId: string;
+  targetId: string;
+}
+export interface NodePosition {
+  id: string;
+  x: number /* float64 */;
+  y: number /* float64 */;
+}
+/**
+ * PluginDescriptor describes a deployment plugin and the schemas consumed by
+ * RJSF. ConfigSchema and UserSchema are deliberately independent: one describes
+ * the application configuration, the other a single service user.
+ */
+export interface PluginDescriptor {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  configSchema: { [key: string]: any};
+  userSchema: { [key: string]: any};
+  uiSchema?: { [key: string]: any};
+  available: boolean;
+  error?: string;
+}
+export interface PluginStatus {
+  state: string;
+  message?: string;
+}
+export interface PluginUser {
+  id: string;
+  data: { [key: string]: any};
 }
 
 //////////
@@ -456,6 +596,20 @@ export interface Tunnel {
 }
 
 //////////
+// source: tunnelmetric.go
+
+/**
+ * TunnelMetric is the source-to-destination p95 round-trip latency for one
+ * topology connection. A nil LatencyP95Ms means that no successful ICMP sample
+ * is available yet; Error describes a per-source collection failure.
+ */
+export interface TunnelMetric {
+  connectionId: string;
+  latencyP95Ms?: number /* float64 */;
+  error?: string;
+}
+
+//////////
 // source: user.go
 
 export interface User {
@@ -469,6 +623,8 @@ export interface Peer {
   name: string;
   pk: Key;
   interface: string;
+  provider?: string;
+  resourceName?: string;
   disabled?: boolean;
   /**
    * DNS is the client-side DNS for this peer's generated wg-quick config

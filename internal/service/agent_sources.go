@@ -19,11 +19,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"uuid"
 
-	"github.com/ks-tool/awg-admin/internal/deploy"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/internal/deploy"
+	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -36,8 +36,8 @@ func (s *Service) ListAgentSources() ([]models.AgentSource, error) {
 
 // CreateAgentSource saves a new named deploy preset. Exactly one of url, path
 // or image must be set: url is fetched (by the managed server itself, or by
-// awg-admin when cacheLocally is set — see models.AgentSource), path reads the
-// binary directly from awg-admin's own filesystem, and image is a Docker image
+// vpn-admin when cacheLocally is set — see models.AgentSource), path reads the
+// binary directly from vpn-admin's own filesystem, and image is a Docker image
 // run as a container on the server. cacheLocally is ignored (forced false) for
 // path (nothing to cache) and image (Docker pulls it itself).
 func (s *Service) CreateAgentSource(name, url, path, image string, cacheLocally, userspace bool) (*models.AgentSource, error) {

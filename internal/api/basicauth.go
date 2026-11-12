@@ -19,7 +19,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/ks-tool/awg-admin/internal/service"
+	"github.com/ks-tool/vpn-admin/internal/service"
 
 	"github.com/rs/zerolog/log"
 )
@@ -44,7 +44,7 @@ import (
 // authenticated at all yet (hiding the login page from random scanners);
 // it isn't meant to nag someone who already has a valid session.
 //
-// Must be wrapped *inside* CorsMiddleware (i.e. cmd/awg-admin.go should
+// Must be wrapped *inside* CorsMiddleware (i.e. cmd/vpn-admin.go should
 // build the handler chain as CorsMiddleware(BasicAuthMiddleware(...))) —
 // CorsMiddleware answers cross-origin preflight OPTIONS requests itself
 // without calling next, so putting it outside keeps `npm run dev`'s CORS
@@ -68,7 +68,7 @@ func BasicAuthMiddleware(svc *service.Service, sessions *SessionStore) func(http
 				return
 			}
 			if !ok {
-				w.Header().Set("WWW-Authenticate", `Basic realm="awg-admin"`)
+				w.Header().Set("WWW-Authenticate", `Basic realm="vpn-admin"`)
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}

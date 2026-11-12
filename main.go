@@ -29,7 +29,7 @@ var assets embed.FS
 
 // version is the desktop build's version, set at link time via
 // -ldflags "-X main.version=..." (the release workflow's `wails build` step).
-// The web-server entry point (cmd/awg-admin.go) has its own identically-named
+// The web-server entry point (cmd/vpn-admin.go) has its own identically-named
 // var — they're separate `main` packages. Defaults to "dev" for local builds.
 var version = "dev"
 
@@ -39,7 +39,7 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "Amnezia-WG Admin",
+		Title:  "VPN Admin",
 		Width:  1230,
 		Height: 800,
 		AssetServer: &assetserver.Options{
@@ -48,7 +48,7 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
-		Bind: []interface{}{
+		Bind: []any{
 			app,
 		},
 	})

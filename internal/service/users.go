@@ -18,10 +18,10 @@ package service
 
 import (
 	"fmt"
+	"uuid"
 
-	"github.com/ks-tool/awg-admin/models"
-
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 )
 
 func (s *Service) ListUsers() ([]models.User, error) {
@@ -93,6 +93,16 @@ func (s *Service) DeleteUser(id string) error {
 	uID, err := uuid.Parse(id)
 	if err != nil {
 		return err
+	}
+	user, err := s.store.Users().Get(uID)
+	if err != nil {
+		return err
+	}
+	for index := range user.Peers {
+		peer := &user.Peers[index]
+		if _, err := s.deleteProviderPeer(uID, peer); err != nil && !storage.IsNotFound(err) {
+			return fmt.Errorf("delete provider peer %q: %w", peer.ResourceName, err)
+		}
 	}
 	return s.store.Users().Delete(uID)
 }

@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // Translation is the agent-side config derived from a wg-quick conf, with the
@@ -145,7 +145,7 @@ func Translate(name string, conf *Conf) (*Translation, error) {
 				}
 			}
 			seenRoute[cidr] = true
-			suffix := ""
+			var suffix string
 			if tableMode == tableNumber {
 				suffix = " table " + strconv.Itoa(table)
 			}
@@ -159,13 +159,13 @@ func Translate(name string, conf *Conf) (*Translation, error) {
 
 	// Non-blocking findings.
 	if len(sec.DNS) > 0 {
-		tr.Warnings = append(tr.Warnings, fmt.Sprintf("[Interface] DNS (%s) changes meaning: wg-quick set it as the host's resolver, awg-admin uses it as the default client DNS rendered into this interface's peer configs", strings.Join(sec.DNS, ", ")))
+		tr.Warnings = append(tr.Warnings, fmt.Sprintf("[Interface] DNS (%s) changes meaning: wg-quick set it as the host's resolver, vpn-admin uses it as the default client DNS rendered into this interface's peer configs", strings.Join(sec.DNS, ", ")))
 	}
 	if sec.SaveConfig != nil {
-		tr.Warnings = append(tr.Warnings, "SaveConfig is ignored: awg-admin's database is the source of truth after import; make sure the wg-quick unit is disabled so it can't rewrite the conf on stop")
+		tr.Warnings = append(tr.Warnings, "SaveConfig is ignored: vpn-admin's database is the source of truth after import; make sure the wg-quick unit is disabled so it can't rewrite the conf on stop")
 	}
 	if noKeepalive > 0 {
-		tr.Warnings = append(tr.Warnings, fmt.Sprintf("%d peer(s) have no PersistentKeepalive (kept as 0, not the default 10s awg-admin gives new peers); peers behind NAT may become unreachable", noKeepalive))
+		tr.Warnings = append(tr.Warnings, fmt.Sprintf("%d peer(s) have no PersistentKeepalive (kept as 0, not the default 10s vpn-admin gives new peers); peers behind NAT may become unreachable", noKeepalive))
 	}
 	tr.Warnings = append(tr.Warnings, LintHooks("PreUp", sec.PreUp)...)
 	tr.Warnings = append(tr.Warnings, LintHooks("PostUp", sec.PostUp)...)

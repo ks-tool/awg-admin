@@ -34,8 +34,8 @@ func (h *Handler) agentSourceList(w http.ResponseWriter, r bunrouter.Request) er
 	return bunrouter.JSON(w, list)
 }
 
-// agentSourceReleases returns the newest awg-agent binaries published on GitHub
-// (tagged agent/v*), for the Add-agent-source UI's "GitHub releases" picker.
+// agentSourceReleases returns the newest vpn-agent binaries published on GitHub
+// (tagged v*), for the Add-agent-source UI's "GitHub releases" picker.
 func (h *Handler) agentSourceReleases(w http.ResponseWriter, r bunrouter.Request) error {
 	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
 	log.Debug().Fields(fields).Msg("listing agent releases from github")

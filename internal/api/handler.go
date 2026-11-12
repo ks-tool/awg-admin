@@ -21,8 +21,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/ks-tool/awg-admin/internal/service"
-	"github.com/ks-tool/awg-admin/storage"
+	"github.com/ks-tool/vpn-admin/internal/service"
+	"github.com/ks-tool/vpn-admin/storage"
 
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bunrouter"
@@ -34,7 +34,7 @@ type Handler struct {
 }
 
 // New registers every route of the standalone web server's JSON API
-// (cmd/awg-admin.go) on rootGroup. The Wails desktop app (app.go) never
+// (cmd/vpn-admin.go) on rootGroup. The Wails desktop app (app.go) never
 // calls this — it binds *service.Service directly to the frontend, so none
 // of this — including the login/session requirement — applies there.
 //
@@ -66,6 +66,40 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 
 	protected.GET("/backup", h.backupDownload)
 	protected.GET("/version", h.appVersion)
+	protected.POST("/artifacts/tags", h.artifactTagList)
+	protected.POST("/artifacts/providers", h.artifactProviderList)
+
+	protected.WithGroup("/registry-sources", func(gr *bunrouter.Group) {
+		gr.POST("", h.registrySourceCreate)
+		gr.GET("/", h.registrySourceList)
+		gr.PUT("/:sourceID", h.registrySourceUpdate)
+		gr.DELETE("/:sourceID", h.registrySourceDelete)
+	})
+
+	protected.WithGroup("/topology", func(gr *bunrouter.Group) {
+		gr.GET("", h.topologyGet)
+		gr.GET("/tunnel-metrics", h.topologyTunnelMetrics)
+		gr.GET("/plugins", h.topologyPluginList)
+		gr.POST("/servers", h.topologyServerCreate)
+		gr.PUT("/servers/:serverID", h.topologyServerUpdate)
+		gr.DELETE("/servers/:serverID", h.topologyServerDelete)
+		gr.POST("/servers/:serverID/interfaces", h.topologyInterfaceCreate)
+		gr.PUT("/interfaces/:interfaceID", h.topologyInterfaceUpdate)
+		gr.DELETE("/interfaces/:interfaceID", h.topologyInterfaceDelete)
+		gr.POST("/services", h.topologyServiceCreate)
+		gr.PUT("/services/:serviceID", h.topologyServiceUpdate)
+		gr.DELETE("/services/:serviceID", h.topologyServiceDelete)
+		gr.POST("/services/:serviceID/apply", h.topologyServiceApply)
+		gr.POST("/services/:serviceID/status", h.topologyServiceStatus)
+		gr.GET("/services/:serviceID/users", h.topologyUserList)
+		gr.POST("/services/:serviceID/users", h.topologyUserCreate)
+		gr.PUT("/services/:serviceID/users/*userID", h.topologyUserUpdate)
+		gr.DELETE("/services/:serviceID/users/*userID", h.topologyUserDelete)
+		gr.POST("/connections", h.topologyConnectionCreate)
+		gr.PUT("/connections/:connectionID", h.topologyConnectionMove)
+		gr.DELETE("/connections/:connectionID", h.topologyConnectionDelete)
+		gr.PUT("/positions", h.topologyPositionsUpdate)
+	})
 
 	protected.WithGroup("/agent-sources", func(gr *bunrouter.Group) {
 		gr.POST("", h.agentSourceCreate)
@@ -101,6 +135,14 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 		gr.DELETE("/:tunnelID", h.tunnelDelete)
 	})
 
+	protected.WithGroup("/links", func(gr *bunrouter.Group) {
+		gr.GET("", h.providerLinkList)
+		gr.POST("", h.providerLinkCreate)
+		gr.POST("/:linkID/apply", h.providerLinkApply)
+		gr.PUT("/:linkID", h.providerLinkMove)
+		gr.DELETE("/:linkID", h.providerLinkDelete)
+	})
+
 	// Server-independent: generated defaults for a new interface form.
 	protected.GET("/interfaces/defaults", h.interfaceDefaults)
 
@@ -114,6 +156,9 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 			gr.DELETE("", h.serverDelete)
 			gr.POST("/tls", h.serverGenerateTLS)
 			gr.POST("/deploy", h.serverDeployAgent)
+			gr.POST("/deploy/pack", h.serverDeployAgentPack)
+			gr.POST("/deploy/provider", h.serverDeployProvider)
+			gr.DELETE("/deploy/providers/:provider", h.serverRemoveProvider)
 			gr.GET("/deploy/status", h.serverDeployStatus)
 			gr.POST("/sync", h.serverSync)
 			gr.GET("/reconcile", h.serverReconcile)
@@ -132,12 +177,22 @@ func New(svc *service.Service, rootGroup *bunrouter.Group) *SessionStore {
 			gr.POST("/ssh/unlock", h.serverUnlockSSH)
 			gr.POST("/sudo/unlock", h.serverUnlockSudo)
 
+			gr.GET("/providers/manifest", h.providerManifest)
+			gr.GET("/providers/:provider/schema", h.providerSchema)
+			gr.GET("/providers/:provider/resources", h.providerResourceList)
+			gr.PUT("/providers/:provider/resources/:kind/:name", h.providerResourcePut)
+			gr.DELETE("/providers/:provider/resources/:kind/:name", h.providerResourceDelete)
+			gr.GET("/providers/:provider/resources/:kind/:name/status", h.providerResourceStatus)
+			gr.POST("/providers/:provider/resources/:kind/:name/actions/:action", h.providerResourceAction)
+
 			gr.WithGroup("/interfaces", func(gr *bunrouter.Group) {
 				gr.POST("", h.interfaceCreate)
 				gr.GET("/", h.interfaceList)
 
 				gr.WithGroup("/:ifaceID", func(gr *bunrouter.Group) {
 					gr.GET("", h.interfaceGet)
+					gr.GET("/metrics", h.serverInterfaceMetrics)
+					gr.GET("/metrics/history", h.serverInterfaceMetricsHistory)
 					gr.PUT("/config", h.interfaceConfigUpdate)
 					gr.POST("/force-replace-peers", h.interfaceForceReplacePeers)
 					gr.DELETE("", h.interfaceDelete)

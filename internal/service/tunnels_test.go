@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // tunnelTestServer creates a server whose agent is unreachable (127.0.0.1:1

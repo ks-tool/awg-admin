@@ -17,7 +17,7 @@
 package models
 
 // AuthCredentials is the single admin account used to log in to the
-// standalone web-server mode (cmd/awg-admin.go). The Wails desktop app
+// standalone web-server mode (cmd/vpn-admin.go). The Wails desktop app
 // never reads this — it already runs as a local single-user process with
 // no network exposure, so it has nothing to authenticate against.
 type AuthCredentials struct {

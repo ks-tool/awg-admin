@@ -16,7 +16,7 @@
 
 import { createContext, type ReactNode, useContext } from 'react';
 
-export type PageId = 'dashboard' | 'servers' | 'users' | 'tunnels' | 'settings' | 'add-user' | 'add-server' | 'user-detail' | 'server-detail';
+export type PageId = 'users' | 'settings' | 'add-user' | 'user-detail';
 
 interface NavigationContextType {
     navigate: (pageId: PageId) => void;

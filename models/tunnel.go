@@ -16,7 +16,7 @@
 
 package models
 
-import "github.com/google/uuid"
+import "uuid"
 
 // TunnelStep identifies one interface a tunnel is built from, given in order
 // (entry first, exit last). Input to Service.BuildTunnel.

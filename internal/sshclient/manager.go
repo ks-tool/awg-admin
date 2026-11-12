@@ -19,16 +19,16 @@ package sshclient
 import (
 	"fmt"
 	"sync"
+	"uuid"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"golang.org/x/sync/singleflight"
 )
 
 // Manager holds one TunnelClient per server that doesn't have mTLS
 // configured — those reach their agent exclusively through an SSH tunnel,
-// so awg-admin keeps the underlying SSH connection open for the lifetime of
+// so vpn-admin keeps the underlying SSH connection open for the lifetime of
 // the process instead of dialing per request. Servers with mTLS configured
 // are not tracked here; they're reached directly (see models.AgentTLS).
 type Manager struct {
@@ -178,7 +178,24 @@ func (m *Manager) Open(serverID uuid.UUID, sshCfg models.SSHConfig, agentAddr st
 // internal/service.tunnelDropped). Use it for the hot (re)dial paths (Ensure,
 // callAgent's retry); Open stays for the one-shot startup/deploy paths.
 func (m *Manager) Reopen(serverID uuid.UUID, sshCfg models.SSHConfig, agentAddr string) error {
+	return m.reopenStale(serverID, nil, sshCfg, agentAddr)
+}
+
+// ReopenStale replaces stale unless another caller has already installed a
+// live replacement. This covers failures that finish after an earlier
+// singleflight call: reopening unconditionally then would close the new tunnel
+// underneath requests that have already started using it.
+func (m *Manager) ReopenStale(serverID uuid.UUID, stale *TunnelClient, sshCfg models.SSHConfig, agentAddr string) error {
+	return m.reopenStale(serverID, stale, sshCfg, agentAddr)
+}
+
+func (m *Manager) reopenStale(serverID uuid.UUID, stale *TunnelClient, sshCfg models.SSHConfig, agentAddr string) error {
 	_, err, _ := m.reopen.Do(serverID.String(), func() (any, error) {
+		if stale != nil {
+			if current, ok := m.Get(serverID); ok && current != stale && current.Alive() {
+				return nil, nil
+			}
+		}
 		return nil, m.Open(serverID, sshCfg, agentAddr)
 	})
 	return err

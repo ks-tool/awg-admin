@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"strings"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // Conf is a parsed wg-quick/awg-quick configuration file: one [Interface]
@@ -314,7 +314,7 @@ func (c *Conf) validate() error {
 
 func splitList(value string) []string {
 	var out []string
-	for _, part := range strings.Split(value, ",") {
+	for part := range strings.SplitSeq(value, ",") {
 		if part = strings.TrimSpace(part); part != "" {
 			out = append(out, part)
 		}

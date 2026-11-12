@@ -19,8 +19,8 @@ package service
 import (
 	"testing"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // TestPeerEndpointsExposeOnlyThePublicKey is a regression test for a bug

@@ -22,7 +22,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'wailsjs', 'src/types/admin.ts', 'src/types/agent.ts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -34,6 +34,12 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+    },
+    rules: {
+      'react-refresh/only-export-components': ['error', {
+        allowConstantExport: true,
+        allowExportNames: ['useAuth', 'useNavigation', 'useTheme'],
+      }],
     },
   },
 ])

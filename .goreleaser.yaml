@@ -1,25 +1,26 @@
-# GoReleaser config for the awg-admin RELEASE — the root module's admin app.
+# GoReleaser config for the vpn-admin RELEASE — the root module's admin app.
 # Triggered by a `v*` tag (see .github/workflows/release.yml).
 #
-# This is a MONOREPO: the per-server agent is released separately, on `agent/v*`
-# tags, by .goreleaser.agent.yaml + .github/workflows/release-agent.yml. This
-# config therefore builds ONLY the admin:
-#   - awg-admin: the standalone web server (cmd/awg-admin.go), embeds the built
+# The agent and providers live in github.com/ks-tool/vpn-agent and publish OCI
+# artifacts independently. This config builds ONLY the admin and migration tool:
+#   - vpn-admin: the standalone web server (cmd/vpn-admin.go), embeds the built
 #     frontend (see the "before.hooks") — linux/darwin/windows, amd64/arm64.
+#   - awg-migrate: the backup/restore and v1-to-v2 migration CLI (cmd/migrate),
+#     included in every vpn-admin archive for the same targets.
 #   - {IMAGE_ADMIN}: its multi-arch Docker image (linux amd64+arm64, GHCR), the
 #     frontend already embedded so the image just copies the binary
 #     (docker/Dockerfile.admin). IMAGE_ADMIN is set by the release workflow (the
 #     lowercased GHCR image name); arm64 is built under buildx+QEMU.
 #
 # Deliberately NOT handled here:
-#   - awg-agent / awg-agent-userspace: released on `agent/v*` (see above).
+#   - vpn-agent and VPN providers: released from their own repository (see above).
 #   - The Wails desktop app (Windows/macOS/Linux): needs the `wails` CLI and to
 #     run on each target OS's own runner — separate jobs in release.yml that
 #     upload their artifacts to the same GitHub release this config creates
 #     (hence release.mode: keep-existing).
 version: 2
 
-project_name: awg-admin
+project_name: vpn-admin
 
 before:
   hooks:
@@ -28,12 +29,11 @@ before:
 
 builds:
   - id: admin
-    main: ./cmd/awg-admin.go
-    binary: awg-admin
+    main: ./cmd/vpn-admin.go
+    binary: vpn-admin
     env:
       - CGO_ENABLED=0
-      - GOEXPERIMENT=jsonv2
-    goos:
+      - goos:
       - linux
       - darwin
       - windows
@@ -49,11 +49,28 @@ builds:
       # names below keep the bare {{ .Version }} by convention.
       - -s -w -X main.version=v{{ .Version }}
 
+  - id: migrate
+    main: ./cmd/migrate
+    binary: awg-migrate
+    env:
+      - CGO_ENABLED=0
+      - goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
 archives:
   - id: admin-archive
-    ids: [admin]
+    ids: [admin, migrate]
     name_template: >-
-      awg-admin_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+      vpn-admin_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     formats: [tar.gz]
     format_overrides:
       - goos: windows
@@ -94,5 +111,5 @@ changelog:
 
 release:
   mode: keep-existing
-  name_template: "AWG Admin v{{ .Version }}"
+  name_template: "VPN Admin v{{ .Version }}"
   replace_existing_artifacts: true

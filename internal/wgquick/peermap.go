@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"strings"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
-// PeerMap is the operator-supplied assignment of a conf's peers to awg-admin
-// users. A wg-quick server conf only holds each peer's public key; awg-admin's
+// PeerMap is the operator-supplied assignment of a conf's peers to vpn-admin
+// users. A wg-quick server conf only holds each peer's public key; vpn-admin's
 // model needs the private key (it renders client configs/QR codes from it), and
 // only the operator has those — from the client configs handed out earlier. The
 // map is a two-level, YAML-like text:

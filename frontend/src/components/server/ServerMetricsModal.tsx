@@ -14,7 +14,7 @@
   limitations under the License.
  */
 
-import {type MouseEvent, useEffect, useMemo, useState} from 'react';
+import {type MouseEvent, useCallback, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
     CategoryScale,
@@ -29,7 +29,10 @@ import {
 import {Line} from 'react-chartjs-2';
 import {RefreshCw} from 'lucide-react';
 import {Modal} from '@/components/common/Modal';
-import {getServerMetricsHistory} from '@/services/servers';
+import {AgentDeployment} from '@/components/server/AgentDeployment';
+import {ResourceManager} from '@/components/resources/ResourceManager';
+import ServerDetail from '@/pages/ServerDetail';
+import {getServerInterfaceMetricsHistory, getServerMetricsHistory} from '@/services/servers';
 import {useAppStore} from '@/store';
 import {byName, cn, formatBytes} from '@/lib/utils';
 import {b64ToHex, isPeerConnected} from '@/lib/peers';
@@ -40,6 +43,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip,
 interface Props {
     serverId: string;
     serverName: string;
+    onChanged?: () => Promise<void>;
     onClose: () => void;
 }
 
@@ -207,6 +211,7 @@ function Sparkline({values, times, height = 28}: {values: number[]; times?: numb
     );
 }
 
+type ManageTab = 'metrics' | 'interfaces' | 'agent' | 'information';
 type MetricsTab = 'system' | 'peers';
 
 type RangeKey = '1h' | '3h' | '6h' | '24h' | 'all';
@@ -222,29 +227,39 @@ const RANGES: {key: RangeKey; ms: number | null}[] = [
     {key: 'all', ms: null},
 ];
 
-export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
+export function ServerMetricsModal({serverId, serverName, onChanged, onClose}: Props) {
     const {t} = useTranslation();
     const users = useAppStore((s) => s.users);
     const servers = useAppStore((s) => s.servers);
     const interfacesById = useAppStore((s) => s.interfaces);
     const [history, setHistory] = useState<SystemHistory | null>(null);
     const [loading, setLoading] = useState(true);
+    const [manageTab, setManageTab] = useState<ManageTab>('interfaces');
     const [tab, setTab] = useState<MetricsTab>('system');
     const [range, setRange] = useState<RangeKey>('all');
+    const [deploymentBusy, setDeploymentBusy] = useState(false);
+    const server = servers.find(server => server.id === serverId);
+    const handleChanged = useCallback(() => { void onChanged?.(); }, [onChanged]);
 
     useEffect(() => {
+        if (manageTab !== 'metrics') return;
         let cancelled = false;
-        setLoading(true);
-        getServerMetricsHistory(serverId).then((hist) => {
-            if (!cancelled) {
-                setHistory(hist ?? null);
-                setLoading(false);
-            }
+        const interfaceIds = server?.interfaces ?? [];
+        void Promise.all([
+            getServerMetricsHistory(serverId),
+            Promise.all(interfaceIds.map(id => getServerInterfaceMetricsHistory(serverId, id))),
+        ]).then(([system, interfaceHistories]) => {
+            if (cancelled) return;
+            setHistory(system ? {
+                ...system,
+                interfaces: interfaceHistories.filter(history => history !== null),
+            } : null);
+            setLoading(false);
         });
         return () => {
             cancelled = true;
         };
-    }, [serverId]);
+    }, [serverId, manageTab, server]);
 
     // Restrict every series (system points + each peer's points) to the
     // selected window. The cutoff is relative to the newest retained sample —
@@ -341,8 +356,7 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                         : shortKey(peer.publicKey));
                 // "Online now" is judged from the peer's most recent retained
                 // sample: its lastHandshake against that sample's own timestamp
-                // (the agent's clock), so host clock skew cancels — same rule as
-                // the Dashboard's connected count.
+                // (the agent's clock), so host clock skew cancels.
                 const last = peer.points[peer.points.length - 1];
                 const online = last
                     ? isPeerConnected(last.lastHandshake, new Date(last.timestamp as unknown as string).getTime())
@@ -444,36 +458,63 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
         scales: {...baseOptions.scales, y: {...netBounds, ticks: {font: {size: 10}, callback: (v) => formatBytes(Number(v))}}},
     };
 
+    const manageTabs: ManageTab[] = ['interfaces', 'agent', 'metrics', 'information'];
+    const manageTabLabels: Record<ManageTab, string> = {
+        interfaces: 'servers.interfacesTab',
+        agent: 'servers.agentTab',
+        metrics: 'servers.metricsTitle',
+        information: 'servers.informationTab',
+    };
     const tabs: MetricsTab[] = ['system', 'peers'];
 
     return (
-        <Modal title={`${t('servers.metricsTitle')} — ${serverName}`} onClose={onClose} size="lg">
-            {loading ? (
+        <Modal title={`${serverName} - ${t('servers.managePanel')}`} onClose={onClose} size="lg" loading={deploymentBusy}>
+            <div className="mb-4 flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden border-b border-border dark:border-white/10" role="tablist">
+                {manageTabs.map(item => (
+                    <button
+                        key={item}
+                        type="button"
+                        role="tab"
+                        aria-selected={manageTab === item}
+                        onClick={() => setManageTab(item)}
+                        className={cn(
+                            '-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                            manageTab === item
+                                ? 'border-sky-500 text-foreground dark:text-zinc-100'
+                                : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
+                        )}
+                    >
+                        {t(manageTabLabels[item])}
+                    </button>
+                ))}
+            </div>
+            {manageTab === 'metrics' && (loading ? (
                 <div className="flex items-center justify-center py-16 text-muted-foreground dark:text-zinc-400">
                     <RefreshCw className="w-5 h-5 mr-2 animate-spin"/>
                     {t('common.loading')}
                 </div>
             ) : (
                 <div>
-                    <div className="mb-3 flex items-end justify-between gap-2 border-b border-border dark:border-white/10">
-                        <div className="flex gap-1">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                        <div className="flex rounded-lg bg-muted p-1" role="group" aria-label={t('servers.metricsTitle')}>
                             {tabs.map((tk) => (
                                 <button
                                     key={tk}
                                     type="button"
+                                    aria-pressed={tab === tk}
                                     onClick={() => setTab(tk)}
                                     className={cn(
-                                        '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                                        'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                                         tab === tk
-                                            ? 'border-sky-500 text-foreground dark:text-zinc-100'
-                                            : 'border-transparent text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
+                                            ? 'bg-card text-foreground shadow-sm dark:text-zinc-100'
+                                            : 'text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300',
                                     )}
                                 >
                                     {t(tk === 'system' ? 'servers.metricsTabSystem' : 'servers.metricsTabPeers')}
                                 </button>
                             ))}
                         </div>
-                        <div className="mb-1 flex items-center gap-1" role="group" aria-label={t('servers.metricsRange')}>
+                        <div className="flex items-center gap-1" role="group" aria-label={t('servers.metricsRange')}>
                             {RANGES.map((r) => (
                                 <button
                                     key={r.key}
@@ -567,6 +608,19 @@ export function ServerMetricsModal({serverId, serverName, onClose}: Props) {
                         </table>
                     )}
                 </div>
+            ))}
+            {manageTab !== 'metrics' && (
+                server ? (
+                    manageTab === 'interfaces' ? (
+                        <ResourceManager serverId={serverId} onChanged={handleChanged} />
+                    ) : manageTab === 'agent' ? (
+                        <AgentDeployment server={server} onChanged={handleChanged} onBusyChange={setDeploymentBusy} />
+                    ) : (
+                        <ServerDetail serverId={serverId} section="information" onChanged={handleChanged} />
+                    )
+                ) : (
+                    <div className="py-8 text-center text-sm text-muted-foreground">{t('servers.noServers')}</div>
+                )
             )}
         </Modal>
     );

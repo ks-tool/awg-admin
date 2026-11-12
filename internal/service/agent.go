@@ -27,33 +27,34 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/internal/agentclient"
-	"github.com/ks-tool/awg-admin/models"
-
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/internal/sshclient"
+	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // agentClientFor picks the transport for srv's agent and wraps it in a
 // agentclient.Client: a direct mTLS *http.Client when srv.Agent.TLS is
 // configured (the agent is reachable on its own, typically a public IP),
 // otherwise the SSH tunnel opened by StartTunnels/Manager.Open for that
-// server ID.
-func (s *Service) agentClientFor(srv *models.Server) (*agentclient.Client, error) {
+// server ID. The tunnel is returned so a failed request can reopen that exact
+// generation without replacing a newer healthy one.
+func (s *Service) agentClientFor(srv *models.Server) (*agentclient.Client, *sshclient.TunnelClient, error) {
 	if !srv.Agent.TLS.IsZero() {
 		httpClient, err := mtlsHTTPClient(srv.Agent.TLS)
 		if err != nil {
-			return nil, fmt.Errorf("build mTLS client: %w", err)
+			return nil, nil, fmt.Errorf("build mTLS client: %w", err)
 		}
-		return agentclient.New(httpClient, "https://"+srv.Agent.Address), nil
+		return agentclient.New(httpClient, "https://"+srv.Agent.Address), nil, nil
 	}
 
 	tunnel, err := s.tunnels.Ensure(srv.ID, srv.SSH, srv.Agent.Address)
 	if err != nil {
-		return nil, fmt.Errorf("no SSH tunnel open for server %s (agent unreachable): %w", srv.ID, err)
+		return nil, nil, fmt.Errorf("no SSH tunnel open for server %s (agent unreachable): %w", srv.ID, err)
 	}
-	return agentclient.New(tunnel.Client, "http://"+srv.Agent.Address), nil
+	return agentclient.New(tunnel.Client, "http://"+srv.Agent.Address), tunnel, nil
 }
 
 // callAgent runs an idempotent op against srv's agent, owning transport setup,
@@ -99,7 +100,7 @@ func (s *Service) callAgent(srv *models.Server, op func(context.Context, *agentc
 // profile a "cpu profiling already in use" error from the still-unwinding first
 // attempt). The hard drop signals (EOF/ErrClosed/channel-open) always retry.
 func (s *Service) callAgentTimeout(srv *models.Server, timeout time.Duration, retryOnTimeout bool, op func(context.Context, *agentclient.Client) error) error {
-	client, err := s.agentClientFor(srv)
+	client, tunnel, err := s.agentClientFor(srv)
 	if err != nil {
 		return err
 	}
@@ -111,13 +112,13 @@ func (s *Service) callAgentTimeout(srv *models.Server, timeout time.Duration, re
 	}
 
 	// The tunnel died (or hung until the deadline) underneath the request but
-	// Ensure didn't notice in time. Force a fresh one and try again; keep the
-	// original error if the reconnect itself fails so the caller sees the real
-	// failure.
-	if reopenErr := s.tunnels.Reopen(srv.ID, srv.SSH, srv.Agent.Address); reopenErr != nil {
+	// Ensure didn't notice in time. Reopen this generation unless another
+	// request has already installed a live replacement; keep the original error
+	// if the reconnect itself fails so the caller sees the real failure.
+	if reopenErr := s.tunnels.ReopenStale(srv.ID, tunnel, srv.SSH, srv.Agent.Address); reopenErr != nil {
 		return err
 	}
-	client, reErr := s.agentClientFor(srv)
+	client, _, reErr := s.agentClientFor(srv)
 	if reErr != nil {
 		return err
 	}
@@ -174,13 +175,11 @@ func tunnelDroppedHard(err error) bool {
 }
 
 // pingAgent confirms srv's agent HTTP daemon actually answers, used by
-// ServerAgentStatus. It uses the lightest call — List (GET /interfaces/), which
-// has no metrics-collector dependency (unlike /metrics, which 503s when the
-// collector was never created) — and goes through callAgent so a stale SSH
-// tunnel is reopened-and-retried first.
+// ServerAgentStatus. The provider-neutral manifest endpoint works whether or
+// not the legacy AWG API is configured and has no metrics-collector dependency.
 func (s *Service) pingAgent(srv *models.Server) error {
 	return s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
-		_, err := c.List(ctx)
+		_, err := c.Manifest(ctx)
 		return err
 	})
 }
@@ -213,9 +212,8 @@ func (s *Service) ServerHostInfo(serverID string) (*agentmodels.HostInfo, error)
 	return info, nil
 }
 
-// GetServerMetrics fetches the latest CPU/RAM/load/network/peer snapshot
-// from serverID's agent, for display on the frontend Dashboard.
-func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapshot, error) {
+// GetServerMetrics fetches the latest host snapshot from serverID's agent.
+func (s *Service) GetServerMetrics(serverID string) (*agentmodels.SystemSnapshot, error) {
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
 		return nil, err
@@ -225,7 +223,7 @@ func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapsho
 		return nil, err
 	}
 
-	var snap *agentmodels.MetricsSnapshot
+	var snap *agentmodels.SystemSnapshot
 	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
 		var mErr error
 		snap, mErr = c.Metrics(ctx)
@@ -237,11 +235,52 @@ func (s *Service) GetServerMetrics(serverID string) (*agentmodels.MetricsSnapsho
 	return snap, nil
 }
 
-// GetServerMetricsHistory fetches every host-level sample plus every per-peer
-// sample still retained in serverID's agent's in-memory ring buffers (up to
-// 48h), for the Dashboard's per-server metrics chart modal. Per-peer series
-// come back in SystemHistory.Interfaces (the agent serves all history through
-// its single /metrics/history endpoint).
+func (s *Service) serverAndInterface(serverID, interfaceID string) (*models.Server, *models.Interface, error) {
+	sID, err := uuid.Parse(serverID)
+	if err != nil {
+		return nil, nil, err
+	}
+	ifaceID, err := uuid.Parse(interfaceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	srv, err := s.store.Servers().Get(sID)
+	if err != nil {
+		return nil, nil, err
+	}
+	iface, err := s.store.Servers().Interfaces(sID).Get(ifaceID)
+	return srv, iface, err
+}
+
+func (s *Service) GetServerInterfaceMetrics(serverID, interfaceID string) (*agentmodels.InterfaceSnapshot, error) {
+	srv, iface, err := s.serverAndInterface(serverID, interfaceID)
+	if err != nil {
+		return nil, err
+	}
+	var snap *agentmodels.InterfaceSnapshot
+	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		var mErr error
+		snap, mErr = c.InterfaceMetrics(ctx, iface.Interface)
+		return mErr
+	})
+	return snap, err
+}
+
+func (s *Service) GetServerInterfaceMetricsHistory(serverID, interfaceID string) (*agentmodels.InterfaceHistory, error) {
+	srv, iface, err := s.serverAndInterface(serverID, interfaceID)
+	if err != nil {
+		return nil, err
+	}
+	var history *agentmodels.InterfaceHistory
+	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
+		var mErr error
+		history, mErr = c.InterfaceMetricsHistory(ctx, iface.Interface)
+		return mErr
+	})
+	return history, err
+}
+
+// GetServerMetricsHistory fetches host-level samples retained by serverID's agent.
 func (s *Service) GetServerMetricsHistory(serverID string) (*agentmodels.SystemHistory, error) {
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
@@ -293,7 +332,7 @@ func (s *Service) SetServerMonitoring(serverID string, enabled bool) (*models.Se
 
 // mtlsHTTPClient builds an *http.Client that presents tlsCfg.Client's
 // certificate and trusts tlsCfg.CA, mirroring the server side built by
-// agent/cmd/awg-agent.go's buildTLSConfig.
+// agent/cmd/vpn-agent.go's buildTLSConfig.
 func mtlsHTTPClient(tlsCfg *models.AgentTLS) (*http.Client, error) {
 	clientCert, err := tls.X509KeyPair([]byte(tlsCfg.Client.Certificate), []byte(tlsCfg.Client.PrivateKey))
 	if err != nil {

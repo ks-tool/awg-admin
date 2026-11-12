@@ -19,12 +19,13 @@ package service
 import (
 	"testing"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func newTestServerWithAgent(t *testing.T) (*Service, *models.Server, *fakeAgentTLS) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	ts, tlsMaterial, fa := newFakeAgentTLS(t)
 	t.Cleanup(ts.Close)
 

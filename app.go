@@ -26,9 +26,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ks-tool/awg-admin/internal/logbuffer"
-	"github.com/ks-tool/awg-admin/internal/service"
-	"github.com/ks-tool/awg-admin/storage/boltdb"
+	"github.com/ks-tool/vpn-admin/internal/config"
+	"github.com/ks-tool/vpn-admin/internal/logbuffer"
+	"github.com/ks-tool/vpn-admin/internal/service"
+	"github.com/ks-tool/vpn-admin/storage/boltdb"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -48,7 +49,7 @@ func NewApp(version string) *App {
 	// Tee the global logger to stdout AND an in-memory buffer (surfaced by the
 	// Settings "Logs" modal). This lives here rather than in the web-server
 	// entry point because NewApp is only ever constructed by the Wails desktop
-	// main (cmd/awg-admin.go builds the Service directly), and log viewing is a
+	// main (cmd/vpn-admin.go builds the Service directly), and log viewing is a
 	// desktop-only feature.
 	logs := logbuffer.New(2000)
 	log.Logger = log.Output(io.MultiWriter(os.Stdout, logs))
@@ -61,14 +62,14 @@ func NewApp(version string) *App {
 	// The web-server main logs this line too, but that entry point isn't run in
 	// the desktop app — log it here so the version shows in the Settings "Logs"
 	// modal / captured buffer.
-	log.Info().Str("version", version).Msg("starting awg-admin")
+	log.Info().Str("version", version).Msg("starting vpn-admin")
 
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
 	}
 
-	db, err := boltdb.Open(filepath.Join(home, ".awg-admin"))
+	db, err := boltdb.Open(config.AdminDatabasePath(home))
 	if err != nil {
 		log.Fatal().Err(err).Send()
 	}
@@ -250,7 +251,7 @@ func (a *App) SaveLogs() (bool, error) {
 
 	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title:           "Save logs",
-		DefaultFilename: "awg-admin-logs.json",
+		DefaultFilename: "vpn-admin-logs.json",
 		Filters: []runtime.FileFilter{{
 			DisplayName: "JSON (*.json)",
 			Pattern:     "*.json",
@@ -290,7 +291,7 @@ func (a *App) SaveBackup() (bool, error) {
 
 	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title:           "Backup admin database",
-		DefaultFilename: "awg-admin-backup.json",
+		DefaultFilename: "vpn-admin-backup.json",
 		Filters: []runtime.FileFilter{{
 			DisplayName: "JSON (*.json)",
 			Pattern:     "*.json",

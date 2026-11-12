@@ -16,24 +16,23 @@
 
 package models
 
-// AgentReleaseAsset is one downloadable awg-agent binary published in a GitHub
-// release (tagged agent/v*), offered by the "GitHub releases" picker in the
+// AgentReleaseAsset is one downloadable vpn-agent binary published in a GitHub
+// release (tagged v*), offered by the "GitHub releases" picker in the
 // Add-agent-source UI so an official binary can be turned into a URL
 // AgentSource without pasting a URL by hand. Assembled by
 // Service.ListAgentReleases from the public GitHub releases API — it is derived,
 // never persisted.
 type AgentReleaseAsset struct {
 	// Name is the release-relative asset filename, e.g.
-	// "awg-agent-userspace_linux_amd64".
+	// "vpn-agent-userspace_linux_amd64".
 	Name string `json:"name"`
-	// Version is the release version: the agent/v* tag with the "agent/" prefix
-	// stripped, e.g. "v1.0.0".
+	// Version is the release tag, e.g. "v2.0.0".
 	Version string `json:"version"`
 	// Arch is the target CPU architecture parsed from the asset name
 	// ("amd64"/"arm64"), or "" if it couldn't be determined.
 	Arch string `json:"arch"`
-	// Userspace is true for the userspace agent binary (awg-agent-userspace),
-	// false for the kernel one (awg-agent). It maps straight onto
+	// Userspace is true for the userspace agent binary (vpn-agent-userspace),
+	// false for the kernel one (vpn-agent). It maps straight onto
 	// AgentSource.Userspace so a source created from this asset skips (or keeps)
 	// the AmneziaWG kernel-module pre-check on deploy correctly.
 	Userspace bool `json:"userspace"`

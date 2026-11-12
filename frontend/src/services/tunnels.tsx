@@ -14,11 +14,11 @@
   limitations under the License.
  */
 
-import { get, post, remove } from './api';
+import { get } from './api';
 import { getCurrentApiMode } from './apiMode';
 import { bindingsClient } from './bindingsClient';
 import { reportError } from './errorReporting';
-import type { Tunnel, TunnelStep } from '@/types';
+import type { Tunnel } from '@/types';
 
 function getClient() {
   return getCurrentApiMode() === 'bindings' ? bindingsClient : null;
@@ -42,37 +42,4 @@ export async function listTunnels(): Promise<Tunnel[] | null> {
     return null;
   }
   return data ?? null;
-}
-
-/**
- * Builds a tunnel from the given ordered interfaces (entry first, exit last).
- * subnet is the shared tunnel subnet; empty means auto. Returns the tunnel, or
- * an error string (surfaced to the user — BuildTunnel validates the selection).
- */
-export async function buildTunnel(
-  steps: TunnelStep[],
-  subnet: string,
-): Promise<{ tunnel: Tunnel | null; error?: string }> {
-  const client = getClient();
-  if (client) {
-    const { data, error } = await client.buildTunnel(steps, subnet);
-    if (error) return { tunnel: null, error };
-    return { tunnel: data as unknown as Tunnel };
-  }
-
-  const { data, error } = await post<Tunnel, { steps: TunnelStep[]; subnet: string }>('/tunnels', { steps, subnet });
-  if (error) return { tunnel: null, error };
-  return { tunnel: data ?? null };
-}
-
-/** Removes a tunnel, leaving its interfaces empty. */
-export async function removeTunnel(id: string): Promise<{ ok: boolean; error?: string }> {
-  const client = getClient();
-  if (client) {
-    const { error } = await client.removeTunnel(id);
-    return { ok: !error, error };
-  }
-
-  const { error } = await remove<void>(`/tunnels/${id}`);
-  return { ok: !error, error };
 }

@@ -18,21 +18,23 @@ import * as React from 'react';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
-import {ArrowLeft, ArrowRightLeft, Download, FileDown, Key, Plus, Power, PowerOff, QrCode, Trash2, User as UserIcon, UserPen} from 'lucide-react';
-import {PageHeader} from '@/components/layout/PageHeader';
+import {ArrowLeft, ArrowRightLeft, Download, FileDown, Key, Plus, Power, PowerOff, QrCode, Trash2, UserPen} from 'lucide-react';
 import {useNavigation} from '@/contexts/NavigationContext';
 import {useAppStore} from '@/store';
 import {listInterfaces} from '@/services/interfaces';
+import {getProviderSchema} from '@/services/resources';
+import {SchemaForm} from '@/components/topology/SchemaForm';
 import {getPeerConfig, getPeerQRCode, migratePeer, savePeerConfig, savePeerQRCode, setPeerDisabled} from '@/services/peers';
 import {CopyButton} from '@/components/common/CopyButton';
 import {StatusBadge} from '@/components/common/StatusBadge';
 import {Container} from '@/components/common/Container';
 import {FormField} from '@/components/common/FormField';
-import {buttons, inputs, Modal} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {ConfirmModal} from '@/components/common/ConfirmModal';
 import {CollapsibleSection} from '@/components/common/CollapsibleSection';
 import {cn} from '@/lib/utils';
-import type {Interface, Server} from '@/types';
+import type {Interface, ProviderDefinition, Server} from '@/types';
 
 // ---------------------------------------------------------------------------
 // Peer QR code modal
@@ -74,13 +76,19 @@ function PeerQRModal({userId, publicKey, peerName, onClose}: {
         return () => {
             cancelled = true;
         };
-    }, [userId, publicKey]);
+    }, [userId, publicKey, t]);
 
     // Strip only characters that are actually illegal in filenames (keep
     // Unicode letters, e.g. Cyrillic peer names, intact), then trim stray
     // separators so the result is never empty.
     const safeName = (peerName || 'peer')
-        .replace(/[/\\:*?"<>|\x00-\x1f]+/g, '_')
+        .replace(/[/\\:*?"<>|]+/g, '_')
+        .split('')
+        .filter(character => {
+            const code = character.charCodeAt(0);
+            return code > 31 && code !== 127;
+        })
+        .join('')
         .replace(/^[.\s]+|[.\s]+$/g, '') || 'peer';
 
     // Save the (already-rendered, server-produced) PNG to a file. The browser
@@ -159,6 +167,7 @@ const INITIAL_PEER_FORM = {
     name: '',
     serverId: '',
     interfaceId: '',
+    spec: {} as Record<string, unknown>,
     allowedIps: '',
     endpoint: '',
     dns: '',
@@ -181,19 +190,24 @@ function AddPeerModal({
 }) {
     const {t} = useTranslation();
     const [form, setForm] = useState<PeerFormData>(INITIAL_PEER_FORM);
-    const [interfaces, setInterfaces] = useState<Array<{ id: string; name: string; addr: string }>>([]);
+    const [interfaces, setInterfaces] = useState<Array<{ id: string; name: string; addr: string; provider?: string }>>([]);
+    const [providerDefinition, setProviderDefinition] = useState<ProviderDefinition | null>(null);
+    const selectedInterface = interfaces.find(iface => iface.id === form.interfaceId);
+    const isProviderPeer = !!selectedInterface?.provider && selectedInterface.provider !== 'awg';
 
     useEffect(() => {
-        if (!form.serverId) {
-            setInterfaces([]);
-            return;
-        }
         let cancelled = false;
+        if (!form.serverId) {
+            void Promise.resolve().then(() => {
+                if (!cancelled) setInterfaces([]);
+            });
+            return () => {cancelled = true;};
+        }
         (async () => {
             const list = await listInterfaces(form.serverId);
             if (!cancelled) {
                 setInterfaces(
-                    list ? list.map(iface => ({id: iface.id, name: iface.iface, addr: iface.addr || ''})) : [],
+                    list ? list.map(iface => ({id: iface.id, name: iface.iface, addr: iface.addr || '', provider: iface.provider})) : [],
                 );
             }
         })();
@@ -202,14 +216,33 @@ function AddPeerModal({
         };
     }, [form.serverId]);
 
+    useEffect(() => {
+        if (!isProviderPeer || !selectedInterface?.provider) return;
+        let cancelled = false;
+        void getProviderSchema(form.serverId, selectedInterface.provider).then(definition => {
+            if (!cancelled) setProviderDefinition(definition);
+        }).catch(error => toast.error(error instanceof Error ? error.message : String(error)));
+        return () => {cancelled = true;};
+    }, [form.serverId, isProviderPeer, selectedInterface?.provider]);
+
+    const peerSchema = React.useMemo(() => {
+        const definition = providerDefinition?.resources.find(resource => resource.kind === 'Peer');
+        if (!definition) return null;
+        const internal = new Set(['name', 'interfaceRef', 'userRef', 'publicKey', 'disabled']);
+        const properties = Object.fromEntries(Object.entries(definition.specSchema.properties ?? {}).filter(([key]) => !internal.has(key)));
+        const required = Array.isArray(definition.specSchema.required) ? definition.specSchema.required.filter(key => typeof key === 'string' && !internal.has(key)) : [];
+        return {...definition.specSchema, properties, required};
+    }, [providerDefinition]);
+    const hasProviderFields = isProviderPeer && Object.keys(peerSchema?.properties ?? {}).length > 0;
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const {name, value, type} = e.target;
         const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
         setForm(prev => ({
             ...prev,
             [name]: val,
-            // changing server invalidates the previously selected interface
             ...(name === 'serverId' ? {interfaceId: ''} : {}),
+            ...(name === 'serverId' || name === 'interfaceId' ? {spec: {}} : {}),
         }));
     };
 
@@ -265,7 +298,7 @@ function AddPeerModal({
                     </select>
                 </FormField>
 
-                <CollapsibleSection label={t('common.advancedSettings')}>
+                {!isProviderPeer && <CollapsibleSection label={t('common.advancedSettings')}>
                 <FormField label={`${t('peers.allowedIPs')} (${t('common.optional')})`}>
                     <input
                         type="text"
@@ -343,20 +376,27 @@ function AddPeerModal({
                         />
                     </FormField>
                 )}
-                </CollapsibleSection>
+                </CollapsibleSection>}
 
-                <div className="flex gap-3 pt-4">
-                    <button
-                        onClick={handleSubmit}
+                {hasProviderFields && peerSchema && (
+                    <SchemaForm
+                        schema={peerSchema}
+                        formData={form.spec}
+                        onChange={spec => setForm(prev => ({...prev, spec}))}
+                        onSubmit={spec => onSubmit({...form, spec})}
+                        submitLabel={loading ? `${t('common.saving')}...` : t('peers.addPeer')}
                         disabled={loading || !form.interfaceId}
-                        className={cn('flex-1', buttons.primary)}
-                    >
-                        {loading ? `${t('common.saving')}...` : t('peers.addPeer')}
-                    </button>
-                    <button onClick={onClose} disabled={loading} className={cn('flex-1', buttons.secondary)}>
-                        {t('common.cancel')}
-                    </button>
-                </div>
+                    />
+                )}
+                {!hasProviderFields && (
+                    <div className="flex gap-3 pt-4">
+                        <button onClick={handleSubmit} disabled={loading || !form.interfaceId} className={cn('flex-1', buttons.primary)}>
+                            {loading ? `${t('common.saving')}...` : t('peers.addPeer')}
+                        </button>
+                        <button onClick={onClose} disabled={loading} className={cn('flex-1', buttons.secondary)}>{t('common.cancel')}</button>
+                    </div>
+                )}
+                {hasProviderFields && <button onClick={onClose} disabled={loading} className={cn('w-full', buttons.secondary)}>{t('common.cancel')}</button>}
             </div>
         </Modal>
     );
@@ -407,13 +447,15 @@ export default function UserDetail() {
     /* ---- Effects ---------------------------------------------------------- */
 
     useEffect(() => {
-        if (user) {
+        if (!user) return;
+        const timeout = window.setTimeout(() => {
             setFormData({
                 name: user.name || '',
                 description: user.description || '',
                 disabled: user.disabled || false,
             });
-        }
+        }, 0);
+        return () => window.clearTimeout(timeout);
     }, [user]);
 
     /* ---- Handlers --------------------------------------------------------- */
@@ -482,6 +524,7 @@ export default function UserDetail() {
             await addPeer(selectedUserId, {
                 name: form.name,
                 interfaceId: form.interfaceId,
+                spec: form.spec,
                 allowedIps: allowedIpsArray,
                 endpoint: form.endpoint || undefined,
                 dns: dnsArray.length ? dnsArray : undefined,
@@ -598,46 +641,20 @@ export default function UserDetail() {
     /* ---- Render: empty state ---------------------------------------------- */
 
     if (!user) {
-        return (
-            <div className="flex flex-col">
-                <PageHeader
-                    title={t('users.title')}
-                    icon={UserIcon}
-                    description={t('users.noUser')}
-                    actions={
-                        <button onClick={handleBack} className={buttons.primary} title={t('users.backToUsers')}>
-                            <ArrowLeft size={14}/>
-                        </button>
-                    }
-                />
-                <div className="p-8 text-center text-muted-foreground">{t('users.noUser')}</div>
-            </div>
-        );
+        return <div className="p-8 text-center text-muted-foreground">{t('users.noUser')}</div>;
     }
 
     /* ---- Render: main ----------------------------------------------------- */
 
     return (
         <div className="flex flex-col">
-            <PageHeader
-                title={user.name || t('users.noName')}
-                icon={UserIcon}
-                description={user.id}
-                actions={
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setShowDeleteUserConfirm(true)}
-                            className={buttons.danger}
-                            title={t('users.deleteUser')}
-                        >
-                            <Trash2 size={14}/>
-                        </button>
-                        <button onClick={handleBack} className={buttons.primary} title={t('users.backToUsers')}>
-                            <ArrowLeft size={14}/>
-                        </button>
-                    </div>
-                }
-            />
+            <div className="flex items-center justify-between px-8 pt-6">
+                <h2 className="font-semibold">{user.name || t('users.noName')}</h2>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setShowDeleteUserConfirm(true)} className={buttons.danger} title={t('users.deleteUser')}><Trash2 size={14}/></button>
+                    <button onClick={handleBack} className={buttons.primary} title={t('users.backToUsers')}><ArrowLeft size={14}/></button>
+                </div>
+            </div>
 
             <div className="p-8 space-y-6">
                 {/* User Information */}
@@ -752,13 +769,13 @@ export default function UserDetail() {
                                             >
                                                 <QrCode size={16}/>
                                             </button>
-                                            <button
+                                            {(!peer.provider || peer.provider === 'awg') && <button
                                                 onClick={() => { setMigrateTarget(''); setPeerToMigrate({publicKey: peer.pk, name: peer.name, currentInterface: peer.interface}); }}
                                                 className="p-1 text-muted-foreground hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300 rounded transition-colors"
                                                 title={t('peers.migrateTooltip')}
                                             >
                                                 <ArrowRightLeft size={16}/>
-                                            </button>
+                                            </button>}
                                             <button
                                                 onClick={() => handleTogglePeerDisabled(peer.pk, !peer.disabled)}
                                                 disabled={togglingPeerKey === peer.pk}

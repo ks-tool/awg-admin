@@ -17,19 +17,23 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"time"
 
-	"github.com/ks-tool/awg-admin/storage/boltdb/dump"
+	appconfig "github.com/ks-tool/app-config/go"
+	"github.com/ks-tool/vpn-admin/storage/boltdb"
+	"github.com/ks-tool/vpn-admin/storage/boltdb/dump"
+	"github.com/spf13/pflag"
 
 	bolt "go.etcd.io/bbolt"
 )
 
-// awg-migrate moves awg-admin's data between two boltdb files — typically
-// the ~/.awg-admin used by the Wails desktop app on one machine and the one
-// used by the standalone web server (cmd/awg-admin.go) on another. Both
+// awg-migrate moves vpn-admin's data between two boltdb files — typically
+// the ~/.vpn-admin/db used by the Wails desktop app on one machine and the one
+// used by the standalone web server (cmd/vpn-admin.go) on another. Both
 // already share the exact same file format (same boltdb buckets, same JSON
 // value encoding — see storage/boltdb), so this tool doesn't need to know
 // anything about the application's schema (models.Server, models.User,
@@ -38,16 +42,17 @@ import (
 // historical bktUsers/bktInterfaces bucket-name mismatch in
 // storage/boltdb/bbolt.go — it doesn't care what a bucket is named or what
 // its values mean, only that the source and destination are the same
-// awg-admin version (the binary format of values is an internal,
+// vpn-admin version (the binary format of values is an internal,
 // undocumented implementation detail, not a stable cross-version contract).
 //
 // Usage:
 //
-//	awg-migrate export -db ~/.awg-admin -out dump.json
-//	awg-migrate import -db ~/.awg-admin -in dump.json [-force]
+//	awg-migrate export --db ~/.vpn-admin/db --out dump.json
+//	awg-migrate import --db ~/.vpn-admin/db --in dump.json [--force]
+//	awg-migrate v2 --db ~/.awg-admin --out ~/.vpn-admin/db
 func main() {
 	if len(os.Args) < 2 {
-		usage()
+		usage(os.Stderr)
 		os.Exit(2)
 	}
 
@@ -56,70 +61,125 @@ func main() {
 		runExportCmd(os.Args[2:])
 	case "import":
 		runImportCmd(os.Args[2:])
+	case "v2":
+		runV2Cmd(os.Args[2:])
 	case "-h", "-help", "--help":
-		usage()
+		usage(os.Stdout)
 	default:
 		fmt.Fprintf(os.Stderr, "awg-migrate: unknown command %q\n\n", os.Args[1])
-		usage()
+		usage(os.Stderr)
 		os.Exit(2)
 	}
 }
 
-func usage() {
-	fmt.Fprint(os.Stderr, `awg-migrate: export/import awg-admin's boltdb between machines or
-between the Wails desktop app and the standalone web server — both read
-the same file format, so a dump taken from one can be imported into the
-other.
+func usage(w io.Writer) {
+	_, _ = fmt.Fprint(w, `awg-migrate: backup, restore and manually migrate vpn-admin's BoltDB.
 
 Usage:
-  awg-migrate export -db <path> -out <dump.json>
-  awg-migrate import -db <path> -in <dump.json> [-force]
+  awg-migrate <command> [flags]
 
-Flags:
-  -db     path to the boltdb file (the desktop app and standalone server
-          both default to ~/.awg-admin)
-  -out    (export) path to write the JSON dump to
-  -in     (import) path to read the JSON dump from
-  -force  (import) overwrite keys that already exist in the destination
-          instead of aborting on the first conflict
+Commands:
+  export  export a BoltDB database to a JSON dump
+  import  import a JSON dump into a BoltDB database
+  v2      manually migrate a v1 database to a separate v2 database
+
+Use "awg-migrate <command> --help" for command-specific flags and defaults.
+Flags can also be set with AWG_MIGRATE_DB, AWG_MIGRATE_OUT,
+AWG_MIGRATE_IN and AWG_MIGRATE_FORCE; command-line flags take precedence.
+
+The v2 command reads the v1 source without modifying it and atomically creates
+a separate v2 database. Its defaults are ~/.awg-admin and ~/.vpn-admin/db.
+Stop vpn-admin before replacing an existing destination. The source v1 database
+can remain in use by the previous application version.
 `)
 }
 
-func runExportCmd(args []string) {
-	fs := flag.NewFlagSet("export", flag.ExitOnError)
-	dbPath := fs.String("db", "", "path to the source boltdb file")
-	outPath := fs.String("out", "", "path to write the JSON dump to")
-	_ = fs.Parse(args)
+type v2Config struct {
+	DB    string `env:"DB" flag:"db" help:"path to the v1 source database"`
+	Out   string `env:"OUT" flag:"out" help:"path to the new v2 database"`
+	Force bool   `env:"FORCE" flag:"force" help:"atomically replace the destination database"`
+}
 
-	if *dbPath == "" || *outPath == "" {
-		fs.Usage()
+type exportConfig struct {
+	DB  string `env:"DB" flag:"db" help:"path to the source BoltDB file"`
+	Out string `env:"OUT" flag:"out" help:"path to write the JSON dump"`
+}
+
+type importConfig struct {
+	DB    string `env:"DB" flag:"db" help:"path to the destination BoltDB file"`
+	In    string `env:"IN" flag:"in" help:"path to read the JSON dump"`
+	Force bool   `env:"FORCE" flag:"force" help:"overwrite existing destination keys"`
+}
+
+func runV2Cmd(args []string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	cfg := v2Config{DB: filepath.Join(home, ".awg-admin"), Out: filepath.Join(home, ".vpn-admin", "db")}
+	parseCommandConfig("v2", &cfg, args)
+	if err := boltdb.MigrateV2(cfg.DB, cfg.Out, cfg.Force); err != nil {
+		fmt.Fprintln(os.Stderr, "v2 migration failed:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("migrated v1 %s -> v2 %s; source was not modified\n", cfg.DB, cfg.Out)
+}
+
+func runExportCmd(args []string) {
+	var cfg exportConfig
+	flags := parseCommandConfig("export", &cfg, args)
+	if cfg.DB == "" || cfg.Out == "" {
+		flags.Usage()
 		os.Exit(2)
 	}
 
-	if err := exportDB(*dbPath, *outPath); err != nil {
+	if err := exportDB(cfg.DB, cfg.Out); err != nil {
 		fmt.Fprintln(os.Stderr, "export failed:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("exported %s -> %s\n", *dbPath, *outPath)
+	fmt.Printf("exported %s -> %s\n", cfg.DB, cfg.Out)
 }
 
 func runImportCmd(args []string) {
-	fs := flag.NewFlagSet("import", flag.ExitOnError)
-	dbPath := fs.String("db", "", "path to the destination boltdb file")
-	inPath := fs.String("in", "", "path to read the JSON dump from")
-	force := fs.Bool("force", false, "overwrite keys that already exist instead of aborting")
-	_ = fs.Parse(args)
-
-	if *dbPath == "" || *inPath == "" {
-		fs.Usage()
+	var cfg importConfig
+	flags := parseCommandConfig("import", &cfg, args)
+	if cfg.DB == "" || cfg.In == "" {
+		flags.Usage()
 		os.Exit(2)
 	}
 
-	if err := importDB(*dbPath, *inPath, *force); err != nil {
+	if err := importDB(cfg.DB, cfg.In, cfg.Force); err != nil {
 		fmt.Fprintln(os.Stderr, "import failed:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("imported %s -> %s\n", *inPath, *dbPath)
+	fmt.Printf("imported %s -> %s\n", cfg.In, cfg.DB)
+}
+
+func parseCommandConfig(name string, cfg any, args []string) *pflag.FlagSet {
+	if err := appconfig.Load(cfg,
+		appconfig.Env(),
+		appconfig.Options(appconfig.EnvOptions{Prefix: "AWG_MIGRATE_"}),
+	); err != nil {
+		fmt.Fprintln(os.Stderr, name+" configuration failed:", err)
+		os.Exit(2)
+	}
+	flags := pflag.NewFlagSet(name, pflag.ExitOnError)
+	appconfig.BindFlags(flags, "AWG_MIGRATE_", cfg)
+	flags.Usage = func() {
+		var synopsis string
+		switch name {
+		case "export":
+			synopsis = "--db <path> --out <dump.json>"
+		case "import":
+			synopsis = "--db <path> --in <dump.json> [--force]"
+		case "v2":
+			synopsis = "[--db <v1-path>] [--out <v2-path>] [--force]"
+		}
+		_, _ = fmt.Fprintf(flags.Output(), "Usage:\n  awg-migrate %s %s\n\nFlags:\n", name, synopsis)
+		flags.PrintDefaults()
+	}
+	_ = flags.Parse(args)
+	return flags
 }
 
 // The dump JSON shape and the copy logic live in storage/boltdb/dump, shared

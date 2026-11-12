@@ -22,10 +22,10 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 
-	"github.com/google/uuid"
 	"github.com/skip2/go-qrcode"
 )
 
@@ -49,6 +49,9 @@ func (s *Service) GetPeerConfig(userID string, key string) (string, error) {
 	peer, err := s.store.Users().Peers(uID).Get(pk)
 	if err != nil {
 		return "", err
+	}
+	if len(peer.Provider) > 0 && peer.Provider != "awg" {
+		return s.renderProviderPeerConfig(peer)
 	}
 
 	srv, err := s.findServerByInterface(peer.InterfaceId)

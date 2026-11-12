@@ -22,14 +22,13 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/internal/agentclient"
-	"github.com/ks-tool/awg-admin/internal/wgquick"
-	"github.com/ks-tool/awg-admin/models"
-	"github.com/ks-tool/awg-admin/storage"
-
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/internal/wgquick"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // importPlan is everything PreviewImport reports and ImportInterfaceFromServer
@@ -57,7 +56,7 @@ func (s *Service) PreviewImport(serverID, ifaceName, peerMap string) (*models.Im
 }
 
 // ImportInterfaceFromServer adopts the wg-quick/awg-quick interface ifaceName
-// on serverID into awg-admin: the same fetch/parse/validate as PreviewImport,
+// on serverID into vpn-admin: the same fetch/parse/validate as PreviewImport,
 // then ONE storage transaction (storage.Interfaces.Import) creating the
 // interface with its full peer list, the users named in peerMap that don't
 // exist yet, and their peer records — followed by one best-effort push of the
@@ -126,8 +125,7 @@ func (s *Service) planImport(serverID, ifaceName, peerMap string) (*importPlan, 
 		return nil
 	})
 	if err != nil {
-		var notFound *agentclient.NotFoundError
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*agentclient.NotFoundError](err); ok {
 			return nil, invalidInput("no wg-quick config for %q on the server (looked for /etc/amnezia/amneziawg/%s.conf and /etc/wireguard/%s.conf)", ifaceName, ifaceName, ifaceName)
 		}
 		return nil, fmt.Errorf("read %s config from agent: %w", ifaceName, err)
@@ -146,7 +144,7 @@ func (s *Service) planImport(serverID, ifaceName, peerMap string) (*importPlan, 
 	if err := validateInterfaceConfig(cfg); err != nil {
 		return nil, err
 	}
-	if err := s.validateInterfaceUnique(sID, cfg, uuid.Nil, nil); err != nil {
+	if err := s.validateInterfaceUnique(sID, cfg, uuid.Nil(), nil); err != nil {
 		return nil, err
 	}
 	if err := validateImportedPeerIPs(cfg); err != nil {

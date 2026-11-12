@@ -19,12 +19,13 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
+	"uuid"
 
-	"github.com/ks-tool/awg-admin/internal/agentclient"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/internal/agentclient"
+	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -36,6 +37,18 @@ const pushTimeout = 15 * time.Second
 // rejected config, ...) is recorded but never returned to the caller, so
 // editing interfaces/peers keeps working while the agent is offline.
 func (s *Service) pushInterface(serverID uuid.UUID, iface *models.Interface) {
+	s.pushInterfaceWithFirewall(serverID, iface, true)
+}
+
+func (s *Service) pushInterfaceWithFirewall(serverID uuid.UUID, iface *models.Interface, syncFirewall bool) {
+	if handled, err := s.pushProviderInterface(serverID, iface); handled {
+		s.recordSyncResult(serverID, iface, err)
+		if err == nil && syncFirewall {
+			s.scheduleFirewallSync(serverID)
+		}
+		return
+	}
+
 	srv, err := s.store.Servers().Get(serverID)
 	if err != nil {
 		log.Error().Err(err).Str("server_id", serverID.String()).Msg("push interface: failed to load server")
@@ -91,6 +104,10 @@ func (s *Service) pushInterfaceDelete(serverID uuid.UUID, ifaceName string) {
 // is gone), after a prolonged outage (it may have missed pushes that failed
 // while it was down), or just as a manual "force re-apply" from the UI.
 func (s *Service) SyncServer(serverID string) error {
+	return s.syncServer(serverID, true)
+}
+
+func (s *Service) syncServer(serverID string, syncFirewall bool) error {
 	debugOp("SyncServer").Str("server_id", serverID).Msg("syncing server")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
@@ -103,7 +120,7 @@ func (s *Service) SyncServer(serverID string) error {
 	}
 
 	for i := range ifaces {
-		s.pushInterface(sID, &ifaces[i])
+		s.pushInterfaceWithFirewall(sID, &ifaces[i], syncFirewall)
 	}
 
 	s.syncMonitoringState(sID)
@@ -202,7 +219,7 @@ func (s *Service) syncTunnelledServers(servers []models.Server, tunnelErrs map[u
 		if _, failed := tunnelErrs[srv.ID]; failed {
 			continue
 		}
-		if err := s.SyncServer(srv.ID.String()); err != nil {
+		if err := s.syncServer(srv.ID.String(), false); err != nil {
 			log.Warn().Err(err).Str("server_id", srv.ID.String()).Msg("failed to sync server after opening tunnel")
 		}
 	}
@@ -218,10 +235,8 @@ func (s *Service) findServerByInterface(ifaceID uuid.UUID) (*models.Server, erro
 		return nil, err
 	}
 	for i := range servers {
-		for _, id := range servers[i].Interfaces {
-			if id == ifaceID {
-				return &servers[i], nil
-			}
+		if slices.Contains(servers[i].Interfaces, ifaceID) {
+			return &servers[i], nil
 		}
 	}
 	return nil, errors.New("no server owns this interface")

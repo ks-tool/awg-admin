@@ -1,13 +1,3 @@
-export * from './admin';
-export * from './agent';
-
-export interface DashboardStats {
-  totalServers: number
-  onlineServers: number
-  totalPeers: number
-  activePeers: number
-  totalUsers: number
-  totalTunnels: number
-  totalRxBytes: number
-  totalTxBytes: number
-}
+export type * from './admin';
+export type * from './agent';
+export type * from './resources';

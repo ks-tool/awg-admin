@@ -21,11 +21,12 @@ import (
 	"net"
 	"strings"
 	"time"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -38,6 +39,7 @@ const defaultKeepaliveInterval = 10 // seconds
 type AddPeerInput struct {
 	Name        string
 	InterfaceID uuid.UUID
+	Spec        map[string]any
 	AllowedIPs  []string
 	Endpoint    string
 	// DNS sets the peer's client-side DNS (the wg-quick `[Interface] DNS`
@@ -90,6 +92,17 @@ func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) 
 	uID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
+	}
+	server, err := s.findServerByInterface(in.InterfaceID)
+	if err != nil {
+		return nil, err
+	}
+	providerInterface, err := s.providerInterface(server.ID, in.InterfaceID)
+	if err != nil && !storage.IsNotFound(err) {
+		return nil, err
+	}
+	if err == nil && providerFromAPIVersion(providerInterface.APIVersion) != "awg" {
+		return s.addProviderPeer(uID, in, server, providerInterface)
 	}
 	if len(in.AllowedIPs) == 0 {
 		ip, err := s.nextFreeIP(in.InterfaceID)
@@ -179,6 +192,11 @@ func (s *Service) DeletePeer(userID string, key string) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
+	if updated, providerErr := s.deleteProviderPeer(uID, peer); providerErr == nil {
+		return updated, nil
+	} else if !storage.IsNotFound(providerErr) {
+		return nil, providerErr
+	}
 	ifaceID := peer.InterfaceId
 
 	if err = s.store.Users().Peers(uID).Delete(pk); err != nil {
@@ -214,6 +232,9 @@ func (s *Service) SetPeerDisabled(userID, publicKey string, disabled bool) (*mod
 	peer, err := s.store.Users().Peers(uID).Get(pk)
 	if err != nil {
 		return nil, err
+	}
+	if len(peer.Provider) > 0 && peer.Provider != "awg" {
+		return s.setProviderPeerDisabled(uID, peer, disabled)
 	}
 	ifaceID := peer.InterfaceId
 
@@ -283,6 +304,9 @@ func (s *Service) MigratePeer(userID, publicKey, targetIfaceID string) (*models.
 	peer, err := s.store.Users().Peers(uID).Get(pk)
 	if err != nil {
 		return nil, err
+	}
+	if len(peer.Provider) > 0 && peer.Provider != "awg" {
+		return nil, invalidInput("moving provider peers is not supported; create a new peer on the target interface")
 	}
 	sourceID := peer.InterfaceId
 	if sourceID == targetID {
@@ -383,11 +407,11 @@ func (s *Service) MigratePeer(userID, publicKey, targetIfaceID string) (*models.
 func (s *Service) getInterfaceByID(ifaceID uuid.UUID) (*models.Interface, uuid.UUID, error) {
 	srv, err := s.findServerByInterface(ifaceID)
 	if err != nil {
-		return nil, uuid.Nil, err
+		return nil, uuid.Nil(), err
 	}
 	iface, err := s.store.Servers().Interfaces(srv.ID).Get(ifaceID)
 	if err != nil {
-		return nil, uuid.Nil, err
+		return nil, uuid.Nil(), err
 	}
 	return iface, srv.ID, nil
 }

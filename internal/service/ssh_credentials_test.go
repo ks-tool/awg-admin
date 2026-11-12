@@ -19,7 +19,7 @@ package service
 import (
 	"testing"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 // TestUpdateServerSwitchesSSHAuthMethod locks the credential-merge rule in

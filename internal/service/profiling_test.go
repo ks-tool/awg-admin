@@ -19,10 +19,9 @@ package service
 import (
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/ks-tool/awg-admin/models"
-
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 // TestUpdateServerPreservesAgentDesiredStateFlags guards against an unrelated
@@ -74,12 +73,11 @@ func TestUpdateServerPreservesAgentDesiredStateFlags(t *testing.T) {
 func TestGetServerProfileRejectsUnknownKind(t *testing.T) {
 	svc := newTestService(t)
 
-	_, err := svc.GetServerProfile(uuid.NewString(), "../secrets", 0)
+	_, err := svc.GetServerProfile(uuid.New().String(), "../secrets", 0)
 	if err == nil {
 		t.Fatal("expected an error for an unknown profile kind")
 	}
-	var ve *ValidationError
-	if !errors.As(err, &ve) {
+	if _, ok := errors.AsType[*ValidationError](err); !ok {
 		t.Fatalf("expected a *ValidationError (→ HTTP 400), got %T: %v", err, err)
 	}
 }

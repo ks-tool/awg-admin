@@ -19,7 +19,7 @@ import type {ChangeEvent} from 'react';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
 import {FormField} from '@/components/common/FormField';
-import {buttons, inputs} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {cn} from '@/lib/utils';
 import type {AuthType, ServerFormData} from '@/hooks/useServerForm';
 import {generateAgentTLS} from '@/services/servers';

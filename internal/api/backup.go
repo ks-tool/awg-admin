@@ -37,7 +37,7 @@ func (h *Handler) backupDownload(w http.ResponseWriter, r bunrouter.Request) err
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", `attachment; filename="awg-admin-backup.json"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="vpn-admin-backup.json"`)
 	_, err = w.Write(data)
 	return err
 }

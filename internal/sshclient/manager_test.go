@@ -23,10 +23,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -108,13 +108,22 @@ func (srv *fakeSSHServer) addr() string {
 // ever being told explicitly.
 func (srv *fakeSSHServer) killNewestConn(t *testing.T) {
 	t.Helper()
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
-	if len(srv.conns) == 0 {
-		t.Fatal("no server-side connections accepted yet")
-	}
-	if err := srv.conns[len(srv.conns)-1].Close(); err != nil {
-		t.Fatalf("close server-side conn: %v", err)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		srv.mu.Lock()
+		if len(srv.conns) > 0 {
+			conn := srv.conns[len(srv.conns)-1]
+			srv.mu.Unlock()
+			if err := conn.Close(); err != nil {
+				t.Fatalf("close server-side conn: %v", err)
+			}
+			return
+		}
+		srv.mu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatal("no server-side connections accepted yet")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -200,5 +209,34 @@ func TestManagerEnsureReusesLiveConnection(t *testing.T) {
 	}
 	if reused != original {
 		t.Fatal("expected Ensure to reuse the existing live tunnel instead of reconnecting")
+	}
+}
+
+func TestManagerReopenStaleKeepsLiveReplacement(t *testing.T) {
+	srv := newFakeSSHServer(t)
+	cfg := sshCfgFor(srv)
+	serverID := uuid.New()
+
+	m := NewManager()
+	t.Cleanup(func() { _ = m.Close() })
+
+	if err := m.Open(serverID, cfg, "127.0.0.1:0"); err != nil {
+		t.Fatalf("Open stale tunnel: %v", err)
+	}
+	stale, _ := m.Get(serverID)
+	if err := m.Open(serverID, cfg, "127.0.0.1:0"); err != nil {
+		t.Fatalf("Open replacement tunnel: %v", err)
+	}
+	replacement, _ := m.Get(serverID)
+
+	if err := m.ReopenStale(serverID, stale, cfg, "127.0.0.1:0"); err != nil {
+		t.Fatalf("ReopenStale: %v", err)
+	}
+	current, _ := m.Get(serverID)
+	if current != replacement {
+		t.Fatal("expected a late failure from the stale tunnel to keep its live replacement")
+	}
+	if !current.Alive() {
+		t.Fatal("expected the retained replacement tunnel to remain alive")
 	}
 }

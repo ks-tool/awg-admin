@@ -25,8 +25,8 @@ import (
 	"sync"
 	"testing"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // fakeAgent mimics agent/internal/api/handlers.go's actual routes/status
@@ -156,8 +156,7 @@ func TestClientSetGetListDelete(t *testing.T) {
 	if _, err := c.Get(ctx, "wg0"); err == nil {
 		t.Fatal("Get after delete: expected error, got nil")
 	} else {
-		var notFound *NotFoundError
-		if !errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*NotFoundError](err); !ok {
 			t.Fatalf("Get after delete: expected NotFoundError, got %T: %v", err, err)
 		}
 	}
@@ -165,8 +164,7 @@ func TestClientSetGetListDelete(t *testing.T) {
 	if err := c.Delete(ctx, "wg0"); err == nil {
 		t.Fatal("Delete already-deleted interface: expected error, got nil")
 	} else {
-		var notFound *NotFoundError
-		if !errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*NotFoundError](err); !ok {
 			t.Fatalf("Delete already-deleted interface: expected NotFoundError, got %T: %v", err, err)
 		}
 	}
@@ -326,5 +324,20 @@ func TestClientSetForceReplacePeers(t *testing.T) {
 	defer rt.mu.Unlock()
 	if len(rt.replacePeers) != 1 || rt.replacePeers[0] != "true" {
 		t.Fatalf("replacePeers query values = %v, want [true]", rt.replacePeers)
+	}
+}
+
+func TestClientListDoesNotInventEmptyInterfaceName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "legacy provider unavailable", http.StatusNotFound)
+	}))
+	defer server.Close()
+	client := New(server.Client(), server.URL)
+	_, err := client.List(context.Background())
+	if err == nil || err.Error() != "agent returned 404 Not Found: legacy provider unavailable" {
+		t.Fatalf("unexpected list error: %v", err)
+	}
+	if _, ok := errors.AsType[*NotFoundError](err); ok {
+		t.Fatalf("list failure became an interface lookup error: %v", err)
 	}
 }

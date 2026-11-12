@@ -28,10 +28,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // NotFoundError is returned by Get/Delete when the agent has no interface
@@ -251,9 +252,8 @@ func (c *Client) Info(ctx context.Context) (*agentmodels.HostInfo, error) {
 	return &info, nil
 }
 
-// Metrics fetches the agent's latest CPU/RAM/load/network/peer snapshot
-// (GET /metrics).
-func (c *Client) Metrics(ctx context.Context) (*agentmodels.MetricsSnapshot, error) {
+// Metrics fetches the agent's latest host snapshot (GET /metrics).
+func (c *Client) Metrics(ctx context.Context) (*agentmodels.SystemSnapshot, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/metrics", nil)
 	if err != nil {
 		return nil, err
@@ -269,18 +269,51 @@ func (c *Client) Metrics(ctx context.Context) (*agentmodels.MetricsSnapshot, err
 		return nil, responseError(resp, "")
 	}
 
-	var snap agentmodels.MetricsSnapshot
+	var snap agentmodels.SystemSnapshot
 	if err := json.NewDecoder(resp.Body).Decode(&snap); err != nil {
-		return nil, fmt.Errorf("decode metrics snapshot: %w", err)
+		return nil, fmt.Errorf("decode system metrics snapshot: %w", err)
 	}
 	return &snap, nil
 }
 
-// MetricsHistory fetches every host-level sample plus every per-peer sample
-// still retained in the agent's in-memory ring buffers (GET /metrics/history)
-// — up to 48h, oldest first — for charting instead of just the latest value
-// (see Metrics). Per-peer series arrive in SystemHistory.Interfaces; history
-// is served only through this one endpoint.
+// InterfaceMetrics fetches one interface's peer metrics and agent-measured p95 latency.
+func (c *Client) InterfaceMetrics(ctx context.Context, name string) (*agentmodels.InterfaceSnapshot, error) {
+	var snap agentmodels.InterfaceSnapshot
+	if err := c.interfaceMetricsGet(ctx, "/metrics/"+url.PathEscape(name), &snap); err != nil {
+		return nil, err
+	}
+	return &snap, nil
+}
+
+// InterfaceMetricsHistory fetches one interface's retained peer history.
+func (c *Client) InterfaceMetricsHistory(ctx context.Context, name string) (*agentmodels.InterfaceHistory, error) {
+	var history agentmodels.InterfaceHistory
+	if err := c.interfaceMetricsGet(ctx, "/metrics/"+url.PathEscape(name)+"/history", &history); err != nil {
+		return nil, err
+	}
+	return &history, nil
+}
+
+func (c *Client) interfaceMetricsGet(ctx context.Context, path string, output any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("GET %s: %w", path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return responseError(resp, "")
+	}
+	if err := json.NewDecoder(resp.Body).Decode(output); err != nil {
+		return fmt.Errorf("decode interface metrics: %w", err)
+	}
+	return nil
+}
+
+// MetricsHistory fetches host-level samples retained by the agent (GET /metrics/history).
 func (c *Client) MetricsHistory(ctx context.Context) (*agentmodels.SystemHistory, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/metrics/history", nil)
 	if err != nil {
@@ -427,7 +460,7 @@ func markIdempotent(req *http.Request) {
 }
 
 func responseError(resp *http.Response, name string) error {
-	if resp.StatusCode == http.StatusNotFound {
+	if resp.StatusCode == http.StatusNotFound && len(name) > 0 {
 		return &NotFoundError{Interface: name}
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))

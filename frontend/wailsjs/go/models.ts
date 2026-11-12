@@ -1,5 +1,53 @@
 export namespace models {
 	
+	export class ActionDefinition {
+	    name: string;
+	    title: string;
+	    description?: string;
+	    argumentsSchema?: number[];
+	    uiSchema?: number[];
+	    resultType: string;
+	    timeoutSeconds?: number;
+	    mutating?: boolean;
+	    requiresConfirmation?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActionDefinition(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.argumentsSchema = source["argumentsSchema"];
+	        this.uiSchema = source["uiSchema"];
+	        this.resultType = source["resultType"];
+	        this.timeoutSeconds = source["timeoutSeconds"];
+	        this.mutating = source["mutating"];
+	        this.requiresConfirmation = source["requiresConfirmation"];
+	    }
+	}
+	export class ActionResult {
+	    type: string;
+	    data?: number[];
+	    fileName?: string;
+	    mediaType?: string;
+	    taskId?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.data = source["data"];
+	        this.fileName = source["fileName"];
+	        this.mediaType = source["mediaType"];
+	        this.taskId = source["taskId"];
+	    }
+	}
 	export class CertKeyPair {
 	    cert: string;
 	    pk: string;
@@ -84,6 +132,58 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class Registry {
+	    sourceId?: string;
+	    username?: string;
+	    password?: string;
+	    plainHttp?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Registry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourceId = source["sourceId"];
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.plainHttp = source["plainHttp"];
+	    }
+	}
+	export class AgentDeployment {
+	    artifact?: string;
+	    binaryPath?: string;
+	    registry: Registry;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentDeployment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.artifact = source["artifact"];
+	        this.binaryPath = source["binaryPath"];
+	        this.registry = this.convertValues(source["registry"], Registry);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class AgentReleaseAsset {
 	    name: string;
 	    version: string;
@@ -134,6 +234,47 @@ export namespace models {
 	}
 	
 	
+	export class Condition {
+	    type: string;
+	    status: string;
+	    reason: string;
+	    message: string;
+	    observedGeneration?: number;
+	    // Go type: time
+	    lastTransitionTime: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Condition(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.status = source["status"];
+	        this.reason = source["reason"];
+	        this.message = source["message"];
+	        this.observedGeneration = source["observedGeneration"];
+	        this.lastTransitionTime = this.convertValues(source["lastTransitionTime"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class DeployStatus {
 	    step: string;
 	    done: boolean;
@@ -363,10 +504,12 @@ export namespace models {
 	    i3?: string;
 	    i4?: string;
 	    i5?: string;
+	    provider?: string;
+	    resourceName?: string;
 	    inSync: boolean;
 	    lastSyncError?: string;
 	    // Go type: time
-	    lastSyncedAt?: any;
+	    lastSyncedAt: any;
 	    tunnel?: number[];
 	
 	    static createFrom(source: any = {}) {
@@ -406,6 +549,8 @@ export namespace models {
 	        this.i3 = source["i3"];
 	        this.i4 = source["i4"];
 	        this.i5 = source["i5"];
+	        this.provider = source["provider"];
+	        this.resourceName = source["resourceName"];
 	        this.inSync = source["inSync"];
 	        this.lastSyncError = source["lastSyncError"];
 	        this.lastSyncedAt = this.convertValues(source["lastSyncedAt"], null);
@@ -627,6 +772,8 @@ export namespace models {
 	    tx: number;
 	    // Go type: time
 	    lastHandshake: any;
+	    probeAddress?: string;
+	    latencyP95Ms?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new PeerSnapshot(source);
@@ -638,6 +785,8 @@ export namespace models {
 	        this.rx = source["rx"];
 	        this.tx = source["tx"];
 	        this.lastHandshake = this.convertValues(source["lastHandshake"], null);
+	        this.probeAddress = source["probeAddress"];
+	        this.latencyP95Ms = source["latencyP95Ms"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -690,33 +839,20 @@ export namespace models {
 		    return a;
 		}
 	}
-	export class SystemSnapshot {
-	    // Go type: time
-	    timestamp: any;
-	    cpuPercent: number;
-	    memUsedBytes: number;
-	    memTotalBytes: number;
-	    load1: number;
-	    load5: number;
-	    load15: number;
-	    netRxBytes: number;
-	    netTxBytes: number;
+	export class LinkStatus {
+	    observedGeneration: number;
+	    phase: string;
+	    conditions?: Condition[];
 	
 	    static createFrom(source: any = {}) {
-	        return new SystemSnapshot(source);
+	        return new LinkStatus(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.timestamp = this.convertValues(source["timestamp"], null);
-	        this.cpuPercent = source["cpuPercent"];
-	        this.memUsedBytes = source["memUsedBytes"];
-	        this.memTotalBytes = source["memTotalBytes"];
-	        this.load1 = source["load1"];
-	        this.load5 = source["load5"];
-	        this.load15 = source["load15"];
-	        this.netRxBytes = source["netRxBytes"];
-	        this.netTxBytes = source["netTxBytes"];
+	        this.observedGeneration = source["observedGeneration"];
+	        this.phase = source["phase"];
+	        this.conditions = this.convertValues(source["conditions"], Condition);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -737,18 +873,54 @@ export namespace models {
 		    return a;
 		}
 	}
-	export class MetricsSnapshot {
-	    system: SystemSnapshot;
-	    interfaces: InterfaceSnapshot[];
+	export class LinkEndpoint {
+	    serverId: string;
+	    resourceId: string;
+	    apiVersion: string;
+	    kind: string;
+	    name: string;
+	    port: string;
+	    address?: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new MetricsSnapshot(source);
+	        return new LinkEndpoint(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.system = this.convertValues(source["system"], SystemSnapshot);
-	        this.interfaces = this.convertValues(source["interfaces"], InterfaceSnapshot);
+	        this.serverId = source["serverId"];
+	        this.resourceId = source["resourceId"];
+	        this.apiVersion = source["apiVersion"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.port = source["port"];
+	        this.address = source["address"];
+	    }
+	}
+	export class Link {
+	    id: string;
+	    name?: string;
+	    kind: string;
+	    generation: number;
+	    source: LinkEndpoint;
+	    target: LinkEndpoint;
+	    spec?: number[];
+	    status: LinkStatus;
+	
+	    static createFrom(source: any = {}) {
+	        return new Link(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.generation = source["generation"];
+	        this.source = this.convertValues(source["source"], LinkEndpoint);
+	        this.target = this.convertValues(source["target"], LinkEndpoint);
+	        this.spec = source["spec"];
+	        this.status = this.convertValues(source["status"], LinkStatus);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -768,11 +940,203 @@ export namespace models {
 		    }
 		    return a;
 		}
+	}
+	
+	
+	export class PortDefinition {
+	    name: string;
+	    title?: string;
+	    direction?: string;
+	    linkKinds?: string[];
+	    remotePorts?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PortDefinition(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.title = source["title"];
+	        this.direction = source["direction"];
+	        this.linkKinds = source["linkKinds"];
+	        this.remotePorts = source["remotePorts"];
+	    }
+	}
+	export class ResourceDefinition {
+	    apiVersion: string;
+	    kind: string;
+	    specSchema: number[];
+	    uiSchema?: number[];
+	    schemaHash: string;
+	    ports?: PortDefinition[];
+	    actions?: ActionDefinition[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ResourceDefinition(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiVersion = source["apiVersion"];
+	        this.kind = source["kind"];
+	        this.specSchema = source["specSchema"];
+	        this.uiSchema = source["uiSchema"];
+	        this.schemaHash = source["schemaHash"];
+	        this.ports = this.convertValues(source["ports"], PortDefinition);
+	        this.actions = this.convertValues(source["actions"], ActionDefinition);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ProviderDefinition {
+	    name: string;
+	    version: string;
+	    resources: ResourceDefinition[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderDefinition(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.resources = this.convertValues(source["resources"], ResourceDefinition);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Manifest {
+	    protocolVersion: string;
+	    agentId: string;
+	    providers: ProviderDefinition[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Manifest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.protocolVersion = source["protocolVersion"];
+	        this.agentId = source["agentId"];
+	        this.providers = this.convertValues(source["providers"], ProviderDefinition);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class NetworkConnection {
+	    id: number[];
+	    sourceId: number[];
+	    targetId: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkConnection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.sourceId = source["sourceId"];
+	        this.targetId = source["targetId"];
+	    }
+	}
+	export class NetworkInterface {
+	    id: number[];
+	    serverId: number[];
+	    name: string;
+	    address?: string;
+	    legacy?: boolean;
+	    serviceId?: number[];
+	    x: number;
+	    y: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkInterface(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.serverId = source["serverId"];
+	        this.name = source["name"];
+	        this.address = source["address"];
+	        this.legacy = source["legacy"];
+	        this.serviceId = source["serviceId"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	    }
+	}
+	export class NodePosition {
+	    id: number[];
+	    x: number;
+	    y: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new NodePosition(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	    }
 	}
 	export class Peer {
 	    name: string;
 	    pk: number[];
 	    interface: number[];
+	    provider?: string;
+	    resourceName?: string;
 	    disabled?: boolean;
 	    dns?: string[];
 	
@@ -785,11 +1149,196 @@ export namespace models {
 	        this.name = source["name"];
 	        this.pk = source["pk"];
 	        this.interface = source["interface"];
+	        this.provider = source["provider"];
+	        this.resourceName = source["resourceName"];
 	        this.disabled = source["disabled"];
 	        this.dns = source["dns"];
 	    }
 	}
 	
+	
+	
+	export class PluginDescriptor {
+	    id: string;
+	    name: string;
+	    version: string;
+	    description?: string;
+	    configSchema: Record<string, any>;
+	    userSchema: Record<string, any>;
+	    uiSchema?: Record<string, any>;
+	    available: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginDescriptor(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.description = source["description"];
+	        this.configSchema = source["configSchema"];
+	        this.userSchema = source["userSchema"];
+	        this.uiSchema = source["uiSchema"];
+	        this.available = source["available"];
+	        this.error = source["error"];
+	    }
+	}
+	export class PluginUser {
+	    id: string;
+	    data: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginUser(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.data = source["data"];
+	    }
+	}
+	
+	
+	export class ProviderDeployment {
+	    name: string;
+	    artifact?: string;
+	    binaryPath?: string;
+	    options?: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderDeployment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.artifact = source["artifact"];
+	        this.binaryPath = source["binaryPath"];
+	        this.options = source["options"];
+	    }
+	}
+	export class ProviderRepository {
+	    name: string;
+	    repository: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderRepository(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.repository = source["repository"];
+	    }
+	}
+	
+	export class RegistrySource {
+	    id: number[];
+	    url: string;
+	    type: string;
+	    username?: string;
+	    password?: string;
+	    hasPassword?: boolean;
+	    plainHttp?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new RegistrySource(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.url = source["url"];
+	        this.type = source["type"];
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.hasPassword = source["hasPassword"];
+	        this.plainHttp = source["plainHttp"];
+	    }
+	}
+	export class ResourceStatus {
+	    observedGeneration: number;
+	    phase: string;
+	    conditions?: Condition[];
+	    provider?: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ResourceStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.observedGeneration = source["observedGeneration"];
+	        this.phase = source["phase"];
+	        this.conditions = this.convertValues(source["conditions"], Condition);
+	        this.provider = source["provider"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Resource {
+	    id: string;
+	    serverId: string;
+	    apiVersion: string;
+	    kind: string;
+	    name: string;
+	    generation: number;
+	    spec: number[];
+	    status: ResourceStatus;
+	
+	    static createFrom(source: any = {}) {
+	        return new Resource(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.serverId = source["serverId"];
+	        this.apiVersion = source["apiVersion"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.generation = source["generation"];
+	        this.spec = source["spec"];
+	        this.status = this.convertValues(source["status"], ResourceStatus);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	
 	export class SSHConfig {
@@ -837,6 +1386,7 @@ export namespace models {
 	    ssh: SSHConfig;
 	    agent: Agent;
 	    interfaces?: number[][];
+	    unmanaged?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Server(source);
@@ -850,6 +1400,7 @@ export namespace models {
 	        this.ssh = this.convertValues(source["ssh"], SSHConfig);
 	        this.agent = this.convertValues(source["agent"], Agent);
 	        this.interfaces = source["interfaces"];
+	        this.unmanaged = source["unmanaged"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -945,6 +1496,170 @@ export namespace models {
 		}
 	}
 	
+	export class SystemSnapshot {
+	    // Go type: time
+	    timestamp: any;
+	    cpuPercent: number;
+	    memUsedBytes: number;
+	    memTotalBytes: number;
+	    load1: number;
+	    load5: number;
+	    load15: number;
+	    netRxBytes: number;
+	    netTxBytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SystemSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = this.convertValues(source["timestamp"], null);
+	        this.cpuPercent = source["cpuPercent"];
+	        this.memUsedBytes = source["memUsedBytes"];
+	        this.memTotalBytes = source["memTotalBytes"];
+	        this.load1 = source["load1"];
+	        this.load5 = source["load5"];
+	        this.load15 = source["load15"];
+	        this.netRxBytes = source["netRxBytes"];
+	        this.netTxBytes = source["netTxBytes"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class VPNService {
+	    id: number[];
+	    serverId: number[];
+	    interfaceId?: number[];
+	    pluginId: string;
+	    name: string;
+	    config: Record<string, any>;
+	    status: string;
+	    statusMessage?: string;
+	    // Go type: time
+	    lastAppliedAt?: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new VPNService(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.serverId = source["serverId"];
+	        this.interfaceId = source["interfaceId"];
+	        this.pluginId = source["pluginId"];
+	        this.name = source["name"];
+	        this.config = source["config"];
+	        this.status = source["status"];
+	        this.statusMessage = source["statusMessage"];
+	        this.lastAppliedAt = this.convertValues(source["lastAppliedAt"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TopologyServer {
+	    id: number[];
+	    name: string;
+	    address?: string;
+	    description?: string;
+	    location?: string;
+	    locationError?: string;
+	    legacy?: boolean;
+	    latitude?: number;
+	    longitude?: number;
+	    coordinatesManual?: boolean;
+	    x: number;
+	    y: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TopologyServer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.address = source["address"];
+	        this.description = source["description"];
+	        this.location = source["location"];
+	        this.locationError = source["locationError"];
+	        this.legacy = source["legacy"];
+	        this.latitude = source["latitude"];
+	        this.longitude = source["longitude"];
+	        this.coordinatesManual = source["coordinatesManual"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	    }
+	}
+	export class Topology {
+	    servers: TopologyServer[];
+	    interfaces: NetworkInterface[];
+	    services: VPNService[];
+	    connections: NetworkConnection[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Topology(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.servers = this.convertValues(source["servers"], TopologyServer);
+	        this.interfaces = this.convertValues(source["interfaces"], NetworkInterface);
+	        this.services = this.convertValues(source["services"], VPNService);
+	        this.connections = this.convertValues(source["connections"], NetworkConnection);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	export class TunnelMember {
 	    serverId: number[];
@@ -999,6 +1714,22 @@ export namespace models {
 		}
 	}
 	
+	export class TunnelMetric {
+	    connectionId: string;
+	    latencyP95Ms?: number;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TunnelMetric(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connectionId = source["connectionId"];
+	        this.latencyP95Ms = source["latencyP95Ms"];
+	        this.error = source["error"];
+	    }
+	}
 	export class TunnelStep {
 	    serverId: number[];
 	    ifaceId: number[];
@@ -1073,6 +1804,7 @@ export namespace service {
 	export class AddPeerInput {
 	    Name: string;
 	    InterfaceID: number[];
+	    Spec: Record<string, any>;
 	    AllowedIPs: string[];
 	    Endpoint: string;
 	    DNS: string[];
@@ -1089,6 +1821,7 @@ export namespace service {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Name = source["Name"];
 	        this.InterfaceID = source["InterfaceID"];
+	        this.Spec = source["Spec"];
 	        this.AllowedIPs = source["AllowedIPs"];
 	        this.Endpoint = source["Endpoint"];
 	        this.DNS = source["DNS"];
@@ -1096,6 +1829,20 @@ export namespace service {
 	        this.PresharedKey = source["PresharedKey"];
 	        this.WithPresharedKey = source["WithPresharedKey"];
 	        this.KeepaliveInterval = source["KeepaliveInterval"];
+	    }
+	}
+	export class NetworkInterfaceInput {
+	    name: string;
+	    address: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkInterfaceInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.address = source["address"];
 	    }
 	}
 	export class ProfileDump {
@@ -1180,6 +1927,48 @@ export namespace service {
 		    return a;
 		}
 	}
+	export class TopologyServerInput {
+	    name: string;
+	    address: string;
+	    description: string;
+	    location: string;
+	    latitude?: number;
+	    longitude?: number;
+	    interfaces: NetworkInterfaceInput[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TopologyServerInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.address = source["address"];
+	        this.description = source["description"];
+	        this.location = source["location"];
+	        this.latitude = source["latitude"];
+	        this.longitude = source["longitude"];
+	        this.interfaces = this.convertValues(source["interfaces"], NetworkInterfaceInput);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class UserInput {
 	    Name: string;
 	    Description: string;
@@ -1194,6 +1983,26 @@ export namespace service {
 	        this.Name = source["Name"];
 	        this.Description = source["Description"];
 	        this.Disabled = source["Disabled"];
+	    }
+	}
+	export class VPNServiceInput {
+	    serverId: string;
+	    interfaceId: string;
+	    pluginId: string;
+	    name: string;
+	    config: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new VPNServiceInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.serverId = source["serverId"];
+	        this.interfaceId = source["interfaceId"];
+	        this.pluginId = source["pluginId"];
+	        this.name = source["name"];
+	        this.config = source["config"];
 	    }
 	}
 

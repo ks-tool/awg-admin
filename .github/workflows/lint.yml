@@ -1,58 +1,34 @@
 name: lint
 
-# Runs golangci-lint on pull requests, against both Go modules in this repo
-# (root module + agent/, each its own go.mod — golangci-lint lints one module
-# at a time, hence the matrix).
+# The agent is linted by its own workflow in github.com/ks-tool/vpn-agent.
 on:
   pull_request:
 
 permissions:
   contents: read
 
-env:
-  GOEXPERIMENT: jsonv2
-
 jobs:
   golangci-lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        module: [".", "agent"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: ${{ matrix.module }}/go.mod
+          go-version-file: go.mod
 
-      # Prepare each module so golangci-lint can load every package it lints
-      # (a package that fails to type-check is reported as an unfilterable
-      # "typecheck" error — config exclusions can't suppress a load failure):
-      #
-      #  - root: main.go and cmd/awg-admin.go embed the built frontend
-      #    (`//go:embed cmd/dist`). That directory is a build artifact this job
-      #    does not build, so the embed pattern would match no files. Create a
-      #    placeholder to satisfy it; the rest of the package then lints
-      #    normally. Target: ./...
-      #
-      #  - agent: agent/cmd/ holds several `package main` files — awg-agent.go,
-      #    awg-agent-userspace.go and dump.go — so the directory never compiles
-      #    as a single package (each binary is built from its own file, see
-      #    agent/Makefile). Lint every package except cmd.
+      # main.go and cmd/vpn-admin.go embed the built frontend
+      # (`//go:embed cmd/dist`). That directory is a build artifact this job
+      # does not build, so the embed pattern would match no files. Create a
+      # placeholder to satisfy it; the rest of the package then lints normally.
       - name: Prepare lint targets
         id: prep
-        working-directory: ${{ matrix.module }}
         run: |
-          if [ "${{ matrix.module }}" = "agent" ]; then
-            targets=$(go list ./... | sed "s|^$(go list -m)|.|" | grep -v '^\./cmd$' | paste -sd' ' -)
-          else
-            mkdir -p cmd/dist && printf '<!doctype html>\n' > cmd/dist/index.html
-            targets='./...'
-          fi
+          mkdir -p cmd/dist && printf '<!doctype html>\n' > cmd/dist/index.html
+          targets=$(go list ./... | grep -v /node_modules/ | sed "s|^$(go list -m)|.|" | paste -sd' ' -)
           echo "targets=$targets" >> "$GITHUB_OUTPUT"
 
       - uses: golangci/golangci-lint-action@v7
         with:
-          working-directory: ${{ matrix.module }}
           version: latest
           args: ${{ steps.prep.outputs.targets }}

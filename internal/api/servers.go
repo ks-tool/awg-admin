@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/ks-tool/awg-admin/internal/service"
-	"github.com/ks-tool/awg-admin/models"
+	"github.com/ks-tool/vpn-admin/internal/service"
+	"github.com/ks-tool/vpn-admin/models"
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bunrouter"
 )
@@ -140,6 +140,59 @@ func (h *Handler) serverDeployAgent(w http.ResponseWriter, r bunrouter.Request) 
 	// The deploy keeps running in the background after this returns — see
 	// Service.DeployAgent's doc comment. Poll serverDeployStatus for
 	// progress/outcome.
+	w.WriteHeader(http.StatusAccepted)
+	return nil
+}
+
+func (h *Handler) serverDeployAgentPack(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+
+	var req models.AgentDeployment
+	if err := decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	if err := h.svc.DeployAgentPack(sID, req); err != nil {
+		return handleErr(err, fields)
+	}
+	w.WriteHeader(http.StatusAccepted)
+	return nil
+}
+
+func (h *Handler) serverDeployProvider(w http.ResponseWriter, r bunrouter.Request) error {
+	fields := map[string]any{"method": r.Method, "path": r.URL.Path}
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	fields["server_id"] = sID
+
+	var req struct {
+		models.ProviderDeployment
+		Registry models.Registry `json:"registry"`
+	}
+	if err := decode(r, &req); err != nil {
+		return badRequest(err)
+	}
+	if err := h.svc.DeployProvider(sID, req.ProviderDeployment, req.Registry); err != nil {
+		return handleErr(err, fields)
+	}
+	w.WriteHeader(http.StatusAccepted)
+	return nil
+}
+
+func (h *Handler) serverRemoveProvider(w http.ResponseWriter, r bunrouter.Request) error {
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	if err := h.svc.RemoveProvider(sID, r.Param("provider")); err != nil {
+		return handleErr(err, map[string]any{"method": r.Method, "path": r.URL.Path, "server_id": sID})
+	}
 	w.WriteHeader(http.StatusAccepted)
 	return nil
 }
@@ -399,6 +452,30 @@ func (h *Handler) serverMetricsHistory(w http.ResponseWriter, r bunrouter.Reques
 	}
 
 	return bunrouter.JSON(w, hist)
+}
+
+func (h *Handler) serverInterfaceMetrics(w http.ResponseWriter, r bunrouter.Request) error {
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	snapshot, err := h.svc.GetServerInterfaceMetrics(sID, r.Param("ifaceID"))
+	if err != nil {
+		return handleErr(err, map[string]any{"method": r.Method, "path": r.URL.Path, "server_id": sID})
+	}
+	return bunrouter.JSON(w, snapshot)
+}
+
+func (h *Handler) serverInterfaceMetricsHistory(w http.ResponseWriter, r bunrouter.Request) error {
+	sID, err := serverID(r)
+	if err != nil {
+		return badRequest(err)
+	}
+	history, err := h.svc.GetServerInterfaceMetricsHistory(sID, r.Param("ifaceID"))
+	if err != nil {
+		return handleErr(err, map[string]any{"method": r.Method, "path": r.URL.Path, "server_id": sID})
+	}
+	return bunrouter.JSON(w, history)
 }
 
 func (h *Handler) serverSetMonitoring(w http.ResponseWriter, r bunrouter.Request) error {

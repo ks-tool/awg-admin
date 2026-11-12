@@ -19,11 +19,10 @@ package storage
 import (
 	"io"
 	"net"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
-
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 type Storage interface {
@@ -32,6 +31,11 @@ type Storage interface {
 	Servers() Servers
 	Auth() Auth
 	AgentSources() AgentSources
+	RegistrySources() RegistrySources
+	Topology() Topology
+	Resources(serverID uuid.UUID) Resources
+	Links() Links
+	Providers() Providers
 	// Backup writes a consistent, restorable snapshot of the entire store to
 	// w (see storage/boltdb/dump — the same format as the awg-migrate CLI).
 	Backup(w io.Writer) error
@@ -43,6 +47,15 @@ type AgentSources interface {
 	List() ([]models.AgentSource, error)
 	Get(id uuid.UUID) (*models.AgentSource, error)
 	Set(src *models.AgentSource) error
+	Delete(id uuid.UUID) error
+}
+
+// RegistrySources holds reusable private OCI registry connections shared by
+// agent and provider deployment.
+type RegistrySources interface {
+	List() ([]models.RegistrySource, error)
+	Get(id uuid.UUID) (*models.RegistrySource, error)
+	Set(src *models.RegistrySource) error
 	Delete(id uuid.UUID) error
 }
 

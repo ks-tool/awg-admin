@@ -17,8 +17,14 @@
 package service
 
 import (
-	"github.com/ks-tool/awg-admin/internal/sshclient"
-	"github.com/ks-tool/awg-admin/storage"
+	"context"
+	"sync"
+
+	"github.com/ks-tool/vpn-admin/internal/deploy"
+	"github.com/ks-tool/vpn-admin/internal/plugin"
+	"github.com/ks-tool/vpn-admin/internal/sshclient"
+	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -56,9 +62,31 @@ func WithVersion(v string) Option {
 	}
 }
 
+func WithPluginRegistry(registry *plugin.Registry) Option {
+	return func(h *Service) {
+		h.plugins = registry
+	}
+}
+
+func withGeocoder(geocoder locationGeocoder) Option {
+	return func(h *Service) {
+		h.geocoder = geocoder
+	}
+}
+
 type Service struct {
-	store   storage.Storage
-	tunnels *sshclient.Manager
+	store            storage.Storage
+	tunnels          *sshclient.Manager
+	plugins          *plugin.Registry
+	providerRegistry *providerRegistry
+	providerRefresh  sync.WaitGroup
+	geocoder         locationGeocoder
+	topologyMu       sync.Mutex
+	firewallMu       sync.Mutex
+	firewallRunning  map[string]bool
+	firewallDesired  map[string]string
+	firewallApplied  map[string]string
+	applyFirewall    func(context.Context, models.Server, []string, string, string) error
 
 	deployStatus *deployStatusStore
 
@@ -67,7 +95,7 @@ type Service struct {
 }
 
 func New(s storage.Storage, opts ...Option) *Service {
-	svc := &Service{store: s, tunnels: sshclient.NewManager(), deployStatus: newDeployStatusStore(), version: "dev"}
+	svc := &Service{store: s, tunnels: sshclient.NewManager(), plugins: defaultPluginRegistry(), providerRegistry: newProviderRegistry(), geocoder: defaultLocationGeocoder(), deployStatus: newDeployStatusStore(), version: "dev", firewallRunning: map[string]bool{}, firewallDesired: map[string]string{}, firewallApplied: map[string]string{}, applyFirewall: deploy.SyncFirewall}
 	for _, opt := range opts {
 		opt(svc)
 	}
@@ -102,6 +130,7 @@ func (s *Service) StartTunnels() {
 
 // StopTunnels closes every tunnel opened by StartTunnels.
 func (s *Service) StopTunnels() {
+	s.providerRefresh.Wait()
 	if err := s.tunnels.Close(); err != nil {
 		log.Error().Err(err).Msg("failed to close agent tunnels")
 	}

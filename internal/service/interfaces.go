@@ -17,13 +17,13 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
+	"uuid"
 
-	agentmodels "github.com/ks-tool/awg-admin/agent/models"
-	"github.com/ks-tool/awg-admin/models"
-
-	"github.com/google/uuid"
+	"github.com/ks-tool/vpn-admin/models"
+	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // ValidationError marks an error as caused by bad user input (a malformed field
@@ -64,7 +64,7 @@ func validateInterfaceConfig(cfg agentmodels.InterfaceConfig) error {
 // can't share a name or bind the same UDP port, and overlapping subnets break
 // routing. Listen port 0 is exempt (it means "no fixed port" — an exit-node
 // interface dials out, so several can legitimately have it). excludeID is the
-// interface being updated, skipped in the scan; pass uuid.Nil on create.
+// interface being updated, skipped in the scan; pass uuid.Nil() on create.
 func (s *Service) validateInterfaceUnique(sID uuid.UUID, cfg agentmodels.InterfaceConfig, excludeID uuid.UUID, old *models.Interface) error {
 	existing, err := s.store.Servers().Interfaces(sID).List()
 	if err != nil {
@@ -169,7 +169,7 @@ func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfi
 			return nil, err
 		}
 	}
-	if err := s.validateInterfaceUnique(sID, in, uuid.Nil, nil); err != nil {
+	if err := s.validateInterfaceUnique(sID, in, uuid.Nil(), nil); err != nil {
 		return nil, err
 	}
 	if err := s.rejectUnmanagedName(sID, in.Interface); err != nil {
@@ -282,6 +282,42 @@ func (s *Service) DeleteInterface(serverID, ifaceID string) error {
 	iID, err := uuid.Parse(ifaceID)
 	if err != nil {
 		return err
+	}
+
+	links, err := s.store.Links().List()
+	if err != nil {
+		return err
+	}
+	for _, link := range links {
+		if link.Source.ResourceID == ifaceID || link.Target.ResourceID == ifaceID {
+			return invalidInput("remove the provider link attached to interface %q first", ifaceID)
+		}
+	}
+	resources, err := s.localProviderResources(serverID)
+	if err != nil {
+		return err
+	}
+	for _, item := range resources {
+		if item.Kind != "Interface" || item.ID != ifaceID {
+			continue
+		}
+		for _, peer := range resources {
+			if peer.Kind != "Peer" {
+				continue
+			}
+			var spec struct {
+				InterfaceRef string `json:"interfaceRef"`
+			}
+			if err := json.Unmarshal(peer.Spec, &spec); err != nil {
+				return err
+			}
+			if spec.InterfaceRef == ifaceID {
+				if err := s.DeleteProviderResource(serverID, providerFromAPIVersion(peer.APIVersion), peer.Kind, peer.Name); err != nil {
+					return err
+				}
+			}
+		}
+		return s.DeleteProviderResource(serverID, providerFromAPIVersion(item.APIVersion), item.Kind, item.Name)
 	}
 
 	ifaces := s.store.Servers().Interfaces(sID)

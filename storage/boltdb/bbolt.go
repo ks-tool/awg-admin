@@ -20,14 +20,12 @@ import (
 	"encoding/json"
 	"io"
 	"time"
+	"uuid"
 
-	"github.com/ks-tool/awg-admin/models"
-	"github.com/ks-tool/awg-admin/storage"
-	"github.com/ks-tool/awg-admin/storage/boltdb/dump"
+	"github.com/ks-tool/vpn-admin/storage"
+	"github.com/ks-tool/vpn-admin/storage/boltdb/dump"
 
-	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -37,14 +35,18 @@ const (
 	interfacesBucketName   = "interfaces"
 	authBucketName         = "auth"
 	agentSourcesBucketName = "agent_sources"
+	registrySourcesBucket  = "registry_sources"
+	topologyBucketName     = "topology"
 )
 
 var (
-	bktServers      = []byte(serversBucketName)
-	bktInterfaces   = []byte(interfacesBucketName)
-	bktUsers        = []byte(usersBucketName)
-	bktAuth         = []byte(authBucketName)
-	bktAgentSources = []byte(agentSourcesBucketName)
+	bktServers         = []byte(serversBucketName)
+	bktInterfaces      = []byte(interfacesBucketName)
+	bktUsers           = []byte(usersBucketName)
+	bktAuth            = []byte(authBucketName)
+	bktAgentSources    = []byte(agentSourcesBucketName)
+	bktRegistrySources = []byte(registrySourcesBucket)
+	bktTopology        = []byte(topologyBucketName)
 )
 
 // authRecordKey is the auth bucket's one and only key — there's a single
@@ -68,43 +70,12 @@ func Open(path string) (*BoltDB, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	err = db.Update(func(tx *bolt.Tx) error {
-		if _, err = tx.CreateBucketIfNotExists(bktServers); err != nil {
-			return err
-		}
-		if _, err = tx.CreateBucketIfNotExists(bktInterfaces); err != nil {
-			return err
-		}
-		if _, err = tx.CreateBucketIfNotExists(bktUsers); err != nil {
-			return err
-		}
-
-		if _, err = tx.CreateBucketIfNotExists(bktAgentSources); err != nil {
-			return err
-		}
-
-		ab, err := tx.CreateBucketIfNotExists(bktAuth)
-		if err != nil {
-			return err
-		}
-		if ab.Get(authRecordKey) != nil {
-			return nil
-		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(defaultAdminPassword), bcrypt.DefaultCost)
-		if err != nil {
-			return err
-		}
-		return put(ab, authRecordKey, &models.AuthCredentials{
-			Username:     defaultAdminUsername,
-			PasswordHash: string(hash),
-		})
-	})
-	if err != nil {
+	result := &BoltDB{db: db}
+	if err := result.initialize(path); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
-
-	return &BoltDB{db: db}, nil
+	return result, nil
 }
 
 func (db *BoltDB) Close() error                       { return db.db.Close() }
@@ -113,6 +84,9 @@ func (db *BoltDB) Users() storage.Users               { return &users{db.db} }
 func (db *BoltDB) Servers() storage.Servers           { return &servers{db: db.db} }
 func (db *BoltDB) Auth() storage.Auth                 { return &auth{db: db.db} }
 func (db *BoltDB) AgentSources() storage.AgentSources { return &agentSources{db: db.db} }
+func (db *BoltDB) RegistrySources() storage.RegistrySources {
+	return &registrySources{db: db.db}
+}
 
 // ─────────────────────────────── helpers ───────────────────────────────────
 

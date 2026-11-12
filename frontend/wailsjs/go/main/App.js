@@ -10,6 +10,14 @@ export function AppVersion() {
   return window['go']['main']['App']['AppVersion']();
 }
 
+export function ApplyProviderLink(arg1) {
+  return window['go']['main']['App']['ApplyProviderLink'](arg1);
+}
+
+export function ApplyVPNService(arg1) {
+  return window['go']['main']['App']['ApplyVPNService'](arg1);
+}
+
 export function Backup() {
   return window['go']['main']['App']['Backup']();
 }
@@ -34,12 +42,40 @@ export function CreateInterface(arg1, arg2) {
   return window['go']['main']['App']['CreateInterface'](arg1, arg2);
 }
 
+export function CreateNetworkConnection(arg1, arg2) {
+  return window['go']['main']['App']['CreateNetworkConnection'](arg1, arg2);
+}
+
+export function CreateNetworkInterface(arg1, arg2) {
+  return window['go']['main']['App']['CreateNetworkInterface'](arg1, arg2);
+}
+
+export function CreateProviderLink(arg1, arg2) {
+  return window['go']['main']['App']['CreateProviderLink'](arg1, arg2);
+}
+
+export function CreateRegistrySource(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['CreateRegistrySource'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function CreateServer(arg1) {
   return window['go']['main']['App']['CreateServer'](arg1);
 }
 
+export function CreateTopologyServer(arg1) {
+  return window['go']['main']['App']['CreateTopologyServer'](arg1);
+}
+
 export function CreateUser(arg1) {
   return window['go']['main']['App']['CreateUser'](arg1);
+}
+
+export function CreateVPNService(arg1) {
+  return window['go']['main']['App']['CreateVPNService'](arg1);
+}
+
+export function CreateVPNServiceUser(arg1, arg2) {
+  return window['go']['main']['App']['CreateVPNServiceUser'](arg1, arg2);
 }
 
 export function CurrentUsername() {
@@ -62,20 +98,60 @@ export function DeleteInterface(arg1, arg2) {
   return window['go']['main']['App']['DeleteInterface'](arg1, arg2);
 }
 
+export function DeleteNetworkConnection(arg1) {
+  return window['go']['main']['App']['DeleteNetworkConnection'](arg1);
+}
+
+export function DeleteNetworkInterface(arg1) {
+  return window['go']['main']['App']['DeleteNetworkInterface'](arg1);
+}
+
 export function DeletePeer(arg1, arg2) {
   return window['go']['main']['App']['DeletePeer'](arg1, arg2);
+}
+
+export function DeleteProviderLink(arg1) {
+  return window['go']['main']['App']['DeleteProviderLink'](arg1);
+}
+
+export function DeleteProviderResource(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['DeleteProviderResource'](arg1, arg2, arg3, arg4);
+}
+
+export function DeleteRegistrySource(arg1) {
+  return window['go']['main']['App']['DeleteRegistrySource'](arg1);
 }
 
 export function DeleteServer(arg1) {
   return window['go']['main']['App']['DeleteServer'](arg1);
 }
 
+export function DeleteTopologyServer(arg1) {
+  return window['go']['main']['App']['DeleteTopologyServer'](arg1);
+}
+
 export function DeleteUser(arg1) {
   return window['go']['main']['App']['DeleteUser'](arg1);
 }
 
+export function DeleteVPNService(arg1) {
+  return window['go']['main']['App']['DeleteVPNService'](arg1);
+}
+
+export function DeleteVPNServiceUser(arg1, arg2) {
+  return window['go']['main']['App']['DeleteVPNServiceUser'](arg1, arg2);
+}
+
 export function DeployAgent(arg1, arg2) {
   return window['go']['main']['App']['DeployAgent'](arg1, arg2);
+}
+
+export function DeployAgentPack(arg1, arg2) {
+  return window['go']['main']['App']['DeployAgentPack'](arg1, arg2);
+}
+
+export function DeployProvider(arg1, arg2, arg3) {
+  return window['go']['main']['App']['DeployProvider'](arg1, arg2, arg3);
 }
 
 export function ForceReplaceInterfacePeers(arg1, arg2) {
@@ -114,8 +190,28 @@ export function GetPeerQRCode(arg1, arg2) {
   return window['go']['main']['App']['GetPeerQRCode'](arg1, arg2);
 }
 
+export function GetProviderManifest(arg1) {
+  return window['go']['main']['App']['GetProviderManifest'](arg1);
+}
+
+export function GetProviderResourceStatus(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetProviderResourceStatus'](arg1, arg2, arg3, arg4);
+}
+
+export function GetProviderSchema(arg1, arg2) {
+  return window['go']['main']['App']['GetProviderSchema'](arg1, arg2);
+}
+
 export function GetServer(arg1) {
   return window['go']['main']['App']['GetServer'](arg1);
+}
+
+export function GetServerInterfaceMetrics(arg1, arg2) {
+  return window['go']['main']['App']['GetServerInterfaceMetrics'](arg1, arg2);
+}
+
+export function GetServerInterfaceMetricsHistory(arg1, arg2) {
+  return window['go']['main']['App']['GetServerInterfaceMetricsHistory'](arg1, arg2);
 }
 
 export function GetServerMetrics(arg1) {
@@ -128,6 +224,14 @@ export function GetServerMetricsHistory(arg1) {
 
 export function GetServerProfile(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetServerProfile'](arg1, arg2, arg3);
+}
+
+export function GetTopology() {
+  return window['go']['main']['App']['GetTopology']();
+}
+
+export function GetTunnelMetrics() {
+  return window['go']['main']['App']['GetTunnelMetrics']();
 }
 
 export function GetUser(arg1) {
@@ -150,12 +254,32 @@ export function ListAgentSources() {
   return window['go']['main']['App']['ListAgentSources']();
 }
 
+export function ListArtifactTags(arg1, arg2) {
+  return window['go']['main']['App']['ListArtifactTags'](arg1, arg2);
+}
+
 export function ListInterfaces(arg1) {
   return window['go']['main']['App']['ListInterfaces'](arg1);
 }
 
 export function ListPeers(arg1) {
   return window['go']['main']['App']['ListPeers'](arg1);
+}
+
+export function ListProviderLinks() {
+  return window['go']['main']['App']['ListProviderLinks']();
+}
+
+export function ListProviderRepositories(arg1, arg2) {
+  return window['go']['main']['App']['ListProviderRepositories'](arg1, arg2);
+}
+
+export function ListProviderResources(arg1, arg2) {
+  return window['go']['main']['App']['ListProviderResources'](arg1, arg2);
+}
+
+export function ListRegistrySources() {
+  return window['go']['main']['App']['ListRegistrySources']();
 }
 
 export function ListServers() {
@@ -174,6 +298,14 @@ export function ListUsers() {
   return window['go']['main']['App']['ListUsers']();
 }
 
+export function ListVPNPlugins() {
+  return window['go']['main']['App']['ListVPNPlugins']();
+}
+
+export function ListVPNServiceUsers(arg1) {
+  return window['go']['main']['App']['ListVPNServiceUsers'](arg1);
+}
+
 export function Login(arg1, arg2) {
   return window['go']['main']['App']['Login'](arg1, arg2);
 }
@@ -182,8 +314,24 @@ export function MigratePeer(arg1, arg2, arg3) {
   return window['go']['main']['App']['MigratePeer'](arg1, arg2, arg3);
 }
 
+export function MoveNetworkConnection(arg1, arg2, arg3) {
+  return window['go']['main']['App']['MoveNetworkConnection'](arg1, arg2, arg3);
+}
+
+export function MoveProviderLink(arg1, arg2, arg3) {
+  return window['go']['main']['App']['MoveProviderLink'](arg1, arg2, arg3);
+}
+
+export function MoveTopologyNodes(arg1) {
+  return window['go']['main']['App']['MoveTopologyNodes'](arg1);
+}
+
 export function PreviewImport(arg1, arg2, arg3) {
   return window['go']['main']['App']['PreviewImport'](arg1, arg2, arg3);
+}
+
+export function PutProviderResource(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['PutProviderResource'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function ReconcileServer(arg1) {
@@ -194,8 +342,24 @@ export function RefreshAgentSourceCache(arg1) {
   return window['go']['main']['App']['RefreshAgentSourceCache'](arg1);
 }
 
+export function RefreshProviderManifest(arg1) {
+  return window['go']['main']['App']['RefreshProviderManifest'](arg1);
+}
+
+export function RefreshVPNServiceStatus(arg1) {
+  return window['go']['main']['App']['RefreshVPNServiceStatus'](arg1);
+}
+
+export function RemoveProvider(arg1, arg2) {
+  return window['go']['main']['App']['RemoveProvider'](arg1, arg2);
+}
+
 export function RemoveTunnel(arg1) {
   return window['go']['main']['App']['RemoveTunnel'](arg1);
+}
+
+export function RunProviderResourceAction(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['RunProviderResourceAction'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function SaveBackup() {
@@ -278,12 +442,32 @@ export function UpdateInterfaceConfig(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateInterfaceConfig'](arg1, arg2, arg3);
 }
 
+export function UpdateNetworkInterface(arg1, arg2) {
+  return window['go']['main']['App']['UpdateNetworkInterface'](arg1, arg2);
+}
+
+export function UpdateRegistrySource(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['UpdateRegistrySource'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 export function UpdateServer(arg1, arg2) {
   return window['go']['main']['App']['UpdateServer'](arg1, arg2);
 }
 
+export function UpdateTopologyServer(arg1, arg2) {
+  return window['go']['main']['App']['UpdateTopologyServer'](arg1, arg2);
+}
+
 export function UpdateUser(arg1, arg2) {
   return window['go']['main']['App']['UpdateUser'](arg1, arg2);
+}
+
+export function UpdateVPNService(arg1, arg2) {
+  return window['go']['main']['App']['UpdateVPNService'](arg1, arg2);
+}
+
+export function UpdateVPNServiceUser(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateVPNServiceUser'](arg1, arg2, arg3);
 }
 
 export function VerifyBasicAuth(arg1, arg2) {

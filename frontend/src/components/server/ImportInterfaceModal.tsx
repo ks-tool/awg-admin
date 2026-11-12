@@ -18,7 +18,8 @@ import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {toast} from 'sonner';
 import {AlertTriangle, CheckCircle2, RefreshCw} from 'lucide-react';
-import {buttons, inputs, Modal} from '@/components/common/Modal';
+import {Modal} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {FormField} from '@/components/common/FormField';
 import {importInterfaceFromServer, listUnmanagedInterfaces, previewInterfaceImport} from '@/services/servers';
 import {cn} from '@/lib/utils';
@@ -79,7 +80,7 @@ function Section({title, hint, children}: {title: string; hint?: string; childre
 }
 
 // ImportInterfaceModal adopts a wg-quick / awg-quick interface that's up on
-// the server but unknown to awg-admin (Service.PreviewImport /
+// the server but unknown to vpn-admin (Service.PreviewImport /
 // ImportInterfaceFromServer). Two steps: pick the interface + paste the
 // user→peer map, Preview (a dry run that reports what will be created and
 // warns about what changed meaning), then Import. The preview is invalidated

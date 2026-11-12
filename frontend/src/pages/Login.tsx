@@ -18,7 +18,7 @@ import {useState} from 'react';
 import type {FormEvent} from 'react';
 import {useTranslation} from 'react-i18next';
 import {ShieldCheck} from 'lucide-react';
-import {buttons, inputs} from '@/components/common/Modal';
+import {buttons, inputs} from '@/components/common/controls';
 import {FormField} from '@/components/common/FormField';
 import {cn} from '@/lib/utils';
 import {login} from '@/services/auth';
