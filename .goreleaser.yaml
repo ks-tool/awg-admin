@@ -33,7 +33,7 @@ builds:
     binary: vpn-admin
     env:
       - CGO_ENABLED=0
-      - goos:
+    goos:
       - linux
       - darwin
       - windows
@@ -54,7 +54,7 @@ builds:
     binary: awg-migrate
     env:
       - CGO_ENABLED=0
-      - goos:
+    goos:
       - linux
       - darwin
       - windows
