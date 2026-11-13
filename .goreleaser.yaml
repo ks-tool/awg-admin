@@ -6,7 +6,7 @@
 #   - vpn-admin: the standalone web server (cmd/vpn-admin.go), embeds the built
 #     frontend (see the "before.hooks") — linux/darwin/windows, amd64/arm64.
 #   - awg-migrate: the backup/restore and v1-to-v2 migration CLI (cmd/migrate),
-#     included in every vpn-admin archive for the same targets.
+#     published in separate archives for the same targets.
 #   - {IMAGE_ADMIN}: its multi-arch Docker image (linux amd64+arm64, GHCR), the
 #     frontend already embedded so the image just copies the binary
 #     (docker/Dockerfile.admin). IMAGE_ADMIN is set by the release workflow (the
@@ -68,9 +68,18 @@ builds:
 
 archives:
   - id: admin-archive
-    ids: [admin, migrate]
+    ids: [admin]
     name_template: >-
       vpn-admin_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+  - id: migrate-archive
+    ids: [migrate]
+    name_template: >-
+      awg-migrate_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     formats: [tar.gz]
     format_overrides:
       - goos: windows
