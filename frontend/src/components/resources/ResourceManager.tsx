@@ -178,6 +178,12 @@ export function ResourceManager({serverId, onChanged}: {serverId: string; onChan
                     <button type="button" onClick={() => void refresh()} disabled={loading} className={buttons.secondary} title={t('common.refresh')}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
                     <button
                         type="button"
+                        onClick={() => setImportTarget('')}
+                        className={cn(buttons.secondary, 'inline-flex items-center gap-1.5')}
+                        title={t('servers.import.rowHint')}
+                    ><FileInput size={14} /></button>
+                    <button
+                        type="button"
                         onClick={() => setEditor({provider: '', kind: 'Interface'})}
                         disabled={interfaceProviders.length === 0}
                         className={buttons.primary}

@@ -407,12 +407,17 @@ instead of moving it.
 
 ### Importing wg-quick / awg-quick
 
-A live interface created outside the agent appears under Interfaces as **Not managed** and read-only. **Import…** reads
-`/etc/amnezia/amneziawg/<name>.conf`, then `/etc/wireguard/<name>.conf`.
+Click a server on the map and open **Manage panel → Interfaces → Import…**. The header button is always available, even when no
+unmanaged interfaces are detected. A live interface created outside the agent also appears in the list as **Not managed** and
+read-only; its row has its own **Import…** button.
 
-Run **Preview** before importing: it shows the interface, users/peers, original and generated hooks and warnings without changing
-anything. The peer map can associate existing client private keys with users; without it, peers survive but the admin cannot
-recover their private keys for new client configs.
+In the wizard, select a detected interface or **Other (type a name)…** to enter the name of an interface that is currently down.
+The import reads `/etc/amnezia/amneziawg/<name>.conf`, then `/etc/wireguard/<name>.conf`.
+
+Before confirming, click **Preview** at the bottom of the same dialog: it shows the interface, users/peers, original and generated
+hooks and warnings without changing anything. **Import** becomes available only after a preview; changing the interface name or
+peer map requires another preview. The peer map can associate existing client private keys with users; without it, peers survive
+but the admin cannot recover their private keys for new client configs.
 
 Import stores the inventory in BoltDB and pushes it to the agent. A live kernel link is adopted in place; userspace cannot adopt
 somebody else's kernel link, so bring it down first and retry Sync. Afterwards, disable `wg-quick@<name>` or `awg-quick@<name>`

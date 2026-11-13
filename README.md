@@ -25,7 +25,8 @@ configuration and network links.
 - **Interfaces through JSON Schema.** Under **Manage panel → Interfaces**, a wizard first selects an installed provider and then
   builds its `Interface` form through RJSF. Schemas are always read from `~/.vpn-admin/cache/<apiVersion>.<kind>.spec` when
   available and refreshed in the background. Peers are not created here: a user selects the required interface and the peer
-  form uses that provider's `Peer` schema. Unmanaged `wg-quick`/`awg-quick` interfaces can be imported from the same tab.
+  form uses that provider's `Peer` schema. **Import…** adopts a `wg-quick`/`awg-quick` configuration; **Preview** shows the
+  interface, peers and hooks before confirmation.
 - **VPN service plugins.** A separate plugin API models a service as “application + configuration”, passes topology to the plugin
   and provides independent JSON schemas for configuration and users.
 - **AWG, Xray and Hysteria 2.** AWG supports obfuscation, kernel/userspace modes and WireGuard client configs. Xray provides
