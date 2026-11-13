@@ -150,6 +150,9 @@ func (s *Service) RemoveProvider(id, name string) error {
 	go func() {
 		err := deploy.RemoveProviderFromPack(context.Background(), *srv, name, s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID))
 		if err == nil {
+			err = s.waitForProviderRemoval(id, name, 20*time.Second)
+		}
+		if err == nil {
 			err = s.removeCachedProvider(sID, name)
 		}
 		s.deployStatus.finish(sID, err)

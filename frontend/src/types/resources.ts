@@ -1,7 +1,7 @@
 export interface ProviderManifest {
     protocolVersion: string;
-    agentId: string;
     providers: ProviderDefinition[];
+    providerErrors?: Record<string, string>;
 }
 
 export interface ProviderDefinition {

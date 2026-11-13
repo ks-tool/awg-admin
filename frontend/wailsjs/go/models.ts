@@ -132,6 +132,20 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class AgentDeploymentSettings {
+	    address: string;
+	    mtls: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentDeploymentSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.address = source["address"];
+	        this.mtls = source["mtls"];
+	    }
+	}
 	export class Registry {
 	    sourceId?: string;
 	    username?: string;
@@ -154,6 +168,7 @@ export namespace models {
 	    artifact?: string;
 	    binaryPath?: string;
 	    registry: Registry;
+	    settings?: AgentDeploymentSettings;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentDeployment(source);
@@ -164,6 +179,7 @@ export namespace models {
 	        this.artifact = source["artifact"];
 	        this.binaryPath = source["binaryPath"];
 	        this.registry = this.convertValues(source["registry"], Registry);
+	        this.settings = this.convertValues(source["settings"], AgentDeploymentSettings);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -184,6 +200,7 @@ export namespace models {
 		    return a;
 		}
 	}
+
 	export class AgentReleaseAsset {
 	    name: string;
 	    version: string;
@@ -1041,8 +1058,8 @@ export namespace models {
 	}
 	export class Manifest {
 	    protocolVersion: string;
-	    agentId: string;
 	    providers: ProviderDefinition[];
+	    providerErrors?: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Manifest(source);
@@ -1051,8 +1068,8 @@ export namespace models {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.protocolVersion = source["protocolVersion"];
-	        this.agentId = source["agentId"];
 	        this.providers = this.convertValues(source["providers"], ProviderDefinition);
+	        this.providerErrors = source["providerErrors"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

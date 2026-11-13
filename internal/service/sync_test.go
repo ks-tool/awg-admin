@@ -52,6 +52,7 @@ type fakeAgentTLS struct {
 	deleteCalls     int
 	failCommit      bool
 	awg             bool
+	providerErrors  map[string]string
 	legacyDisabled  bool
 
 	// Discovery/import inputs (see the wg-quick import tests): live devices the
@@ -166,12 +167,13 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 	mux.HandleFunc("GET /v1/manifest", func(w http.ResponseWriter, r *http.Request) {
 		fa.mu.Lock()
 		awg := fa.awg
+		providerErrors := fa.providerErrors
 		fa.mu.Unlock()
 		providers := []models.ProviderDefinition{testProviderDefinition}
 		if awg {
 			providers = append(providers, awgDefinition)
 		}
-		_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion, AgentID: "agent", Providers: providers})
+		_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion, Providers: providers, ProviderErrors: providerErrors})
 	})
 	mux.HandleFunc("GET /v1/providers/{provider}/schema", func(w http.ResponseWriter, r *http.Request) {
 		fa.mu.Lock()

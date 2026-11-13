@@ -54,7 +54,6 @@ func (p *providerPack) PackRoot() packschema.Root {
 	}
 	return packschema.Root{Hooks: hooks, Packages: map[string]packschema.OSInstall{
 		"debian": {
-			Prepare: []string{"ca-certificates"},
 			Content: []packschema.File{
 				content,
 				{Path: config, Values: "deployment", Format: "json", Mode: "0600"},

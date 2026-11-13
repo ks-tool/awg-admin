@@ -33,7 +33,7 @@ func TestProviderDefinitionCacheUsesAPIVersionFileNames(t *testing.T) {
 	svc := newTestService(t)
 	serverID := uuid.New().String()
 	definition := models.ResourceDefinition{APIVersion: "xray.ks-tool.dev/v1", Kind: "Interface", SpecSchema: json.RawMessage(`{"type":"object"}`)}
-	manifest := &models.Manifest{ProtocolVersion: models.ProtocolVersion, AgentID: "agent", Providers: []models.ProviderDefinition{{Name: "xray", Version: "1", Resources: []models.ResourceDefinition{definition}}}}
+	manifest := &models.Manifest{ProtocolVersion: models.ProtocolVersion, Providers: []models.ProviderDefinition{{Name: "xray", Version: "1", Resources: []models.ResourceDefinition{definition}}}}
 	if err := cacheProviderManifest(manifest); err != nil {
 		t.Fatal(err)
 	}

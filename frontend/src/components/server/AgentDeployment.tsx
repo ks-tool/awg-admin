@@ -134,6 +134,13 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
                     return;
                 }
                 toast.success(request?.kind === 'remove' ? t('servers.providerRemovedSuccess') : t('servers.deployedSuccess'));
+                if (request?.kind === 'remove') {
+                    const removedName = request.name;
+                    setManifest(current => current ? {
+                        ...current,
+                        providers: current.providers.filter(provider => provider.name !== removedName),
+                    } : current);
+                }
                 await loadManifest(true);
                 onChanged();
             } catch (error) {
@@ -146,7 +153,7 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
             cancelled = true;
             window.clearInterval(interval);
         };
-    }, [deploying, handleError, loadManifest, onChanged, request?.kind, server.id, t]);
+    }, [deploying, handleError, loadManifest, onChanged, request, server.id, t]);
 
     const submitUnlock = async (secret: string, applyToAll = false) => {
         if (!request) return;

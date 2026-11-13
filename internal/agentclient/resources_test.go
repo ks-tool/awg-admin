@@ -32,7 +32,7 @@ func TestResourceClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method + " " + r.URL.Path {
 		case "GET /v1/manifest":
-			_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion, AgentID: "agent"})
+			_ = json.NewEncoder(w).Encode(models.Manifest{ProtocolVersion: models.ProtocolVersion})
 		case "GET /v1/providers/test/schema":
 			_ = json.NewEncoder(w).Encode(models.ProviderDefinition{Name: "test", Version: "1", Resources: []models.ResourceDefinition{{APIVersion: "test/v1", Kind: "Service", SpecSchema: json.RawMessage(`{"type":"object"}`), SchemaHash: "hash"}}})
 		case "GET /v1/providers/test/resources":
@@ -62,7 +62,7 @@ func TestResourceClient(t *testing.T) {
 	ctx := context.Background()
 
 	manifest, err := client.Manifest(ctx)
-	if err != nil || manifest.AgentID != "agent" {
+	if err != nil {
 		t.Fatalf("Manifest: %+v, %v", manifest, err)
 	}
 	definition, err := client.ProviderSchema(ctx, "test")

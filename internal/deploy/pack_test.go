@@ -19,6 +19,7 @@ package deploy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,6 +117,9 @@ func TestApplyPackUsesHostTarget(t *testing.T) {
 		}
 		if !options.Refresh || options.Env["PACK_SSH_PASSPHRASE"] != "key-passphrase" {
 			t.Fatalf("unexpected apply options: %#v", options)
+		}
+		if options.Planned == nil {
+			t.Fatal("pack apply does not report its plan")
 		}
 		var release map[string]any
 		readPackTestJSON(t, filepath.Join(options.Dir, "release.yaml"), &release)
@@ -314,6 +318,28 @@ func TestApplyPackSelfDeploysLocalAgentBinary(t *testing.T) {
 	}
 	if err := applyPack(context.Background(), srv, item, "", "", t.TempDir()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestApplyPackSavesTargetLockAfterFailure(t *testing.T) {
+	original := embeddedPackApply
+	t.Cleanup(func() { embeddedPackApply = original })
+	want := []byte("{\"targets\":{\"host\":{\"source\":\"test\",\"sha256\":\"sum\"}}}\n")
+	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
+		if err := os.WriteFile(filepath.Join(options.Dir, "release.lock.json"), want, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return errors.New("apply failed")
+	}
+	srv := models.Server{SSH: models.SSHConfig{Host: "192.0.2.1", Key: "/tmp/id"}}
+	item := packRelease{name: "firewall", step: "firewall", pack: &firewallPack{}, values: map[string]any{}}
+	cache := t.TempDir()
+	if err := applyPack(context.Background(), srv, item, "", "", cache); err == nil {
+		t.Fatal("failed apply returned no error")
+	}
+	got, err := os.ReadFile(filepath.Join(cache, "releases", "firewall.lock.json"))
+	if err != nil || string(got) != string(want) {
+		t.Fatalf("saved lock = %q, %v", got, err)
 	}
 }
 

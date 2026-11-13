@@ -29,17 +29,19 @@ import (
 	"time"
 
 	packcmd "github.com/horchestra/pack/cmd"
+	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/sdk"
 	"github.com/horchestra/pack/sdk/packschema"
 	"github.com/ks-tool/vpn-admin/internal/config"
 	"github.com/ks-tool/vpn-admin/models"
 	vpnagentpack "github.com/ks-tool/vpn-admin/pack/vpn-agent"
+	"github.com/rs/zerolog/log"
 )
 
 const (
 	packTargetName   = "host"
-	packTargetSource = "https://github.com/horchestra/targets/releases/download/host/v0.2.3/pack-target-host_{os}_{arch}.tar.gz"
+	packTargetSource = "https://github.com/horchestra/targets/releases/download/host/v0.4.1/pack-target-host_{os}_{arch}.tar.gz"
 	packMirrorURL    = "http://127.0.0.1:8081"
 	packApplyTimeout = 15 * time.Minute
 )
@@ -57,6 +59,7 @@ type packRelease struct {
 	credentials []render.Credential
 	firewall    []string
 	registry    models.Registry
+	force       bool
 }
 
 type firewallPack struct{}
@@ -134,7 +137,7 @@ func ProviderToPack(ctx context.Context, srv models.Server, provider models.Prov
 	}
 	item := packRelease{
 		name: provider.Name, step: "provider_" + provider.Name, binary: pack.Meta().Name, localBinary: provider.BinaryPath,
-		pack: pack, values: values, registry: registry,
+		pack: pack, values: values, registry: registry, force: true,
 	}
 	if err := applyPack(ctx, srv, item, passphrase, sudoPassword, config.AdminCachePath(home)); err != nil {
 		return fmt.Errorf("install %s provider: %w", provider.Name, err)
@@ -190,8 +193,13 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 			return fmt.Errorf("prepare local binary: %w", err)
 		}
 	}
+	// state: observe — the host itself is the record: the plan is the diff of what the target holds against
+	// what the pack wants, so a repeated run that changes nothing runs nothing. The server's stable UUID names
+	// its installation; history_count keeps the files' snapshots a rollback restores.
 	if err := writePackJSON(filepath.Join(dir, "release.yaml"), map[string]any{
-		"pack": filepath.Join(dir, "packs", item.pack.Meta().Name),
+		"pack":  filepath.Join(dir, "packs", item.pack.Meta().Name),
+		"state": "observe",
+		"id":    srv.ID.String(),
 		"targets": map[string]any{
 			packTargetName: map[string]any{"url": packTargetSource},
 		},
@@ -238,9 +246,9 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 		placement["firewall"] = item.firewall
 	}
 	env := map[string]any{
-		"target": packTargetName,
-		"state":  filepath.Join(cache, "host-state.json"),
-		"hosts":  map[string]any{"server": host},
+		"target":        packTargetName,
+		"history_count": 3,
+		"hosts":         map[string]any{"server": host},
 		"keys": map[string]any{
 			item.pack.Meta().Name: placement,
 		},
@@ -276,6 +284,12 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 		return err
 	}
 	options := packcmd.ApplyOptions{Dir: dir, CacheDir: filepath.Join(cache, "pack"), Refresh: true, Env: map[string]string{}}
+	if item.force {
+		options.Force = []string{item.pack.Meta().Name}
+	}
+	options.Planned = func(p *plan.Plan) {
+		log.Info().Str("server_id", srv.ID.String()).Str("pack", item.name).Msgf("pack plan:\n%s", p.Text())
+	}
 	if len(passphrase) > 0 {
 		options.Env["PACK_SSH_PASSPHRASE"] = passphrase
 	}
@@ -294,12 +308,10 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("read pack target lock: %w", err)
 	}
-	if err := embeddedPackApply(ctx, options); err != nil {
-		return err
-	}
+	applyErr := embeddedPackApply(ctx, options)
 	generatedLock, err := os.ReadFile(filepath.Join(dir, "release.lock.json"))
 	if os.IsNotExist(err) {
-		return nil
+		return applyErr
 	}
 	if err != nil {
 		return fmt.Errorf("read generated pack target lock: %w", err)
@@ -307,7 +319,7 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 	if err := os.WriteFile(lockPath, generatedLock, 0o600); err != nil {
 		return fmt.Errorf("save pack target lock: %w", err)
 	}
-	return nil
+	return applyErr
 }
 
 func packFirewallRules(interfaceNames []string) []string {

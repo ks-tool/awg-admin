@@ -100,11 +100,11 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	}
 	if srv.Unmanaged {
 		if _, err := s.fetchProviderManifest(id); err != nil {
-			log.Error().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("server is waiting for v2 agent and AWG provider")
 			return models.AgentStatusUnmanaged, nil
 		}
 		if err := s.completeServerMigration(srv); err != nil {
-			log.Error().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("server is waiting for v2 agent and AWG provider")
 			return models.AgentStatusUnmanaged, nil
 		}
 	}
@@ -115,7 +115,7 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	// with a silent agent (degraded).
 	if !mtls {
 		if _, err := s.tunnels.Ensure(sID, srv.SSH, srv.Agent.Address); err != nil {
-			log.Error().Err(err).Str("server_id", id).Msg("agent status: SSH tunnel to agent is down")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("agent status: SSH tunnel to agent is down")
 			return models.AgentStatusDown, nil
 		}
 	}
@@ -125,7 +125,7 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	if err := s.pingAgent(srv); err != nil {
 		if mtls {
 			// mTLS is reached directly; a failed probe means the agent is unreachable.
-			log.Error().Err(err).Str("server_id", id).Msg("agent status: mTLS agent unreachable")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("agent status: mTLS agent unreachable")
 			return models.AgentStatusDown, nil
 		}
 		// SSH: the pre-check saw a live tunnel, but a probe failing with a
@@ -133,22 +133,22 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 		// underneath us — Alive() merely lagged. That's "tunnel down" (red), not
 		// a silent agent behind a genuinely live tunnel (degraded).
 		if tunnelDropped(err) {
-			log.Error().Err(err).Str("server_id", id).Msg("agent status: SSH tunnel to agent died")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("agent status: SSH tunnel to agent died")
 			return models.AgentStatusDown, nil
 		}
-		log.Error().Err(err).Str("server_id", id).Msg("agent status: SSH tunnel up but agent not responding")
+		log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("agent status: SSH tunnel up but agent not responding")
 		return models.AgentStatusDegraded, nil
 	}
 
 	manifest, err := s.fetchProviderManifest(id)
 	if err != nil {
-		log.Warn().Err(err).Str("server_id", id).Msg("failed to read provider manifest health")
+		log.Warn().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("failed to read provider manifest health")
 		return models.AgentStatusDegraded, nil
 	}
 	for _, provider := range manifest.Providers {
 		resources, err := s.ListProviderResources(id, provider.Name)
 		if err != nil {
-			log.Warn().Err(err).Str("server_id", id).Str("provider", provider.Name).Msg("failed to read provider resource health")
+			log.Warn().Err(err).Str("server_id", id).Str("server_name", srv.Name).Str("provider", provider.Name).Msg("failed to read provider resource health")
 			return models.AgentStatusDegraded, nil
 		}
 		for _, resource := range resources {
@@ -451,7 +451,7 @@ func (s *Service) DeployAgent(id string, agentSourceID string) error {
 		// right away instead of waiting for the next unrelated edit to
 		// trigger a push.
 		if err := s.SyncServer(id); err != nil {
-			log.Warn().Err(err).Str("server_id", id).Msg("failed to sync server after deploying agent")
+			log.Warn().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("failed to sync server after deploying agent")
 		}
 	}()
 	return nil

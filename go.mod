@@ -3,8 +3,8 @@ module github.com/ks-tool/vpn-admin
 go 1.27.1
 
 require (
-	github.com/horchestra/pack v0.5.1
-	github.com/horchestra/pack/sdk v1.1.0
+	github.com/horchestra/pack v0.7.0
+	github.com/horchestra/pack/sdk v1.2.0
 	github.com/ks-tool/app-config/go v1.0.0
 	github.com/ks-tool/vpn-agent/v2 v2.0.0-rc.2
 	github.com/rs/zerolog v1.35.1
@@ -231,3 +231,9 @@ tool (
 	github.com/gzuidhof/tygo
 	github.com/wailsapp/wails/v2/cmd/wails
 )
+
+replace github.com/horchestra/pack => /Users/pirate/GolandProjects/pack
+
+replace github.com/ks-tool/vpn-agent/v2 => ./agent
+
+replace github.com/horchestra/pack/sdk => /Users/pirate/GolandProjects/pack/sdk

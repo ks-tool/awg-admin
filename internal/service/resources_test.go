@@ -32,7 +32,7 @@ func TestProviderResourceLifecycleAndSchemaCache(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
 	serverID := server.ID.String()
 	manifest, err := svc.GetProviderManifest(serverID)
-	if err != nil || manifest.AgentID != "agent" || len(manifest.Providers) != 1 {
+	if err != nil || len(manifest.Providers) != 1 {
 		t.Fatalf("GetProviderManifest: %+v, %v", manifest, err)
 	}
 	definition, err := svc.GetProviderSchema(serverID, "test")
@@ -127,6 +127,36 @@ func TestWaitForProviderRequiresManifestRegistration(t *testing.T) {
 	err := svc.waitForProvider(server.ID.String(), "awg", 0)
 	if err == nil || !strings.Contains(err.Error(), "did not appear in agent manifest") {
 		t.Fatalf("unregistered provider reported a successful deployment: %v", err)
+	}
+}
+
+func TestWaitForProviderReportsDiscoveryError(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	agent.mu.Lock()
+	agent.awg = false
+	agent.providerErrors = map[string]string{"awg": "create TUN failed"}
+	agent.mu.Unlock()
+	err := svc.waitForProvider(server.ID.String(), "awg", 0)
+	if err == nil || !strings.Contains(err.Error(), "create TUN failed") {
+		t.Fatalf("discovery error was not reported: %v", err)
+	}
+}
+
+func TestWaitForProviderRemovalRequiresManifestDeregistration(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	agent.mu.Lock()
+	agent.awg = false
+	agent.mu.Unlock()
+	if err := svc.waitForProviderRemoval(server.ID.String(), "awg", time.Second); err != nil {
+		t.Fatalf("unregistered provider was not accepted: %v", err)
+	}
+
+	agent.mu.Lock()
+	agent.awg = true
+	agent.mu.Unlock()
+	err := svc.waitForProviderRemoval(server.ID.String(), "awg", 0)
+	if err == nil || !strings.Contains(err.Error(), "did not disappear from agent manifest") {
+		t.Fatalf("registered provider reported a successful removal: %v", err)
 	}
 }
 
