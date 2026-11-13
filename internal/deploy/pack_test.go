@@ -19,14 +19,15 @@ package deploy
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	packcmd "github.com/horchestra/pack/cmd"
+	"github.com/horchestra/pack/pkg/target"
 	"github.com/ks-tool/vpn-admin/models"
 	vpnagentpack "github.com/ks-tool/vpn-admin/pack/vpn-agent"
 )
@@ -115,21 +116,22 @@ func TestApplyPackUsesHostTarget(t *testing.T) {
 		if !ok || time.Until(deadline) <= 0 || time.Until(deadline) > packApplyTimeout {
 			t.Fatalf("pack apply deadline = %v, %v", deadline, ok)
 		}
-		if !options.Refresh || options.Env["PACK_SSH_PASSPHRASE"] != "key-passphrase" {
+		if options.Refresh || options.Env["PACK_SSH_PASSPHRASE"] != "key-passphrase" {
 			t.Fatalf("unexpected apply options: %#v", options)
 		}
 		if options.Planned == nil {
 			t.Fatal("pack apply does not report its plan")
+		}
+		if !slices.Contains(target.Names(), packTargetName) {
+			t.Fatalf("host target is not registered: %v", target.Names())
 		}
 		var release map[string]any
 		readPackTestJSON(t, filepath.Join(options.Dir, "release.yaml"), &release)
 		if !strings.Contains(release["pack"].(string), (&vpnagentpack.Config{}).Meta().Name) {
 			t.Fatalf("unexpected release: %#v", release)
 		}
-		targets := release["targets"].(map[string]any)
-		host := targets[packTargetName].(map[string]any)
-		if host["url"] != packTargetSource {
-			t.Fatalf("unexpected target source: %#v", host)
+		if _, ok := release["targets"]; ok {
+			t.Fatalf("embedded host target must not have a download source: %#v", release)
 		}
 		var values struct {
 			Values map[string]any `json:"values"`
@@ -190,40 +192,6 @@ func TestApplyPackUsesHostTarget(t *testing.T) {
 	}
 	if called != 1 {
 		t.Fatalf("embedded apply called %d times", called)
-	}
-}
-
-func TestApplyPackReusesTargetLock(t *testing.T) {
-	original := embeddedPackApply
-	t.Cleanup(func() { embeddedPackApply = original })
-	cache := t.TempDir()
-	lock := []byte("{\"targets\":{\"host\":{\"source\":\"" + packTargetSource + "\",\"sha256\":\"abc\"}}}\n")
-	called := 0
-	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
-		called++
-		path := filepath.Join(options.Dir, "release.lock.json")
-		if called == 1 {
-			if _, err := os.Stat(path); !os.IsNotExist(err) {
-				t.Fatalf("first apply unexpectedly has a target lock: %v", err)
-			}
-		} else {
-			restored, err := os.ReadFile(path)
-			if err != nil || string(restored) != string(lock) {
-				t.Fatalf("restored target lock = %q, %v", restored, err)
-			}
-		}
-		return os.WriteFile(path, lock, 0o600)
-	}
-	item := packRelease{name: "VPN firewall", step: "firewall", pack: &firewallPack{}, values: map[string]any{}, firewall: []string{"i:awg0"}}
-	srv := models.Server{SSH: models.SSHConfig{Host: "192.0.2.1", KeyData: "private-key"}}
-	for range 2 {
-		if err := applyPack(context.Background(), srv, item, "", "", cache); err != nil {
-			t.Fatal(err)
-		}
-	}
-	persistent, err := os.ReadFile(filepath.Join(cache, "releases", "firewall.lock.json"))
-	if err != nil || string(persistent) != string(lock) {
-		t.Fatalf("persistent target lock = %q, %v", persistent, err)
 	}
 }
 
@@ -318,28 +286,6 @@ func TestApplyPackSelfDeploysLocalAgentBinary(t *testing.T) {
 	}
 	if err := applyPack(context.Background(), srv, item, "", "", t.TempDir()); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestApplyPackSavesTargetLockAfterFailure(t *testing.T) {
-	original := embeddedPackApply
-	t.Cleanup(func() { embeddedPackApply = original })
-	want := []byte("{\"targets\":{\"host\":{\"source\":\"test\",\"sha256\":\"sum\"}}}\n")
-	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
-		if err := os.WriteFile(filepath.Join(options.Dir, "release.lock.json"), want, 0o600); err != nil {
-			t.Fatal(err)
-		}
-		return errors.New("apply failed")
-	}
-	srv := models.Server{SSH: models.SSHConfig{Host: "192.0.2.1", Key: "/tmp/id"}}
-	item := packRelease{name: "firewall", step: "firewall", pack: &firewallPack{}, values: map[string]any{}}
-	cache := t.TempDir()
-	if err := applyPack(context.Background(), srv, item, "", "", cache); err == nil {
-		t.Fatal("failed apply returned no error")
-	}
-	got, err := os.ReadFile(filepath.Join(cache, "releases", "firewall.lock.json"))
-	if err != nil || string(got) != string(want) {
-		t.Fatalf("saved lock = %q, %v", got, err)
 	}
 }
 

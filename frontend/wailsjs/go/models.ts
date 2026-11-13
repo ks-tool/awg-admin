@@ -135,11 +135,11 @@ export namespace models {
 	export class AgentDeploymentSettings {
 	    address: string;
 	    mtls: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AgentDeploymentSettings(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.address = source["address"];
@@ -200,7 +200,7 @@ export namespace models {
 		    return a;
 		}
 	}
-
+	
 	export class AgentReleaseAsset {
 	    name: string;
 	    version: string;
