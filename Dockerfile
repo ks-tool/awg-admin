@@ -36,6 +36,7 @@ RUN go mod download
 
 COPY . .
 COPY --from=frontend /src/cmd/dist ./cmd/dist
+RUN go run ./scripts/download-host-agents.go
 
 ARG TARGETOS
 ARG TARGETARCH

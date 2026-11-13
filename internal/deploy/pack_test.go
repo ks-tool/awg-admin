@@ -18,7 +18,10 @@ package deploy
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -103,6 +106,23 @@ func TestPackFirewallRules(t *testing.T) {
 	rules := packFirewallRules([]string{"awg0", "", "awg1", "awg0"})
 	if len(rules) != 2 || rules[0] != "i:awg0" || rules[1] != "i:awg1" {
 		t.Fatalf("firewall rules = %#v", rules)
+	}
+}
+
+func TestHostAgents(t *testing.T) {
+	checksums := map[string]string{
+		"pack-host-agent-linux-amd64": "6f36ccaa26bdb2adb40291742234368982ca0afe966b778a4a2ccf608d6e49d5",
+		"pack-host-agent-linux-arm64": "1116e5311a77ff09f1bf7f701594949117bd0e6886cdb80fb311075190e15a71",
+	}
+	for name, want := range checksums {
+		data, err := fs.ReadFile(hostAgents, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(data)
+		if got := hex.EncodeToString(sum[:]); got != want {
+			t.Errorf("%s SHA-256 = %s, want %s", name, got, want)
+		}
 	}
 }
 

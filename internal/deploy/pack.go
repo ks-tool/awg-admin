@@ -32,7 +32,6 @@ import (
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/sdk"
 	"github.com/horchestra/pack/sdk/packschema"
-	"github.com/horchestra/targets/host/local"
 	"github.com/ks-tool/vpn-admin/internal/config"
 	"github.com/ks-tool/vpn-admin/models"
 	vpnagentpack "github.com/ks-tool/vpn-admin/pack/vpn-agent"
@@ -278,7 +277,6 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 	if err := writePackJSON(filepath.Join(dir, "env.yaml"), env); err != nil {
 		return err
 	}
-	local.Register()
 	options := packcmd.ApplyOptions{Dir: dir, CacheDir: filepath.Join(cache, "pack"), Refresh: false, Env: map[string]string{}}
 	if item.force {
 		options.Force = []string{item.pack.Meta().Name}

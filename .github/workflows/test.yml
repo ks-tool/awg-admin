@@ -32,5 +32,6 @@ jobs:
 
       - name: Run Go tests
         run: |
+          go run ./scripts/download-host-agents.go
           targets=$(go list ./... | grep -v /node_modules/)
           go test $targets

@@ -220,8 +220,8 @@ github.com/hashicorp/golang-lru/v2 v2.0.7 h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs
 github.com/hashicorp/golang-lru/v2 v2.0.7/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/hexops/gotextdiff v1.0.3 h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUqJM=
 github.com/hexops/gotextdiff v1.0.3/go.mod h1:pSWU5MAI3yDq+fZBTazCSJysOMbxWL1BSow5/V2vxeg=
-github.com/horchestra/targets/host v0.4.1 h1:cEtheBwHizTD4lZMrPYPwnD9JLetrRkyM5397KlFsDw=
-github.com/horchestra/targets/host v0.4.1/go.mod h1:f5lNE5lguuBxsfsybp/nPuV7G6OcICJh1T804UjRqKM=
+github.com/horchestra/targets/host v0.4.3 h1:YdGcsP+UXGL6RHQCy+zKMwvG/DmyGh8NfSaPwaGDoJg=
+github.com/horchestra/targets/host v0.4.3/go.mod h1:f5lNE5lguuBxsfsybp/nPuV7G6OcICJh1T804UjRqKM=
 github.com/huandu/xstrings v1.5.0 h1:2ag3IFq9ZDANvthTwTiqSSZLjDc+BedvHPAp5tJy2TI=
 github.com/huandu/xstrings v1.5.0/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=

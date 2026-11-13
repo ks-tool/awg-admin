@@ -4,5 +4,6 @@ _tmp/
 cmd/dist
 /dist/
 frontend/node_modules
+internal/deploy/agentbin/
 
 .DS_Store

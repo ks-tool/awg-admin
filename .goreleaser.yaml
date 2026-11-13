@@ -24,6 +24,7 @@ project_name: vpn-admin
 
 before:
   hooks:
+    - go run ./scripts/download-host-agents.go
     - sh -c "cd frontend && npm ci"
     - make frontend
 
