@@ -203,7 +203,7 @@ export function AgentDeployment({server, onChanged, onBusyChange}: {
             {deployError && !busy && <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">{deployError}</p>}
 
             {addingAgent && (
-                <ArtifactDeploymentModal kind="agent" busy={busy} onClose={() => setAddingAgent(false)} onDeploy={deployment => {
+                <ArtifactDeploymentModal kind="agent" server={server} busy={busy} onClose={() => setAddingAgent(false)} onDeploy={deployment => {
                     setAddingAgent(false);
                     void start({kind: 'agent', deployment});
                 }} />

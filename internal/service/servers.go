@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/deploy"
@@ -298,6 +300,37 @@ func (s *Service) UnlockServerSudo(id string, password string, applyToAll bool) 
 	return nil
 }
 
+func (s *Service) configureAgentDeployment(srv *models.Server, settings *models.AgentDeploymentSettings) error {
+	if settings == nil {
+		return nil
+	}
+	address := strings.TrimSpace(settings.Address)
+	if len(address) == 0 {
+		return fmt.Errorf("agent address is required")
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || len(host) == 0 {
+		return fmt.Errorf("agent address must be in host:port format")
+	}
+	portNumber, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || portNumber == 0 {
+		return fmt.Errorf("agent address must contain a valid TCP port")
+	}
+	if !settings.MTLS && host != "127.0.0.1" && host != "::1" && !strings.EqualFold(host, "localhost") {
+		return fmt.Errorf("agent address without mTLS must use a loopback host")
+	}
+
+	srv.Agent.Address = address
+	if settings.MTLS {
+		if err := issueAgentTLS(srv); err != nil {
+			return err
+		}
+	} else {
+		srv.Agent.TLS = nil
+	}
+	return s.store.Servers().Set(srv)
+}
+
 // GenerateAgentTLS (re)issues a CA, server and client certificate for the
 // server's agent and stores them on the server record. The server cert's
 // SAN is derived from Agent.Address so it matches whatever "white" IP or
@@ -312,13 +345,19 @@ func (s *Service) GenerateAgentTLS(id string) (*models.Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := issueAgentTLS(srv); err != nil {
+		return nil, err
+	}
+	return srv, s.store.Servers().Set(srv)
+}
 
+func issueAgentTLS(srv *models.Server) error {
 	host := srv.Agent.Address
 	if h, _, splitErr := net.SplitHostPort(host); splitErr == nil {
 		host = h
 	}
 	if len(host) == 0 {
-		return nil, fmt.Errorf("agent address is required to issue TLS certificates")
+		return fmt.Errorf("agent address is required to issue TLS certificates")
 	}
 
 	var ips []net.IP
@@ -331,11 +370,10 @@ func (s *Service) GenerateAgentTLS(id string) (*models.Server, error) {
 
 	tlsMaterial, err := pki.IssueAgentTLS(srv.Name, ips, dnsNames)
 	if err != nil {
-		return nil, fmt.Errorf("issue agent TLS material: %w", err)
+		return fmt.Errorf("issue agent TLS material: %w", err)
 	}
-
 	srv.Agent.TLS = tlsMaterial
-	return srv, s.store.Servers().Set(srv)
+	return nil
 }
 
 func (s *Service) serverUDPPorts(id uuid.UUID) []uint16 {

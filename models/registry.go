@@ -51,11 +51,18 @@ type RegistryRequest struct {
 	Registry   Registry `json:"registry"`
 }
 
-// AgentDeployment selects either an OCI release or a local vpn-agent binary.
+// AgentDeployment selects either an OCI release or a local vpn-agent binary and
+// optionally updates the agent connection settings before deployment.
 type AgentDeployment struct {
-	Artifact   string   `json:"artifact,omitempty"`
-	BinaryPath string   `json:"binaryPath,omitempty"`
-	Registry   Registry `json:"registry"`
+	Artifact   string                   `json:"artifact,omitempty"`
+	BinaryPath string                   `json:"binaryPath,omitempty"`
+	Registry   Registry                 `json:"registry"`
+	Settings   *AgentDeploymentSettings `json:"settings,omitempty"`
+}
+
+type AgentDeploymentSettings struct {
+	Address string `json:"address"`
+	MTLS    bool   `json:"mtls"`
 }
 
 // ProviderRepository is a provider found under an OCI repository prefix.

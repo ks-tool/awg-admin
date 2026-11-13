@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	packcmd "github.com/horchestra/pack/cmd"
 	"github.com/horchestra/pack/pkg/render"
@@ -40,6 +41,7 @@ const (
 	packTargetName   = "host"
 	packTargetSource = "https://github.com/horchestra/targets/releases/download/host/v0.2.3/pack-target-host_{os}_{arch}.tar.gz"
 	packMirrorURL    = "http://127.0.0.1:8081"
+	packApplyTimeout = 15 * time.Minute
 )
 
 var embeddedPackApply = packcmd.Apply
@@ -147,6 +149,8 @@ func applyPack(ctx context.Context, srv models.Server, item packRelease, passphr
 	if len(srv.SSH.User) > 0 && srv.SSH.User != "root" && len(sudoPassword) > 0 {
 		return fmt.Errorf("pack host target requires passwordless sudo for a non-root SSH user")
 	}
+	ctx, cancel := context.WithTimeout(ctx, packApplyTimeout)
+	defer cancel()
 	root := filepath.Join(cache, "releases")
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err

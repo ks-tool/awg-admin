@@ -62,6 +62,9 @@ func (s *Service) DeployAgentPack(id string, deployment models.AgentDeployment) 
 	if err != nil {
 		return err
 	}
+	if err := s.configureAgentDeployment(srv, deployment.Settings); err != nil {
+		return err
+	}
 
 	s.deployStatus.start(sID)
 	go func() {

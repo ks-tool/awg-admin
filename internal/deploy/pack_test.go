@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	packcmd "github.com/horchestra/pack/cmd"
 	"github.com/ks-tool/vpn-admin/models"
@@ -107,8 +108,12 @@ func TestApplyPackUsesHostTarget(t *testing.T) {
 	original := embeddedPackApply
 	t.Cleanup(func() { embeddedPackApply = original })
 	called := 0
-	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
+	embeddedPackApply = func(ctx context.Context, options packcmd.ApplyOptions) error {
 		called++
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) <= 0 || time.Until(deadline) > packApplyTimeout {
+			t.Fatalf("pack apply deadline = %v, %v", deadline, ok)
+		}
 		if !options.Refresh || options.Env["PACK_SSH_PASSPHRASE"] != "key-passphrase" {
 			t.Fatalf("unexpected apply options: %#v", options)
 		}
