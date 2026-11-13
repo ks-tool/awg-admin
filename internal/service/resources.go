@@ -117,6 +117,18 @@ func (s *Service) GetProviderSchema(serverID, providerName string) (*models.Prov
 	return definition, err
 }
 
+func (s *Service) remoteProviderResources(serverID, provider string) ([]models.Resource, error) {
+	var resources []models.Resource
+	if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
+		var err error
+		resources, err = client.ListResources(ctx, provider)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return resources, nil
+}
+
 func (s *Service) ListProviderResources(serverID, provider string) ([]models.Resource, error) {
 	definition, err := s.GetProviderSchema(serverID, provider)
 	if err != nil {
@@ -136,12 +148,8 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 			localByName[item.Kind+"\x00"+item.Name] = item
 		}
 	}
-	var resources []models.Resource
-	if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
-		var err error
-		resources, err = client.ListResources(ctx, provider)
-		return err
-	}); err != nil {
+	resources, err := s.remoteProviderResources(serverID, provider)
+	if err != nil {
 		return nil, err
 	}
 	result := make([]models.Resource, 0, len(resources))

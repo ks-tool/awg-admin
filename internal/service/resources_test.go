@@ -380,6 +380,45 @@ func TestServerStatusReflectsDegradedProviderResources(t *testing.T) {
 	}
 }
 
+func TestServerStatusDoesNotMigrateSecrets(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	privateKey, err := agentmodels.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	interfaceID := uuid.New()
+	iface := &models.Interface{ID: interfaceID, Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, PrivateKey: privateKey}
+	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
+		t.Fatal(err)
+	}
+	item := models.Resource{
+		ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", Name: "awg0", Generation: 1,
+		Spec: json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`),
+		Status: models.ResourceStatus{
+			ObservedGeneration: 1, Phase: models.ResourceReady,
+			Conditions: []models.Condition{{Type: "Secrets", Status: models.ConditionFalse, Reason: "SecretMigrationPending"}},
+		},
+	}
+	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+		t.Fatal(err)
+	}
+	agent.mu.Lock()
+	agent.awg = true
+	agent.resources["Interface/awg0"] = item
+	agent.mu.Unlock()
+
+	status, err := svc.ServerAgentStatus(server.ID.String())
+	if err != nil || status != models.AgentStatusOK {
+		t.Fatalf("server status = %q, %v", status, err)
+	}
+	agent.mu.Lock()
+	calls := agent.actionCalls
+	agent.mu.Unlock()
+	if calls != 0 {
+		t.Fatalf("health check ran %d secret import actions", calls)
+	}
+}
+
 func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
 	svc, server, _ := newTestServerWithAgent(t)
 	interfaceKey, err := agentmodels.GeneratePrivateKey()

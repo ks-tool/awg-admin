@@ -146,7 +146,7 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 		return models.AgentStatusDegraded, nil
 	}
 	for _, provider := range manifest.Providers {
-		resources, err := s.ListProviderResources(id, provider.Name)
+		resources, err := s.remoteProviderResources(id, provider.Name)
 		if err != nil {
 			log.Warn().Err(err).Str("server_id", id).Str("server_name", srv.Name).Str("provider", provider.Name).Msg("failed to read provider resource health")
 			return models.AgentStatusDegraded, nil
