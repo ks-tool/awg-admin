@@ -20,9 +20,10 @@ import (
 	"fmt"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -39,7 +40,7 @@ func (p *peers) List() ([]models.Peer, error) {
 	return u.Peers, nil
 }
 
-func (p *peers) Get(publicKey agentmodels.Key) (*models.Peer, error) {
+func (p *peers) Get(publicKey awgmodels.Key) (*models.Peer, error) {
 	u, err := (&users{db: p.db}).Get(p.userID)
 	if err != nil {
 		return nil, err
@@ -53,13 +54,13 @@ func (p *peers) Get(publicKey agentmodels.Key) (*models.Peer, error) {
 }
 
 func (p *peers) Set(peer *models.Peer) error {
-	ifacePeer := agentmodels.InterfacePeer{
+	ifacePeer := awgmodels.InterfacePeer{
 		Key: peer.PrivateKey.PublicKey(),
 	}
 	return p.setWithIfacePeer(peer, ifacePeer)
 }
 
-func (p *peers) Delete(key agentmodels.Key) error {
+func (p *peers) Delete(key awgmodels.Key) error {
 	return p.db.Update(func(tx *bolt.Tx) error {
 		ub := tx.Bucket(bktUsers)
 		u, err := get[models.User](ub, idKey(p.userID))
@@ -94,11 +95,11 @@ func (p *peers) Delete(key agentmodels.Key) error {
 
 // SetWithIfacePeer is the preferred variant for callers that have the full
 // InterfacePeer available (AllowedIPs, PSK, keepalive, endpoint).
-func (p *peers) SetWithIfacePeer(peer *models.Peer, ifacePeer agentmodels.InterfacePeer) error {
+func (p *peers) SetWithIfacePeer(peer *models.Peer, ifacePeer awgmodels.InterfacePeer) error {
 	return p.setWithIfacePeer(peer, ifacePeer)
 }
 
-func (p *peers) setWithIfacePeer(peer *models.Peer, ifacePeer agentmodels.InterfacePeer) error {
+func (p *peers) setWithIfacePeer(peer *models.Peer, ifacePeer awgmodels.InterfacePeer) error {
 	return p.db.Update(func(tx *bolt.Tx) error {
 		ub := tx.Bucket(bktUsers)
 		u, err := get[models.User](ub, idKey(p.userID))
@@ -138,7 +139,7 @@ func (p *peers) setWithIfacePeer(peer *models.Peer, ifacePeer agentmodels.Interf
 // ─────────────────────── helpers ────────────────────────────
 
 // upsertIfacePeer adds or replaces an InterfacePeer by public key.
-func upsertIfacePeer(ib *bolt.Bucket, ifaceID uuid.UUID, ip agentmodels.InterfacePeer) error {
+func upsertIfacePeer(ib *bolt.Bucket, ifaceID uuid.UUID, ip awgmodels.InterfacePeer) error {
 	iface, err := get[models.Interface](ib, idKey(ifaceID))
 	if err != nil {
 		return fmt.Errorf("interface %s: %w", ifaceID, err)
@@ -159,7 +160,7 @@ func upsertIfacePeer(ib *bolt.Bucket, ifaceID uuid.UUID, ip agentmodels.Interfac
 
 // removePeerFromInterface removes the peer with the given public key from an
 // interface's peer list.  A missing interface is treated as a no-op.
-func removePeerFromInterface(ib *bolt.Bucket, ifaceID uuid.UUID, pubKey agentmodels.Key) error {
+func removePeerFromInterface(ib *bolt.Bucket, ifaceID uuid.UUID, pubKey awgmodels.Key) error {
 	iface, err := get[models.Interface](ib, idKey(ifaceID))
 	if err != nil {
 		if storage.IsNotFound(err) {

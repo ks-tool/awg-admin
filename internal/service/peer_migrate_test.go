@@ -21,8 +21,9 @@ import (
 	"testing"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // hostPeerIPs returns the /32 (host) AllowedIPs of an interface's peers — the
@@ -46,13 +47,13 @@ func TestTunnelUnifiedPeerPoolAndMigrate(t *testing.T) {
 	srv1 := tunnelTestServer(t, svc, "relay")
 	srv2 := tunnelTestServer(t, svc, "exit")
 
-	entryCfg := agentmodels.InterfaceConfig{Interface: "awg0", Address: "172.23.30.1/24", ListenPort: 53000}
-	agentmodels.GenerateAmneziaParams(&entryCfg)
+	entryCfg := awgmodels.InterfaceConfig{Interface: "awg0", Address: "172.23.30.1/24", ListenPort: 53000}
+	awgmodels.GenerateAmneziaParams(&entryCfg)
 	entry, err := svc.CreateInterface(srv1.ID.String(), entryCfg)
 	if err != nil {
 		t.Fatalf("CreateInterface entry: %v", err)
 	}
-	exit, err := svc.CreateInterface(srv2.ID.String(), agentmodels.InterfaceConfig{Interface: "awg0", Address: "10.8.8.1/24", ListenPort: 51820})
+	exit, err := svc.CreateInterface(srv2.ID.String(), awgmodels.InterfaceConfig{Interface: "awg0", Address: "10.8.8.1/24", ListenPort: 51820})
 	if err != nil {
 		t.Fatalf("CreateInterface exit: %v", err)
 	}
@@ -145,11 +146,11 @@ func TestMigratePeerReassignsOnCollision(t *testing.T) {
 	srvB := tunnelTestServer(t, svc, "B")
 
 	// Same subnet on two different servers — allowed (uniqueness is per-server).
-	ifaceA, err := svc.CreateInterface(srvA.ID.String(), agentmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820})
+	ifaceA, err := svc.CreateInterface(srvA.ID.String(), awgmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820})
 	if err != nil {
 		t.Fatalf("CreateInterface A: %v", err)
 	}
-	ifaceB, err := svc.CreateInterface(srvB.ID.String(), agentmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820})
+	ifaceB, err := svc.CreateInterface(srvB.ID.String(), awgmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820})
 	if err != nil {
 		t.Fatalf("CreateInterface B: %v", err)
 	}

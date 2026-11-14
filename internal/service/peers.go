@@ -23,9 +23,10 @@ import (
 	"time"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 
 	"github.com/rs/zerolog/log"
 )
@@ -75,7 +76,7 @@ func (s *Service) GetPeer(userID string, publicKey string) (*models.Peer, error)
 	if err != nil {
 		return nil, err
 	}
-	pk, err := agentmodels.ParseKey(publicKey)
+	pk, err := awgmodels.ParseKey(publicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -114,14 +115,14 @@ func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) 
 		return nil, err
 	}
 
-	var privKey agentmodels.Key
+	var privKey awgmodels.Key
 	if k := strings.TrimSpace(in.PrivateKey); k != "" {
-		privKey, err = agentmodels.ParseKey(k)
+		privKey, err = awgmodels.ParseKey(k)
 		if err != nil {
 			return nil, fmt.Errorf("parse private key: %w", err)
 		}
 	} else {
-		privKey, err = agentmodels.GeneratePrivateKey()
+		privKey, err = awgmodels.GeneratePrivateKey()
 		if err != nil {
 			return nil, fmt.Errorf("generate key: %w", err)
 		}
@@ -129,19 +130,19 @@ func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) 
 
 	peer := &models.Peer{Name: in.Name, PrivateKey: privKey, InterfaceId: in.InterfaceID, DNS: in.DNS}
 
-	ifacePeer := agentmodels.InterfacePeer{
+	ifacePeer := awgmodels.InterfacePeer{
 		Key:        privKey.PublicKey(),
 		AllowedIPs: in.AllowedIPs,
 		Endpoint:   in.Endpoint,
 	}
 	if in.WithPresharedKey {
-		psk, err := agentmodels.GenerateKey()
+		psk, err := awgmodels.GenerateKey()
 		if err != nil {
 			return nil, fmt.Errorf("generate PSK: %w", err)
 		}
 		ifacePeer.PresharedKey = &psk
 	} else if k := strings.TrimSpace(in.PresharedKey); k != "" {
-		psk, err := agentmodels.ParseKey(k)
+		psk, err := awgmodels.ParseKey(k)
 		if err != nil {
 			return nil, fmt.Errorf("parse preshared key: %w", err)
 		}
@@ -154,7 +155,7 @@ func (s *Service) AddPeer(userID string, in AddPeerInput) (*models.User, error) 
 
 	ps := s.store.Users().Peers(uID)
 	if ext, ok := ps.(interface {
-		SetWithIfacePeer(*models.Peer, agentmodels.InterfacePeer) error
+		SetWithIfacePeer(*models.Peer, awgmodels.InterfacePeer) error
 	}); ok {
 		// bbolt path: stores peer + interface peer in one transaction
 		if err = ext.SetWithIfacePeer(peer, ifacePeer); err != nil {
@@ -183,7 +184,7 @@ func (s *Service) DeletePeer(userID string, key string) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	pk, err := agentmodels.ParseKey(key)
+	pk, err := awgmodels.ParseKey(key)
 	if err != nil {
 		return nil, err
 	}
@@ -213,8 +214,8 @@ func (s *Service) DeletePeer(userID string, key string) (*models.User, error) {
 
 // SetPeerDisabled activates or deactivates a peer, mirroring the interface-level
 // Disabled toggle. A deactivated peer keeps its stored config (keys, address,
-// PSK, keepalive) but is dropped from the InterfaceConfig pushed to the agent
-// (ToAmneziaConfig omits it), so it's removed from the live WireGuard device and
+// PSK, keepalive) but is omitted by the AWG provider when it builds the live
+// device configuration, so the peer is removed from the WireGuard device and
 // can't connect until reactivated. Both the user's models.Peer and the owning
 // interface's InterfacePeer carry the flag; both are updated in one storage
 // write, then the interface is re-pushed. Returns the updated (sanitized) user.
@@ -224,7 +225,7 @@ func (s *Service) SetPeerDisabled(userID, publicKey string, disabled bool) (*mod
 	if err != nil {
 		return nil, invalidInput("invalid user id %q", userID)
 	}
-	pk, err := agentmodels.ParseKey(publicKey)
+	pk, err := awgmodels.ParseKey(publicKey)
 	if err != nil {
 		return nil, invalidInput("invalid peer public key")
 	}
@@ -245,7 +246,7 @@ func (s *Service) SetPeerDisabled(userID, publicKey string, disabled bool) (*mod
 	if err != nil {
 		return nil, fmt.Errorf("load interface: %w", err)
 	}
-	var ifacePeer *agentmodels.InterfacePeer
+	var ifacePeer *awgmodels.InterfacePeer
 	for i := range iface.Peers {
 		if iface.Peers[i].Key == pk {
 			cp := iface.Peers[i]
@@ -262,7 +263,7 @@ func (s *Service) SetPeerDisabled(userID, publicKey string, disabled bool) (*mod
 
 	ps := s.store.Users().Peers(uID)
 	if ext, ok := ps.(interface {
-		SetWithIfacePeer(*models.Peer, agentmodels.InterfacePeer) error
+		SetWithIfacePeer(*models.Peer, awgmodels.InterfacePeer) error
 	}); ok {
 		if err = ext.SetWithIfacePeer(peer, *ifacePeer); err != nil {
 			return nil, err
@@ -292,7 +293,7 @@ func (s *Service) MigratePeer(userID, publicKey, targetIfaceID string) (*models.
 	if err != nil {
 		return nil, invalidInput("invalid user id %q", userID)
 	}
-	pk, err := agentmodels.ParseKey(publicKey)
+	pk, err := awgmodels.ParseKey(publicKey)
 	if err != nil {
 		return nil, invalidInput("invalid peer public key")
 	}
@@ -319,7 +320,7 @@ func (s *Service) MigratePeer(userID, publicKey, targetIfaceID string) (*models.
 	if err != nil {
 		return nil, fmt.Errorf("load source interface: %w", err)
 	}
-	var srcIfacePeer *agentmodels.InterfacePeer
+	var srcIfacePeer *awgmodels.InterfacePeer
 	for i := range sourceIface.Peers {
 		if sourceIface.Peers[i].Key == pk {
 			cp := sourceIface.Peers[i]
@@ -372,7 +373,7 @@ func (s *Service) MigratePeer(userID, publicKey, targetIfaceID string) (*models.
 		Disabled:    peer.Disabled,
 		DNS:         peer.DNS,
 	}
-	newIfacePeer := agentmodels.InterfacePeer{
+	newIfacePeer := awgmodels.InterfacePeer{
 		Key:               srcIfacePeer.Key,
 		PresharedKey:      srcIfacePeer.PresharedKey,
 		AllowedIPs:        newAllowedIPs,
@@ -382,7 +383,7 @@ func (s *Service) MigratePeer(userID, publicKey, targetIfaceID string) (*models.
 	}
 	ps := s.store.Users().Peers(uID)
 	if ext, ok := ps.(interface {
-		SetWithIfacePeer(*models.Peer, agentmodels.InterfacePeer) error
+		SetWithIfacePeer(*models.Peer, awgmodels.InterfacePeer) error
 	}); ok {
 		if err = ext.SetWithIfacePeer(newPeer, newIfacePeer); err != nil {
 			return nil, err

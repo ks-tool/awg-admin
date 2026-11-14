@@ -19,17 +19,15 @@ package service
 import (
 	"testing"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
-// TestSetPeerDisabledTogglesDeviceConfig verifies the peer-deactivation toggle
-// end to end at the service layer: it flips both the user's models.Peer.Disabled
-// and the owning interface's InterfacePeer.Disabled, preserves the rest of the
-// interface peer (its auto-assigned AllowedIPs), and — through ToAmneziaConfig —
-// drops the peer from the pushed device config while deactivated and restores it
-// on reactivation.
-func TestSetPeerDisabledTogglesDeviceConfig(t *testing.T) {
+// TestSetPeerDisabledTogglesInterfaceConfig verifies the peer-deactivation toggle
+// in both the user and the desired interface configuration. The AWG provider's
+// device conversion tests cover omitting disabled peers from the live device.
+func TestSetPeerDisabledTogglesInterfaceConfig(t *testing.T) {
 	svc := newTestService(t)
 
 	srv, err := svc.CreateServer(ServerInput{
@@ -39,7 +37,7 @@ func TestSetPeerDisabledTogglesDeviceConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateServer: %v", err)
 	}
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface:  "wg0",
 		Address:    "10.0.0.1/24",
 		ListenPort: 51820,
@@ -58,13 +56,13 @@ func TestSetPeerDisabledTogglesDeviceConfig(t *testing.T) {
 	// The exposed "PrivateKey" is actually the public key (see sanitizePeer).
 	pub := u.Peers[0].PrivateKey
 
-	// A freshly added peer is active and present in the device config.
+	// A freshly added peer is active and present in the interface config.
 	before, err := svc.GetInterface(srv.ID.String(), iface.ID.String())
 	if err != nil {
 		t.Fatalf("GetInterface: %v", err)
 	}
-	if len(before.ToAmneziaConfig().Peers) != 1 {
-		t.Fatalf("expected the new peer in the device config, got %d", len(before.ToAmneziaConfig().Peers))
+	if len(before.Peers) != 1 {
+		t.Fatalf("expected the new peer in the interface config, got %d", len(before.Peers))
 	}
 	if len(before.Peers[0].AllowedIPs) == 0 {
 		t.Fatalf("expected an auto-assigned AllowedIP on the peer")
@@ -90,9 +88,6 @@ func TestSetPeerDisabledTogglesDeviceConfig(t *testing.T) {
 	if len(off.Peers[0].AllowedIPs) == 0 || off.Peers[0].AllowedIPs[0] != before.Peers[0].AllowedIPs[0] {
 		t.Fatalf("AllowedIPs not preserved across disable: %v -> %v", before.Peers[0].AllowedIPs, off.Peers[0].AllowedIPs)
 	}
-	if got := len(off.ToAmneziaConfig().Peers); got != 0 {
-		t.Fatalf("disabled peer must be omitted from device config, got %d peers", got)
-	}
 
 	// ---- Reactivate --------------------------------------------------------
 	ru, err := svc.SetPeerDisabled(user.ID.String(), pub.String(), false)
@@ -109,8 +104,8 @@ func TestSetPeerDisabledTogglesDeviceConfig(t *testing.T) {
 	if on.Peers[0].Disabled {
 		t.Fatalf("interface peer still disabled after reactivation")
 	}
-	if got := len(on.ToAmneziaConfig().Peers); got != 1 {
-		t.Fatalf("reactivated peer must be back in device config, got %d peers", got)
+	if got := len(on.Peers); got != 1 {
+		t.Fatalf("reactivated peer must be back in interface config, got %d peers", got)
 	}
 }
 

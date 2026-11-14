@@ -25,6 +25,8 @@ import (
 	"sync"
 	"testing"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
 	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
@@ -34,19 +36,19 @@ import (
 // without pulling in the agent module's wgctrl dependency.
 type fakeAgent struct {
 	mu           sync.Mutex
-	store        map[string]agentmodels.InterfaceConfig
+	store        map[string]awgmodels.InterfaceConfig
 	replacePeers map[string]bool
 }
 
 func newFakeAgent() *httptest.Server {
 	fa := &fakeAgent{
-		store:        make(map[string]agentmodels.InterfaceConfig),
+		store:        make(map[string]awgmodels.InterfaceConfig),
 		replacePeers: make(map[string]bool),
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /interfaces", func(w http.ResponseWriter, r *http.Request) {
-		var cfg agentmodels.InterfaceConfig
+		var cfg awgmodels.InterfaceConfig
 		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -64,7 +66,7 @@ func newFakeAgent() *httptest.Server {
 	mux.HandleFunc("GET /interfaces/", func(w http.ResponseWriter, r *http.Request) {
 		fa.mu.Lock()
 		defer fa.mu.Unlock()
-		out := make([]agentmodels.InterfaceConfig, 0, len(fa.store))
+		out := make([]awgmodels.InterfaceConfig, 0, len(fa.store))
 		for _, cfg := range fa.store {
 			out = append(out, cfg)
 		}
@@ -127,7 +129,7 @@ func TestClientSetGetListDelete(t *testing.T) {
 	c := New(srv.Client(), srv.URL)
 	ctx := context.Background()
 
-	cfg := agentmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820}
+	cfg := awgmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820}
 	if err := c.Set(ctx, cfg); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
@@ -218,7 +220,7 @@ func TestClientMutationsAreMarkedIdempotent(t *testing.T) {
 	c := New(httpClient, srv.URL)
 	ctx := context.Background()
 
-	cfg := agentmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820}
+	cfg := awgmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820}
 	if err := c.Set(ctx, cfg); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
@@ -269,7 +271,7 @@ func TestClientSetRejectsMissingInterfaceName(t *testing.T) {
 	defer srv.Close()
 
 	c := New(srv.Client(), srv.URL)
-	if err := c.Set(context.Background(), agentmodels.InterfaceConfig{}); err == nil {
+	if err := c.Set(context.Background(), awgmodels.InterfaceConfig{}); err == nil {
 		t.Fatal("expected error for missing interface name, got nil")
 	}
 }
@@ -313,9 +315,9 @@ func TestClientSetForceReplacePeers(t *testing.T) {
 	httpClient := srv.Client()
 	httpClient.Transport = rt
 	c := New(httpClient, srv.URL)
-	if err := c.SetForceReplacePeers(context.Background(), agentmodels.InterfaceConfig{
+	if err := c.SetForceReplacePeers(context.Background(), awgmodels.InterfaceConfig{
 		Interface: "wg0",
-		Peers:     []agentmodels.InterfacePeer{{}},
+		Peers:     []awgmodels.InterfacePeer{{}},
 	}); err != nil {
 		t.Fatalf("SetForceReplacePeers: %v", err)
 	}

@@ -17,12 +17,14 @@
 package service
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // tunnelTestServer creates a server whose agent is unreachable (127.0.0.1:1
@@ -50,15 +52,15 @@ func TestBuildAndRemoveTunnel(t *testing.T) {
 	// now — CreateInterface no longer auto-generates them), matching what the UI
 	// sends via GenerateInterfaceDefaults, so the tunnel has params to copy to
 	// the exit.
-	entryCfg := agentmodels.InterfaceConfig{
+	entryCfg := awgmodels.InterfaceConfig{
 		Interface: "awg0", Address: "172.23.24.2/24", ListenPort: 53053,
 	}
-	agentmodels.GenerateAmneziaParams(&entryCfg)
+	awgmodels.GenerateAmneziaParams(&entryCfg)
 	entry, err := svc.CreateInterface(srv1.ID.String(), entryCfg)
 	if err != nil {
 		t.Fatalf("CreateInterface entry: %v", err)
 	}
-	exit, err := svc.CreateInterface(srv2.ID.String(), agentmodels.InterfaceConfig{
+	exit, err := svc.CreateInterface(srv2.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "awg0", Address: "10.9.9.1/24", ListenPort: 51820,
 	})
 	if err != nil {
@@ -66,9 +68,9 @@ func TestBuildAndRemoveTunnel(t *testing.T) {
 	}
 
 	// A client peer on the entry — must survive the tunnel build.
-	clientKey, _ := agentmodels.GeneratePrivateKey()
+	clientKey, _ := awgmodels.GeneratePrivateKey()
 	entryStored, _ := svc.store.Servers().Interfaces(srv1.ID).Get(entry.ID)
-	entryStored.Peers = append(entryStored.Peers, agentmodels.InterfacePeer{
+	entryStored.Peers = append(entryStored.Peers, awgmodels.InterfacePeer{
 		Key: clientKey.PublicKey(), AllowedIPs: []string{"172.23.24.10/32"},
 	})
 	if err := svc.store.Servers().Interfaces(srv1.ID).Set(entryStored); err != nil {
@@ -143,11 +145,41 @@ func TestBuildAndRemoveTunnel(t *testing.T) {
 	if p.KeepaliveInterval != 10*time.Second {
 		t.Errorf("exit peer keepalive = %v, want 10s", p.KeepaliveInterval)
 	}
+	xi.Peers[0].AllowedIPs = []string{"172.23.24.2/32"}
+	xi.Tunnel = nil
+	ei.Tunnel = nil
+	if err := svc.store.Servers().Interfaces(srv1.ID).Set(ei); err != nil {
+		t.Fatal(err)
+	}
+	tunnelPeer, resourceName, resourceSpec, err := svc.legacyTunnelPeer(xi)
+	if err != nil {
+		t.Fatalf("legacyTunnelPeer: %v", err)
+	}
+	if len(tunnelPeer.AllowedIPs) != 1 || tunnelPeer.AllowedIPs[0] != "172.23.24.0/24" {
+		t.Errorf("exit peer AllowedIPs after repair = %v, want [172.23.24.0/24]", tunnelPeer.AllowedIPs)
+	}
+	if resourceName != "tunnel-"+xi.ID.String() {
+		t.Errorf("tunnel resource name = %q", resourceName)
+	}
+	var tunnelSpec struct {
+		InterfaceRef string   `json:"interfaceRef"`
+		AllowedIPs   []string `json:"allowedIPs"`
+	}
+	if err := json.Unmarshal(resourceSpec, &tunnelSpec); err != nil {
+		t.Fatal(err)
+	}
+	if tunnelSpec.InterfaceRef != xi.ID.String() || len(tunnelSpec.AllowedIPs) != 1 || tunnelSpec.AllowedIPs[0] != "172.23.24.0/24" {
+		t.Errorf("tunnel resource spec = %+v", tunnelSpec)
+	}
 	if p.Key != entryStored.PrivateKey.PublicKey() {
 		t.Errorf("exit peer key is not the entry's public key")
 	}
 	if !hooksContain(xi.PreUp, "MASQUERADE") {
 		t.Errorf("exit PreUp missing MASQUERADE: %v", xi.PreUp)
+	}
+	ei.Tunnel = &tun.ID
+	if err := svc.store.Servers().Interfaces(srv1.ID).Set(ei); err != nil {
+		t.Fatal(err)
 	}
 
 	// --- ListTunnels ---

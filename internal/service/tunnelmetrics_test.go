@@ -20,18 +20,18 @@ import (
 	"encoding/hex"
 	"testing"
 
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
 )
 
 func TestGetTunnelMetricsMatchesDestinationPublicKey(t *testing.T) {
 	svc := newTestService(t)
 	sourceServer, sourceAgent := newLinkTestServer(t, svc, "a")
 	targetServer, _ := newLinkTestServer(t, svc, "b")
-	source, err := svc.CreateInterface(sourceServer.ID.String(), agentmodels.InterfaceConfig{Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820})
+	source, err := svc.CreateInterface(sourceServer.ID.String(), awgmodels.InterfaceConfig{Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820})
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := svc.CreateInterface(targetServer.ID.String(), agentmodels.InterfaceConfig{Interface: "awg0", Address: "10.0.0.2/24", ListenPort: 51820})
+	target, err := svc.CreateInterface(targetServer.ID.String(), awgmodels.InterfaceConfig{Interface: "awg0", Address: "10.0.0.2/24", ListenPort: 51820})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,9 +42,9 @@ func TestGetTunnelMetricsMatchesDestinationPublicKey(t *testing.T) {
 	p95 := 87.5
 	targetKey := target.PrivateKey.PublicKey()
 	sourceAgent.mu.Lock()
-	sourceAgent.metrics[source.Interface] = agentmodels.InterfaceSnapshot{
+	sourceAgent.metrics[source.Interface] = awgmodels.InterfaceSnapshot{
 		Interface: source.Interface,
-		Peers:     []agentmodels.PeerSnapshot{{PublicKey: hex.EncodeToString(targetKey[:]), LatencyP95Ms: &p95}},
+		Peers:     []awgmodels.PeerSnapshot{{PublicKey: hex.EncodeToString(targetKey[:]), LatencyP95Ms: &p95}},
 	}
 	sourceAgent.mu.Unlock()
 

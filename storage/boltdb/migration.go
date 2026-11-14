@@ -28,8 +28,9 @@ import (
 	"time"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/crypto/bcrypt"
@@ -471,7 +472,7 @@ func secretMigrationCondition() models.Condition {
 	}
 }
 
-func publicKey(privateKey agentmodels.Key) string {
+func publicKey(privateKey awgmodels.Key) string {
 	publicKey := privateKey.PublicKey()
 	return publicKey.String()
 }

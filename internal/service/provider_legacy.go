@@ -20,12 +20,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"slices"
 	"time"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func legacyInterfaceSpec(iface *models.Interface) (json.RawMessage, error) {
@@ -43,9 +46,9 @@ func legacyInterfaceSpec(iface *models.Interface) (json.RawMessage, error) {
 	return json.Marshal(spec)
 }
 
-func (s *Service) legacyPeerSpec(user *models.User, peer *models.Peer, iface *models.Interface) (json.RawMessage, agentmodels.InterfacePeer, error) {
+func (s *Service) legacyPeerSpec(user *models.User, peer *models.Peer, iface *models.Interface) (json.RawMessage, awgmodels.InterfacePeer, error) {
 	publicKey := peerPublicKey(peer)
-	var configured agentmodels.InterfacePeer
+	var configured awgmodels.InterfacePeer
 	for _, candidate := range iface.Peers {
 		if candidate.Key.String() == publicKey {
 			configured = candidate
@@ -69,6 +72,56 @@ func (s *Service) legacyPeerSpec(user *models.User, peer *models.Peer, iface *mo
 	}
 	spec, err := json.Marshal(values)
 	return spec, configured, err
+}
+
+func (s *Service) legacyTunnelPeer(iface *models.Interface) (awgmodels.InterfacePeer, string, json.RawMessage, error) {
+	servers, err := s.store.Servers().List()
+	if err != nil {
+		return awgmodels.InterfacePeer{}, "", nil, err
+	}
+	for _, server := range servers {
+		interfaces, err := s.store.Servers().Interfaces(server.ID).List()
+		if err != nil {
+			return awgmodels.InterfacePeer{}, "", nil, err
+		}
+		for _, other := range interfaces {
+			if other.ID == iface.ID || iface.Tunnel == nil && other.Tunnel == nil && iface.Table == 0 && other.Table == 0 {
+				continue
+			}
+			publicKey := other.PrivateKey.PublicKey()
+			reciprocal := false
+			for _, peer := range other.Peers {
+				if peer.Key == iface.PrivateKey.PublicKey() {
+					reciprocal = true
+					break
+				}
+			}
+			if !reciprocal {
+				continue
+			}
+			for index := range iface.Peers {
+				peer := &iface.Peers[index]
+				if peer.Key != publicKey {
+					continue
+				}
+				if other.Table != 0 {
+					_, subnet, err := net.ParseCIDR(iface.Address)
+					if err != nil {
+						return awgmodels.InterfacePeer{}, "", nil, fmt.Errorf("tunnel exit address: %w", err)
+					}
+					peer.AllowedIPs = []string{subnet.String()}
+				}
+				name := "tunnel-" + iface.ID.String()
+				spec, err := json.Marshal(map[string]any{
+					"name": "Tunnel peer", "interfaceRef": iface.ID.String(), "publicKey": publicKey.String(),
+					"allowedIPs": peer.AllowedIPs, "disabled": peer.Disabled,
+					"keepaliveSeconds": int(peer.KeepaliveInterval.Seconds()),
+				})
+				return *peer, name, spec, err
+			}
+		}
+	}
+	return awgmodels.InterfacePeer{}, "", nil, nil
 }
 
 func (s *Service) pushProviderInterface(serverID uuid.UUID, iface *models.Interface) (bool, error) {
@@ -135,6 +188,33 @@ func (s *Service) pushProviderInterface(serverID uuid.UUID, iface *models.Interf
 		return true, err
 	}
 	expected := make(map[string]struct{})
+	peer, name, spec, err := s.legacyTunnelPeer(iface)
+	if err != nil {
+		return true, err
+	}
+	if len(name) > 0 {
+		publicKey := peer.Key.String()
+		expected[publicKey] = struct{}{}
+		existing := s.findProviderPeer(serverID, iface.ID, publicKey)
+		if _, err := s.PutProviderResource(serverID.String(), "awg", "Peer", name, spec); err != nil {
+			return true, err
+		}
+		if existing == nil && peer.PresharedKey != nil {
+			supported, err := s.peerSupportsPresharedOnlyImport(serverID.String())
+			if err != nil {
+				return true, err
+			}
+			if supported {
+				arguments, err := json.Marshal(map[string]string{"presharedKey": peer.PresharedKey.String()})
+				if err != nil {
+					return true, err
+				}
+				if _, err := s.RunProviderResourceAction(serverID.String(), "awg", "Peer", name, "importSecret", arguments); err != nil {
+					return true, err
+				}
+			}
+		}
+	}
 	for userIndex := range users {
 		user := &users[userIndex]
 		for peerIndex := range user.Peers {
@@ -208,7 +288,34 @@ func (s *Service) findProviderPeer(serverID uuid.UUID, interfaceID uuid.UUID, pu
 	return nil
 }
 
-func (s *Service) importLegacyPeerSecret(serverID, name string, peer *models.Peer, configured agentmodels.InterfacePeer) error {
+func (s *Service) peerSupportsPresharedOnlyImport(serverID string) (bool, error) {
+	definition, err := s.GetProviderSchema(serverID, "awg")
+	if err != nil {
+		return false, err
+	}
+	for _, resource := range definition.Resources {
+		if resource.Kind != "Peer" {
+			continue
+		}
+		for _, action := range resource.Actions {
+			if action.Name != "importSecret" {
+				continue
+			}
+			var schema struct {
+				Required   []string                   `json:"required"`
+				Properties map[string]json.RawMessage `json:"properties"`
+			}
+			if err := json.Unmarshal(action.ArgumentsSchema, &schema); err != nil {
+				return false, err
+			}
+			_, hasPresharedKey := schema.Properties["presharedKey"]
+			return hasPresharedKey && !slices.Contains(schema.Required, "privateKey"), nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Service) importLegacyPeerSecret(serverID, name string, peer *models.Peer, configured awgmodels.InterfacePeer) error {
 	arguments := map[string]string{"privateKey": peer.PrivateKey.String()}
 	if configured.PresharedKey != nil {
 		arguments["presharedKey"] = configured.PresharedKey.String()
@@ -249,7 +356,7 @@ func (s *Service) removeLegacyResource(serverID string, resource models.Resource
 		if err != nil {
 			return nil
 		}
-		publicKey, err := agentmodels.ParseKey(spec.PublicKey)
+		publicKey, err := awgmodels.ParseKey(spec.PublicKey)
 		if err != nil {
 			return nil
 		}
@@ -281,7 +388,7 @@ func (s *Service) syncLegacyResource(serverID string, resource models.Resource) 
 		if err != nil && !storage.IsNotFound(err) {
 			return err
 		}
-		cfg := agentmodels.InterfaceConfig{}
+		cfg := awgmodels.InterfaceConfig{}
 		if iface != nil {
 			cfg = iface.InterfaceConfig
 		}
@@ -367,7 +474,7 @@ func (s *Service) syncLegacyResource(serverID string, resource models.Resource) 
 					configured.KeepaliveInterval = time.Duration(spec.KeepaliveSeconds) * time.Second
 					peers := s.store.Users().Peers(userID)
 					if extended, ok := peers.(interface {
-						SetWithIfacePeer(*models.Peer, agentmodels.InterfacePeer) error
+						SetWithIfacePeer(*models.Peer, awgmodels.InterfacePeer) error
 					}); ok {
 						return extended.SetWithIfacePeer(peer, *configured)
 					}

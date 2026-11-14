@@ -26,8 +26,9 @@ import (
 	"time"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -384,7 +385,7 @@ func createLegacyFixture(t *testing.T, path string, corruptUsers bool) legacyFix
 		if err := put(tx.Bucket(bktServers), idKey(fixture.serverB), serverB); err != nil {
 			return err
 		}
-		ifaceA := models.Interface{ID: fixture.ifaceA, Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, Table: 100, PrivateKey: privateKey, Peers: []agentmodels.InterfacePeer{{Key: peerKey.PublicKey(), AllowedIPs: []string{"10.0.0.2/32"}}}, PreUp: []string{"private-hook"}, InSync: true, LastSyncedAt: time.Now(), Tunnel: &fixture.tunnel}
+		ifaceA := models.Interface{ID: fixture.ifaceA, Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, Table: 100, PrivateKey: privateKey, Peers: []awgmodels.InterfacePeer{{Key: peerKey.PublicKey(), AllowedIPs: []string{"10.0.0.2/32"}}}, PreUp: []string{"private-hook"}, InSync: true, LastSyncedAt: time.Now(), Tunnel: &fixture.tunnel}
 		ifaceB := models.Interface{ID: fixture.ifaceB, Interface: "awg0", Address: "10.0.0.2/24", PrivateKey: mustKey(t), InSync: true, Tunnel: &fixture.tunnel}
 		if err := put(tx.Bucket(bktInterfaces), idKey(fixture.ifaceA), ifaceA); err != nil {
 			return err

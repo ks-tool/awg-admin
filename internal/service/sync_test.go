@@ -27,6 +27,8 @@ import (
 	"sync"
 	"testing"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/internal/pki"
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage/boltdb"
@@ -39,9 +41,9 @@ import (
 // tests can assert pushes actually happened.
 type fakeAgentTLS struct {
 	mu              sync.Mutex
-	store           map[string]agentmodels.InterfaceConfig
+	store           map[string]awgmodels.InterfaceConfig
 	replacePeers    map[string]bool
-	metrics         map[string]agentmodels.InterfaceSnapshot
+	metrics         map[string]awgmodels.InterfaceSnapshot
 	resources       map[string]models.Resource
 	schemaCalls     int
 	actionCalls     int
@@ -67,9 +69,9 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 	t.Helper()
 
 	fa := &fakeAgentTLS{
-		store:        make(map[string]agentmodels.InterfaceConfig),
+		store:        make(map[string]awgmodels.InterfaceConfig),
 		replacePeers: make(map[string]bool),
-		metrics:      make(map[string]agentmodels.InterfaceSnapshot),
+		metrics:      make(map[string]awgmodels.InterfaceSnapshot),
 		resources:    make(map[string]models.Resource),
 		sources:      make(map[string]string),
 		info:         agentmodels.HostInfo{Backend: "kernel", Version: "test", InterfaceKinds: []string{"amneziawg", "wireguard"}},
@@ -108,7 +110,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 		_ = json.NewEncoder(w).Encode(info)
 	})
 	mux.HandleFunc("PUT /interfaces", func(w http.ResponseWriter, r *http.Request) {
-		var cfg agentmodels.InterfaceConfig
+		var cfg awgmodels.InterfaceConfig
 		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -137,7 +139,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 			http.NotFound(w, r)
 			return
 		}
-		out := make([]agentmodels.InterfaceConfig, 0, len(fa.store))
+		out := make([]awgmodels.InterfaceConfig, 0, len(fa.store))
 		for _, cfg := range fa.store {
 			out = append(out, cfg)
 		}
@@ -292,7 +294,7 @@ func newFakeAgentTLS(t *testing.T) (*httptest.Server, *models.AgentTLS, *fakeAge
 	return ts, tlsMaterial, fa
 }
 
-func (fa *fakeAgentTLS) get(name string) (agentmodels.InterfaceConfig, bool) {
+func (fa *fakeAgentTLS) get(name string) (awgmodels.InterfaceConfig, bool) {
 	fa.mu.Lock()
 	defer fa.mu.Unlock()
 	cfg, ok := fa.store[name]
@@ -302,7 +304,7 @@ func (fa *fakeAgentTLS) get(name string) (agentmodels.InterfaceConfig, bool) {
 func (fa *fakeAgentTLS) clear() {
 	fa.mu.Lock()
 	defer fa.mu.Unlock()
-	fa.store = make(map[string]agentmodels.InterfaceConfig)
+	fa.store = make(map[string]awgmodels.InterfaceConfig)
 	fa.replacePeers = make(map[string]bool)
 }
 
@@ -324,7 +326,7 @@ func newTestService(t *testing.T) *Service {
 	return svc
 }
 
-func mustParseKey(t *testing.T, k agentmodels.Key) string {
+func mustParseKey(t *testing.T, k awgmodels.Key) string {
 	t.Helper()
 	return k.String()
 }
@@ -348,7 +350,7 @@ func TestInterfaceAndPeerMutationsPushToAgent(t *testing.T) {
 	}
 
 	// Create: should push immediately and come back InSync.
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface:  "wg0",
 		Address:    "10.0.0.1/24",
 		ListenPort: 51820,
@@ -364,7 +366,7 @@ func TestInterfaceAndPeerMutationsPushToAgent(t *testing.T) {
 	}
 
 	// Update: should re-push with the new address.
-	updated, err := svc.UpdateInterfaceConfig(srv.ID.String(), iface.ID.String(), agentmodels.InterfaceConfig{
+	updated, err := svc.UpdateInterfaceConfig(srv.ID.String(), iface.ID.String(), awgmodels.InterfaceConfig{
 		Interface:  "wg0",
 		Address:    "10.0.0.2/24",
 		ListenPort: 51821,
@@ -436,7 +438,7 @@ func TestDeleteInterfaceCascadesPeers(t *testing.T) {
 		t.Fatalf("CreateServer: %v", err)
 	}
 
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	})
 	if err != nil {
@@ -501,7 +503,7 @@ func TestRenameInterfaceDeletesOldNameOnAgent(t *testing.T) {
 		t.Fatalf("CreateServer: %v", err)
 	}
 
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	})
 	if err != nil {
@@ -512,7 +514,7 @@ func TestRenameInterfaceDeletesOldNameOnAgent(t *testing.T) {
 	}
 
 	// Rename wg0 -> awg0 (keeping the same UUID, address and port).
-	if _, err = svc.UpdateInterfaceConfig(srv.ID.String(), iface.ID.String(), agentmodels.InterfaceConfig{
+	if _, err = svc.UpdateInterfaceConfig(srv.ID.String(), iface.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	}); err != nil {
 		t.Fatalf("UpdateInterfaceConfig (rename): %v", err)
@@ -546,7 +548,7 @@ func TestSyncServerResendsAllInterfaces(t *testing.T) {
 
 	// Distinct name/port/subnet per interface — two on one server can't share a
 	// listen port or an overlapping subnet (see validateInterfaceUnique).
-	ifaceCfgs := []agentmodels.InterfaceConfig{
+	ifaceCfgs := []awgmodels.InterfaceConfig{
 		{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820},
 		{Interface: "wg1", Address: "10.0.1.1/24", ListenPort: 51821},
 	}
@@ -587,7 +589,7 @@ func TestPushRecordsFailureWhenAgentUnreachable(t *testing.T) {
 		t.Fatalf("CreateServer: %v", err)
 	}
 
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	})
 	if err != nil {
@@ -618,13 +620,13 @@ func TestForceReplaceInterfacePeersTargetsOnlySelectedInterface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateServer: %v", err)
 	}
-	iface0, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface0, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	})
 	if err != nil {
 		t.Fatalf("CreateInterface(wg0): %v", err)
 	}
-	if _, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	if _, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg1", Address: "10.0.1.1/24", ListenPort: 51821,
 	}); err != nil {
 		t.Fatalf("CreateInterface(wg1): %v", err)

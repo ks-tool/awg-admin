@@ -1482,7 +1482,6 @@ export namespace models {
 	}
 	export class SystemHistory {
 	    points: SystemHistoryPoint[];
-	    interfaces: InterfaceHistory[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SystemHistory(source);
@@ -1491,7 +1490,6 @@ export namespace models {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.points = this.convertValues(source["points"], SystemHistoryPoint);
-	        this.interfaces = this.convertValues(source["interfaces"], InterfaceHistory);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

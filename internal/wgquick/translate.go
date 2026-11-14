@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
 )
 
 // Translation is the agent-side config derived from a wg-quick conf, with the
@@ -33,7 +33,7 @@ type Translation struct {
 	// Config is the complete InterfaceConfig to store and push. Its PostUp /
 	// PreDown already include GeneratedPostUp / GeneratedPreDown, appended after
 	// the conf's own hooks.
-	Config agentmodels.InterfaceConfig
+	Config awgmodels.InterfaceConfig
 	// GeneratedPostUp / GeneratedPreDown reproduce what wg-quick did implicitly
 	// (see Translate) — kept apart so the preview can show them as a block.
 	GeneratedPostUp  []string
@@ -81,7 +81,7 @@ func Translate(name string, conf *Conf) (*Translation, error) {
 	}
 
 	tr := &Translation{}
-	cfg := agentmodels.InterfaceConfig{
+	cfg := awgmodels.InterfaceConfig{
 		Interface:  name,
 		PrivateKey: sec.PrivateKey,
 		ListenPort: uint16(*sec.ListenPort),
@@ -106,7 +106,7 @@ func Translate(name string, conf *Conf) (*Translation, error) {
 
 	noKeepalive := 0
 	for _, p := range conf.Peers {
-		peer := agentmodels.InterfacePeer{
+		peer := awgmodels.InterfacePeer{
 			Key:          p.PublicKey,
 			PresharedKey: p.PresharedKey,
 			AllowedIPs:   p.AllowedIPs,

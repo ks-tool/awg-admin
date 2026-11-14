@@ -29,6 +29,7 @@ import (
 
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 )
 
 var ErrProviderNotFound = errors.New("provider not found in agent manifest")
@@ -479,11 +480,48 @@ func (s *Service) restoreProviderResourceSecret(serverID string, definition *mod
 	}
 
 	var spec struct {
-		UserRef   string `json:"userRef"`
-		PublicKey string `json:"publicKey"`
+		UserRef      string `json:"userRef"`
+		InterfaceRef string `json:"interfaceRef"`
+		PublicKey    string `json:"publicKey"`
 	}
 	if err := json.Unmarshal(item.Spec, &spec); err != nil {
 		return err
+	}
+	if len(spec.UserRef) == 0 {
+		if definition.Name != "awg" {
+			return nil
+		}
+		serverUUID, err := uuid.Parse(serverID)
+		if err != nil {
+			return err
+		}
+		interfaceID, err := uuid.Parse(spec.InterfaceRef)
+		if err != nil {
+			return nil
+		}
+		iface, err := s.store.Servers().Interfaces(serverUUID).Get(interfaceID)
+		if storage.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		for _, peer := range iface.Peers {
+			if peer.Key.String() != spec.PublicKey || peer.PresharedKey == nil {
+				continue
+			}
+			supported, err := s.peerSupportsPresharedOnlyImport(serverID)
+			if err != nil || !supported {
+				return err
+			}
+			raw, err := json.Marshal(map[string]string{"presharedKey": peer.PresharedKey.String()})
+			if err != nil {
+				return err
+			}
+			_, err = s.RunProviderResourceAction(serverID, definition.Name, item.Kind, item.Name, "importSecret", raw)
+			return err
+		}
+		return nil
 	}
 	userID, err := uuid.Parse(spec.UserRef)
 	if err != nil {

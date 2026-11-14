@@ -24,6 +24,8 @@ import (
 	"strings"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/internal/wgquick"
 	"github.com/ks-tool/vpn-admin/models"
@@ -34,7 +36,7 @@ import (
 // importPlan is everything PreviewImport reports and ImportInterfaceFromServer
 // writes, computed once by planImport so the two can't diverge.
 type importPlan struct {
-	cfg     agentmodels.InterfaceConfig
+	cfg     awgmodels.InterfaceConfig
 	peers   []storage.ImportPeer
 	preview *models.ImportPreview
 }
@@ -153,7 +155,7 @@ func (s *Service) planImport(serverID, ifaceName, peerMap string) (*importPlan, 
 
 	// Match the map's private keys to the conf's peers via the derived public
 	// key; whatever the map doesn't cover stays an embedded (user-less) peer.
-	byPub := make(map[agentmodels.Key]int, len(cfg.Peers))
+	byPub := make(map[awgmodels.Key]int, len(cfg.Peers))
 	for i, p := range cfg.Peers {
 		byPub[p.Key] = i
 	}
@@ -162,7 +164,7 @@ func (s *Service) planImport(serverID, ifaceName, peerMap string) (*importPlan, 
 		return nil, err
 	}
 	usersByName := map[string][]models.User{}
-	peerOwner := map[agentmodels.Key]string{} // pubkey → user name, for "already registered"
+	peerOwner := map[awgmodels.Key]string{} // pubkey → user name, for "already registered"
 	for _, u := range existingUsers {
 		usersByName[u.Name] = append(usersByName[u.Name], u)
 		for _, p := range u.Peers {
@@ -185,7 +187,7 @@ func (s *Service) planImport(serverID, ifaceName, peerMap string) (*importPlan, 
 		GeneratedHooks: models.ImportPreviewHooks{PostUp: tr.GeneratedPostUp, PreDown: tr.GeneratedPreDown},
 		Warnings:       append([]string{}, tr.Warnings...),
 	}
-	claimed := make(map[agentmodels.Key]bool, len(cfg.Peers))
+	claimed := make(map[awgmodels.Key]bool, len(cfg.Peers))
 	for _, mu := range pm.Users {
 		if len(usersByName[mu.Name]) > 1 {
 			return nil, invalidInput("user name %q matches %d users in the database; rename one before importing", mu.Name, len(usersByName[mu.Name]))
@@ -251,7 +253,7 @@ func (s *Service) planImport(serverID, ifaceName, peerMap string) (*importPlan, 
 }
 
 // previewPeer projects an InterfacePeer onto the preview shape (public key only).
-func previewPeer(name string, p agentmodels.InterfacePeer) models.ImportPreviewPeer {
+func previewPeer(name string, p awgmodels.InterfacePeer) models.ImportPreviewPeer {
 	return models.ImportPreviewPeer{
 		Name:         name,
 		PublicKey:    p.Key.String(),
@@ -267,7 +269,7 @@ func previewPeer(name string, p agentmodels.InterfacePeer) models.ImportPreviewP
 // interface subnet and be unique across the peers and the interface's own
 // address; routed CIDRs (a LAN behind a peer) pass. Without this an imported
 // interface could carry a collision the normal AddPeer path never allows.
-func validateImportedPeerIPs(cfg agentmodels.InterfaceConfig) error {
+func validateImportedPeerIPs(cfg awgmodels.InterfaceConfig) error {
 	ifaceIP, network, err := net.ParseCIDR(cfg.Address)
 	if err != nil {
 		return invalidInput("interface address %q must be a CIDR like 10.0.0.1/24", cfg.Address)
@@ -295,7 +297,7 @@ func validateImportedPeerIPs(cfg agentmodels.InterfaceConfig) error {
 }
 
 // shortKey abbreviates a key for messages the way the UI does.
-func shortKey(k agentmodels.Key) string {
+func shortKey(k awgmodels.Key) string {
 	s := k.String()
 	if len(s) > 8 {
 		return s[:8] + "…"

@@ -19,7 +19,8 @@ package api
 import (
 	"net/http"
 
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/rs/zerolog/log"
 
 	"github.com/uptrace/bunrouter"
@@ -59,7 +60,7 @@ func (h *Handler) interfaceCreate(w http.ResponseWriter, r bunrouter.Request) er
 		return badRequest(err)
 	}
 
-	var cfg agentmodels.InterfaceConfig
+	var cfg awgmodels.InterfaceConfig
 	if err = decode(r, &cfg); err != nil {
 		return badRequest(err)
 	}
@@ -115,7 +116,7 @@ func (h *Handler) interfaceConfigUpdate(w http.ResponseWriter, r bunrouter.Reque
 	fields["interface_id"] = iID
 	log.Debug().Fields(fields).Msg("updating interfaces")
 
-	var cfg agentmodels.InterfaceConfig
+	var cfg awgmodels.InterfaceConfig
 	if err = decode(r, &cfg); err != nil {
 		return badRequest(err)
 	}

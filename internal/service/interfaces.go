@@ -22,8 +22,9 @@ import (
 	"net"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // ValidationError marks an error as caused by bad user input (a malformed field
@@ -46,7 +47,7 @@ func invalidInput(format string, args ...any) error {
 // see defaultInterfaceAddress), but when supplied it must be a valid CIDR:
 // otherwise it reaches the agent's netlink.ParseAddr and comes back as
 // "agent returned 500: invalid CIDR address:".
-func validateInterfaceConfig(cfg agentmodels.InterfaceConfig) error {
+func validateInterfaceConfig(cfg awgmodels.InterfaceConfig) error {
 	if len(cfg.Interface) == 0 {
 		return invalidInput("interface name is required")
 	}
@@ -65,7 +66,7 @@ func validateInterfaceConfig(cfg agentmodels.InterfaceConfig) error {
 // routing. Listen port 0 is exempt (it means "no fixed port" — an exit-node
 // interface dials out, so several can legitimately have it). excludeID is the
 // interface being updated, skipped in the scan; pass uuid.Nil() on create.
-func (s *Service) validateInterfaceUnique(sID uuid.UUID, cfg agentmodels.InterfaceConfig, excludeID uuid.UUID, old *models.Interface) error {
+func (s *Service) validateInterfaceUnique(sID uuid.UUID, cfg awgmodels.InterfaceConfig, excludeID uuid.UUID, old *models.Interface) error {
 	existing, err := s.store.Servers().Interfaces(sID).List()
 	if err != nil {
 		return err
@@ -154,7 +155,7 @@ func (s *Service) GetInterface(serverID, ifaceID string) (*models.Interface, err
 	return s.store.Servers().Interfaces(sID).Get(iID)
 }
 
-func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfig) (*models.Interface, error) {
+func (s *Service) CreateInterface(serverID string, in awgmodels.InterfaceConfig) (*models.Interface, error) {
 	debugOp("CreateInterface").Str("server_id", serverID).Str("name", in.Interface).Msg("creating interface")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {
@@ -185,8 +186,8 @@ func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfi
 	// caller decides. The UI's "Amnezia Interface" toggle sends a generated set
 	// (see GenerateInterfaceDefaults) for an Amnezia interface, or omits them
 	// entirely for a plain WireGuard one.
-	if agentmodels.IsEmpty(in.PrivateKey) {
-		if in.PrivateKey, err = agentmodels.GeneratePrivateKey(); err != nil {
+	if awgmodels.IsEmpty(in.PrivateKey) {
+		if in.PrivateKey, err = awgmodels.GeneratePrivateKey(); err != nil {
 			return nil, fmt.Errorf("generate key: %w", err)
 		}
 	}
@@ -205,15 +206,15 @@ func (s *Service) CreateInterface(serverID string, in agentmodels.InterfaceConfi
 // generated private key and a full set of AmneziaWG obfuscation parameters. The
 // add-interface form calls it to pre-fill the "Amnezia" tab; it touches no
 // storage and reaches no agent, so it's safe to call on every modal open.
-func (s *Service) GenerateInterfaceDefaults() agentmodels.InterfaceConfig {
+func (s *Service) GenerateInterfaceDefaults() awgmodels.InterfaceConfig {
 	debugOp("GenerateInterfaceDefaults").Msg("generating interface defaults")
-	var cfg agentmodels.InterfaceConfig
-	agentmodels.GenerateAmneziaParams(&cfg)
+	var cfg awgmodels.InterfaceConfig
+	awgmodels.GenerateAmneziaParams(&cfg)
 	return cfg
 }
 
 // UpdateInterfaceConfig replaces all config fields but always preserves peers.
-func (s *Service) UpdateInterfaceConfig(serverID, ifaceID string, cfg agentmodels.InterfaceConfig) (*models.Interface, error) {
+func (s *Service) UpdateInterfaceConfig(serverID, ifaceID string, cfg awgmodels.InterfaceConfig) (*models.Interface, error) {
 	debugOp("UpdateInterfaceConfig").Str("server_id", serverID).Str("interface_id", ifaceID).Msg("updating interface config")
 	sID, err := uuid.Parse(serverID)
 	if err != nil {

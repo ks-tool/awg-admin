@@ -21,7 +21,7 @@ import (
 	"time"
 	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
 )
 
 type Server struct {
@@ -123,7 +123,7 @@ type Interface struct {
 	// additionally tells tygo to emit "extends InterfaceConfig" on the
 	// generated TS type instead of a nested field — tygo only understands
 	// plain v1 json tag semantics and doesn't infer this on its own.
-	agentmodels.InterfaceConfig `json:",inline" tstype:",extends"`
+	awgmodels.InterfaceConfig `json:",inline" tstype:",extends"`
 
 	Provider     string `json:"provider,omitempty"`
 	ResourceName string `json:"resourceName,omitempty"`

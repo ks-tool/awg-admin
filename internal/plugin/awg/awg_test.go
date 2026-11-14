@@ -23,13 +23,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/internal/plugin"
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func TestPluginApplyAndUserLifecycle(t *testing.T) {
-	var stored *agentmodels.InterfaceConfig
+	var stored *awgmodels.InterfaceConfig
 	agent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/interfaces/awg0":
@@ -39,7 +40,7 @@ func TestPluginApplyAndUserLifecycle(t *testing.T) {
 			}
 			_ = json.NewEncoder(w).Encode(stored)
 		case r.Method == http.MethodPut && r.URL.Path == "/interfaces":
-			var cfg agentmodels.InterfaceConfig
+			var cfg awgmodels.InterfaceConfig
 			if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
 				t.Error(err)
 			}
@@ -62,7 +63,7 @@ func TestPluginApplyAndUserLifecycle(t *testing.T) {
 	if err != nil || status.State != "running" {
 		t.Fatalf("apply: %#v, %v", status, err)
 	}
-	if stored == nil || agentmodels.IsEmpty(stored.PrivateKey) || !stored.IsAmnezia() {
+	if stored == nil || awgmodels.IsEmpty(stored.PrivateKey) || !stored.IsAmnezia() {
 		t.Fatalf("invalid applied config: %#v", stored)
 	}
 

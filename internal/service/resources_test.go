@@ -24,8 +24,9 @@ import (
 	"time"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func TestProviderResourceLifecycleAndSchemaCache(t *testing.T) {
@@ -162,7 +163,7 @@ func TestWaitForProviderRemovalRequiresManifestDeregistration(t *testing.T) {
 
 func TestMigratedSecretIsSentOnlyThroughAction(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
-	key, err := agentmodels.GeneratePrivateKey()
+	key, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +334,7 @@ func TestMigratedResourcesAreSubmittedInterfaceFirst(t *testing.T) {
 	agent.mu.Lock()
 	agent.awg = true
 	agent.mu.Unlock()
-	privateKey, err := agentmodels.GeneratePrivateKey()
+	privateKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +383,7 @@ func TestServerStatusReflectsDegradedProviderResources(t *testing.T) {
 
 func TestServerStatusDoesNotMigrateSecrets(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
-	privateKey, err := agentmodels.GeneratePrivateKey()
+	privateKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,11 +422,11 @@ func TestServerStatusDoesNotMigrateSecrets(t *testing.T) {
 
 func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
 	svc, server, _ := newTestServerWithAgent(t)
-	interfaceKey, err := agentmodels.GeneratePrivateKey()
+	interfaceKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	peerKey, err := agentmodels.GeneratePrivateKey()
+	peerKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +439,7 @@ func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
 	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
 		t.Fatal(err)
 	}
-	ifacePeer := agentmodels.InterfacePeer{Key: peerKey.PublicKey(), AllowedIPs: []string{"10.0.0.2/32"}}
+	ifacePeer := awgmodels.InterfacePeer{Key: peerKey.PublicKey(), AllowedIPs: []string{"10.0.0.2/32"}}
 	peer := &models.Peer{Name: "laptop", PrivateKey: peerKey, InterfaceId: ifaceID}
 	if err := svc.store.Users().Peers(user.ID).Set(peer); err != nil {
 		t.Fatal(err)
@@ -510,7 +511,7 @@ func TestDeleteUserRevokesProviderPeers(t *testing.T) {
 
 func TestDeleteUserRevokesAdoptedAWGPeer(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
-	privateKey, err := agentmodels.GeneratePrivateKey()
+	privateKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
