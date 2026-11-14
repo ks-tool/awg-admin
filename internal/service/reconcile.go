@@ -22,9 +22,10 @@ import (
 	"time"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // ReconcileReport is the result of comparing a server's agent's actual
@@ -38,7 +39,7 @@ import (
 type ReconcileReport struct {
 	// AgentOnly are interfaces the agent has configured that this DB has
 	// no record of for this server at all.
-	AgentOnly []agentmodels.InterfaceConfig `json:"agentOnly"`
+	AgentOnly []awgmodels.InterfaceConfig `json:"agentOnly"`
 	// DBOnly are interfaces in this DB that the agent didn't report back.
 	DBOnly []models.Interface `json:"dbOnly"`
 }
@@ -59,7 +60,7 @@ func (s *Service) ReconcileServer(serverID string) (*ReconcileReport, error) {
 		return nil, err
 	}
 
-	var agentIfaces []agentmodels.InterfaceConfig
+	var agentIfaces []awgmodels.InterfaceConfig
 	if err := s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
 		var lErr error
 		agentIfaces, lErr = c.List(ctx)
@@ -77,7 +78,7 @@ func (s *Service) ReconcileServer(serverID string) (*ReconcileReport, error) {
 	for _, iface := range dbIfaces {
 		dbByName[iface.Interface] = iface
 	}
-	agentByName := make(map[string]agentmodels.InterfaceConfig, len(agentIfaces))
+	agentByName := make(map[string]awgmodels.InterfaceConfig, len(agentIfaces))
 	for _, cfg := range agentIfaces {
 		agentByName[cfg.Interface] = cfg
 	}
@@ -86,7 +87,7 @@ func (s *Service) ReconcileServer(serverID string) (*ReconcileReport, error) {
 	// `[]` rather than `null` when there's no mismatch — the frontend reads
 	// .length off them directly.
 	report := &ReconcileReport{
-		AgentOnly: []agentmodels.InterfaceConfig{},
+		AgentOnly: []awgmodels.InterfaceConfig{},
 		DBOnly:    []models.Interface{},
 	}
 	for name, cfg := range agentByName {
@@ -128,7 +129,7 @@ func (s *Service) ImportInterface(serverID, ifaceName string) (*models.Interface
 		return nil, err
 	}
 
-	var cfg *agentmodels.InterfaceConfig
+	var cfg *awgmodels.InterfaceConfig
 	if err := s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
 		var gErr error
 		cfg, gErr = c.Get(ctx, ifaceName)

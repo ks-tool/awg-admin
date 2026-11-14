@@ -21,13 +21,14 @@ import (
 	"reflect"
 	"testing"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func TestLegacyPeerSpecAllocatesAddressAndOmitsEmptyDNS(t *testing.T) {
 	svc, srv := newValidationTestServer(t)
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	})
 	if err != nil {
@@ -37,7 +38,7 @@ func TestLegacyPeerSpecAllocatesAddressAndOmitsEmptyDNS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	privateKey, err := agentmodels.GeneratePrivateKey()
+	privateKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +46,7 @@ func TestLegacyPeerSpecAllocatesAddressAndOmitsEmptyDNS(t *testing.T) {
 	if err := svc.store.Users().Peers(user.ID).Set(peer); err != nil {
 		t.Fatal(err)
 	}
-	iface.Peers = []agentmodels.InterfacePeer{{Key: privateKey.PublicKey(), AllowedIPs: []string{}}}
+	iface.Peers = []awgmodels.InterfacePeer{{Key: privateKey.PublicKey(), AllowedIPs: []string{}}}
 
 	raw, configured, err := svc.legacyPeerSpec(user, peer, iface)
 	if err != nil {

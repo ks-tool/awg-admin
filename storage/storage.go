@@ -21,8 +21,9 @@ import (
 	"net"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 type Storage interface {
@@ -111,7 +112,7 @@ type Users interface {
 
 type Peers interface {
 	List() ([]models.Peer, error)
-	Get(publicKey agentmodels.Key) (*models.Peer, error)
+	Get(publicKey awgmodels.Key) (*models.Peer, error)
 	Set(peer *models.Peer) error
-	Delete(publicKey agentmodels.Key) error
+	Delete(publicKey awgmodels.Key) error
 }

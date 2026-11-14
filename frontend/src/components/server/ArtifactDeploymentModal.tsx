@@ -22,13 +22,13 @@ import {FormField} from '@/components/common/FormField';
 import {Modal} from '@/components/common/Modal';
 import {buttons, inputs} from '@/components/common/controls';
 import {listArtifactTags, listProviderRepositories, listRegistrySources} from '@/services/registrySources';
-import type {AgentDeployment, ProviderDeployment, ProviderRepository, Registry, RegistrySource} from '@/types';
+import type {AgentDeployment, ProviderDeployment, ProviderRepository, Registry, RegistrySource, Server} from '@/types';
 
 type Props = {
     onClose: () => void;
     busy: boolean;
 } & (
-    | {kind: 'agent'; onDeploy: (deployment: AgentDeployment) => void}
+    | {kind: 'agent'; server: Server; onDeploy: (deployment: AgentDeployment) => void}
     | {kind: 'provider'; onDeploy: (provider: ProviderDeployment, registry: Registry) => void}
 );
 
@@ -39,6 +39,16 @@ function message(error: unknown): string {
 function providerNameFromBinary(path: string): string {
     const name = path.split(/[\\/]/).pop() ?? '';
     return name.startsWith('vpn-provider-') ? name.slice('vpn-provider-'.length) : '';
+}
+
+function portFromAddress(address: string): string {
+    const separator = address.lastIndexOf(':');
+    return separator >= 0 ? address.slice(separator + 1) : '8080';
+}
+
+function addressWithPort(host: string, port: string): string {
+    const normalized = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+    return `${normalized}:${port}`;
 }
 
 export function ArtifactDeploymentModal(props: Props) {
@@ -52,6 +62,8 @@ export function ArtifactDeploymentModal(props: Props) {
     const [tags, setTags] = useState<string[]>([]);
     const [tag, setTag] = useState('');
     const [userspace, setUserspace] = useState(false);
+    const [agentAddress, setAgentAddress] = useState(props.kind === 'agent' ? props.server.agent?.addr || '127.0.0.1:8080' : '');
+    const [mtls, setMTLS] = useState(props.kind === 'agent' && Boolean(props.server.agent?.tls));
     const [loading, setLoading] = useState(false);
     const [loadError, setLoadError] = useState('');
     const availableSources = sources.filter(source => source.type === kind);
@@ -136,17 +148,25 @@ export function ArtifactDeploymentModal(props: Props) {
         void loadTags(selected.repository, registry);
     };
 
+    const toggleMTLS = (enabled: boolean) => {
+        setMTLS(enabled);
+        if (props.kind !== 'agent') return;
+        const host = enabled ? props.server.ssh.host.trim() : '127.0.0.1';
+        if (host) setAgentAddress(addressWithPort(host, portFromAddress(agentAddress)));
+    };
+
     const submit = () => {
         if (props.kind === 'agent') {
+            const settings = {address: agentAddress.trim(), mtls};
             if (localBinary) {
-                props.onDeploy({binaryPath: localBinary, registry});
+                props.onDeploy({binaryPath: localBinary, registry, settings});
                 return;
             }
             if (!repository || !tag) {
                 toast.error(t('servers.artifactRequired'));
                 return;
             }
-            props.onDeploy({artifact: `${repository}:${tag}`, registry});
+            props.onDeploy({artifact: `${repository}:${tag}`, registry, settings});
             return;
         }
         if (localBinary) {
@@ -169,7 +189,7 @@ export function ArtifactDeploymentModal(props: Props) {
         }, registry);
     };
 
-    const ready = !!sourceId && (!!localBinary || !!repository && !!tag && (kind === 'agent' || !!providerName));
+    const ready = !!sourceId && (kind !== 'agent' || !!agentAddress.trim()) && (!!localBinary || !!repository && !!tag && (kind === 'agent' || !!providerName));
 
     return (
         <Modal title={t(kind === 'agent' ? 'servers.deployAgent' : 'servers.addProviderTitle')} onClose={onClose} loading={busy}>
@@ -211,6 +231,22 @@ export function ArtifactDeploymentModal(props: Props) {
                             </label>
                         )}
                     </>
+                )}
+                {kind === 'agent' && (
+                    <div className="space-y-4 border-t border-border pt-4 dark:border-white/10">
+                        <h3 className="text-sm font-semibold">{t('servers.agentConnectionSettings')}</h3>
+                        <FormField label={t('servers.agentAddress')}>
+                            <>
+                                <input type="text" value={agentAddress} onChange={event => setAgentAddress(event.target.value)} placeholder="127.0.0.1:8080" disabled={busy} required className={inputs.primary} />
+                                <p className="text-xs text-muted-foreground">{t(mtls ? 'servers.agentAddressDirectHint' : 'servers.agentAddressHint')}</p>
+                            </>
+                        </FormField>
+                        <label className="flex items-center gap-3 text-sm">
+                            <input type="checkbox" checked={mtls} onChange={event => toggleMTLS(event.target.checked)} disabled={busy} />
+                            {t('servers.agentEnabledTls')}
+                        </label>
+                        {mtls && <p className="text-xs text-muted-foreground">{t('servers.agentTLSCertsAutoGenerate')}</p>}
+                    </div>
                 )}
                 {loadError && <p className="whitespace-pre-wrap break-words rounded-lg bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">{loadError}</p>}
                 <div className="flex justify-end gap-2 pt-2">

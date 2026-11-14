@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
 )
 
 // PeerMap is the operator-supplied assignment of a conf's peers to vpn-admin
@@ -52,7 +52,7 @@ type PeerMapUser struct {
 
 // PeerMapPeer is one `private-key: name` line of a PeerMap.
 type PeerMapPeer struct {
-	PrivateKey agentmodels.Key
+	PrivateKey awgmodels.Key
 	Name       string
 }
 
@@ -65,7 +65,7 @@ type PeerMapPeer struct {
 func ParsePeerMap(text string) (*PeerMap, error) {
 	pm := &PeerMap{}
 	byName := map[string]int{} // user name → index in pm.Users (repeated blocks merge)
-	seenKeys := map[agentmodels.Key]string{}
+	seenKeys := map[awgmodels.Key]string{}
 	current := -1
 
 	for i, raw := range strings.Split(text, "\n") {
@@ -106,7 +106,7 @@ func ParsePeerMap(text string) (*PeerMap, error) {
 		if !ok {
 			return nil, fmt.Errorf("line %d: expected `private-key: peer-name`, got %q", lineNo, trimmed)
 		}
-		key, err := agentmodels.ParseKey(strings.TrimSpace(keyText))
+		key, err := awgmodels.ParseKey(strings.TrimSpace(keyText))
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %q is not a valid base64 WireGuard private key", lineNo, strings.TrimSpace(keyText))
 		}

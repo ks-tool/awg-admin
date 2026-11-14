@@ -19,7 +19,7 @@ package models
 import (
 	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
 )
 
 type User struct {
@@ -31,12 +31,12 @@ type User struct {
 }
 
 type Peer struct {
-	Name         string          `json:"name"`
-	PrivateKey   agentmodels.Key `json:"pk"`
-	InterfaceId  uuid.UUID       `json:"interface"`
-	Provider     string          `json:"provider,omitempty"`
-	ResourceName string          `json:"resourceName,omitempty"`
-	Disabled     bool            `json:"disabled,omitempty"`
+	Name         string        `json:"name"`
+	PrivateKey   awgmodels.Key `json:"pk"`
+	InterfaceId  uuid.UUID     `json:"interface"`
+	Provider     string        `json:"provider,omitempty"`
+	ResourceName string        `json:"resourceName,omitempty"`
+	Disabled     bool          `json:"disabled,omitempty"`
 	// DNS is the client-side DNS for this peer's generated wg-quick config
 	// (the `[Interface] DNS = …` line). Admin-only: it's never pushed to the
 	// agent (DNS is a client setting). Empty falls back to the owning

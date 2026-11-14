@@ -25,6 +25,7 @@ jobs:
         id: prep
         run: |
           mkdir -p cmd/dist && printf '<!doctype html>\n' > cmd/dist/index.html
+          go run ./scripts/download-host-agents.go
           targets=$(go list ./... | grep -v /node_modules/ | sed "s|^$(go list -m)|.|" | paste -sd' ' -)
           echo "targets=$targets" >> "$GITHUB_OUTPUT"
 

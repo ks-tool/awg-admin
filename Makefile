@@ -8,18 +8,22 @@ GO_GC_FLAGS    := '-N -l'
 GO_BUILD_FLAGS := -ldflags=$(GO_LD_FLAGS) -gcflags=$(GO_GC_FLAGS) -trimpath -o $(BUILD_DIR)
 
 .PHONY: server
-server: frontend
+server: frontend host-agents
 	@echo 'Build server ...'
 	@CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GO_BUILD_FLAGS) cmd/vpn-admin.go
 
 .PHONY: run-server
-run-server: frontend
+run-server: frontend host-agents
 	@go run cmd/vpn-admin.go
 
 .PHONY: desktop
-desktop:
+desktop: host-agents
 	@echo 'Build desktop application ...'
 	@go tool wails build -race -platform=$(GOOS)/$(GOARCH)
+
+.PHONY: host-agents
+host-agents:
+	@go run ./scripts/download-host-agents.go
 
 .PHONY: agent
 agent:
@@ -46,7 +50,7 @@ frontend:
 # isn't ours, so it's filtered out. The Docker-based e2e tunnel test is
 # separate and opt-in — run `make -C agent test-e2e` (needs Docker).
 .PHONY: test
-test:
+test: host-agents
 	@echo 'Test root module ...'
 	@go test $$(go list ./... | grep -v /node_modules/)
 	@$(MAKE) -C agent test

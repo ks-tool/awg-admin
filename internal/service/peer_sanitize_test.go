@@ -19,8 +19,9 @@ package service
 import (
 	"testing"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // TestPeerEndpointsExposeOnlyThePublicKey is a regression test for a bug
@@ -40,7 +41,7 @@ func TestPeerEndpointsExposeOnlyThePublicKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateServer: %v", err)
 	}
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface:  "wg0",
 		Address:    "10.0.0.1/24",
 		ListenPort: 51820,

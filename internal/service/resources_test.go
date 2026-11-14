@@ -24,15 +24,16 @@ import (
 	"time"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func TestProviderResourceLifecycleAndSchemaCache(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
 	serverID := server.ID.String()
 	manifest, err := svc.GetProviderManifest(serverID)
-	if err != nil || manifest.AgentID != "agent" || len(manifest.Providers) != 1 {
+	if err != nil || len(manifest.Providers) != 1 {
 		t.Fatalf("GetProviderManifest: %+v, %v", manifest, err)
 	}
 	definition, err := svc.GetProviderSchema(serverID, "test")
@@ -130,9 +131,39 @@ func TestWaitForProviderRequiresManifestRegistration(t *testing.T) {
 	}
 }
 
+func TestWaitForProviderReportsDiscoveryError(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	agent.mu.Lock()
+	agent.awg = false
+	agent.providerErrors = map[string]string{"awg": "create TUN failed"}
+	agent.mu.Unlock()
+	err := svc.waitForProvider(server.ID.String(), "awg", 0)
+	if err == nil || !strings.Contains(err.Error(), "create TUN failed") {
+		t.Fatalf("discovery error was not reported: %v", err)
+	}
+}
+
+func TestWaitForProviderRemovalRequiresManifestDeregistration(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	agent.mu.Lock()
+	agent.awg = false
+	agent.mu.Unlock()
+	if err := svc.waitForProviderRemoval(server.ID.String(), "awg", time.Second); err != nil {
+		t.Fatalf("unregistered provider was not accepted: %v", err)
+	}
+
+	agent.mu.Lock()
+	agent.awg = true
+	agent.mu.Unlock()
+	err := svc.waitForProviderRemoval(server.ID.String(), "awg", 0)
+	if err == nil || !strings.Contains(err.Error(), "did not disappear from agent manifest") {
+		t.Fatalf("registered provider reported a successful removal: %v", err)
+	}
+}
+
 func TestMigratedSecretIsSentOnlyThroughAction(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
-	key, err := agentmodels.GeneratePrivateKey()
+	key, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +334,7 @@ func TestMigratedResourcesAreSubmittedInterfaceFirst(t *testing.T) {
 	agent.mu.Lock()
 	agent.awg = true
 	agent.mu.Unlock()
-	privateKey, err := agentmodels.GeneratePrivateKey()
+	privateKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,13 +381,52 @@ func TestServerStatusReflectsDegradedProviderResources(t *testing.T) {
 	}
 }
 
-func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
-	svc, server, _ := newTestServerWithAgent(t)
-	interfaceKey, err := agentmodels.GeneratePrivateKey()
+func TestServerStatusDoesNotMigrateSecrets(t *testing.T) {
+	svc, server, agent := newTestServerWithAgent(t)
+	privateKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	peerKey, err := agentmodels.GeneratePrivateKey()
+	interfaceID := uuid.New()
+	iface := &models.Interface{ID: interfaceID, Interface: "awg0", Address: "10.0.0.1/24", ListenPort: 51820, PrivateKey: privateKey}
+	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
+		t.Fatal(err)
+	}
+	item := models.Resource{
+		ID: interfaceID.String(), ServerID: server.ID.String(), APIVersion: "awg.ks-tool.dev/v1", Kind: "Interface", Name: "awg0", Generation: 1,
+		Spec: json.RawMessage(`{"iface":"awg0","addr":"10.0.0.1/24","listen":51820}`),
+		Status: models.ResourceStatus{
+			ObservedGeneration: 1, Phase: models.ResourceReady,
+			Conditions: []models.Condition{{Type: "Secrets", Status: models.ConditionFalse, Reason: "SecretMigrationPending"}},
+		},
+	}
+	if err := svc.saveProviderResource(server.ID.String(), item); err != nil {
+		t.Fatal(err)
+	}
+	agent.mu.Lock()
+	agent.awg = true
+	agent.resources["Interface/awg0"] = item
+	agent.mu.Unlock()
+
+	status, err := svc.ServerAgentStatus(server.ID.String())
+	if err != nil || status != models.AgentStatusOK {
+		t.Fatalf("server status = %q, %v", status, err)
+	}
+	agent.mu.Lock()
+	calls := agent.actionCalls
+	agent.mu.Unlock()
+	if calls != 0 {
+		t.Fatalf("health check ran %d secret import actions", calls)
+	}
+}
+
+func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
+	svc, server, _ := newTestServerWithAgent(t)
+	interfaceKey, err := awgmodels.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +439,7 @@ func TestProviderPeerDeleteAlsoRemovesLegacyCredentials(t *testing.T) {
 	if err := svc.store.Servers().Interfaces(server.ID).Set(iface); err != nil {
 		t.Fatal(err)
 	}
-	ifacePeer := agentmodels.InterfacePeer{Key: peerKey.PublicKey(), AllowedIPs: []string{"10.0.0.2/32"}}
+	ifacePeer := awgmodels.InterfacePeer{Key: peerKey.PublicKey(), AllowedIPs: []string{"10.0.0.2/32"}}
 	peer := &models.Peer{Name: "laptop", PrivateKey: peerKey, InterfaceId: ifaceID}
 	if err := svc.store.Users().Peers(user.ID).Set(peer); err != nil {
 		t.Fatal(err)
@@ -441,7 +511,7 @@ func TestDeleteUserRevokesProviderPeers(t *testing.T) {
 
 func TestDeleteUserRevokesAdoptedAWGPeer(t *testing.T) {
 	svc, server, agent := newTestServerWithAgent(t)
-	privateKey, err := agentmodels.GeneratePrivateKey()
+	privateKey, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -109,6 +109,9 @@ func TestProviderToPackUsesGenericDeployCommand(t *testing.T) {
 	called := 0
 	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
 		called++
+		if len(options.Force) != 1 || options.Force[0] != "vpn-provider-awg" {
+			t.Fatalf("explicit provider deployment is not forced: %v", options.Force)
+		}
 		var release map[string]any
 		readPackTestJSON(t, filepath.Join(options.Dir, "release.yaml"), &release)
 		if !strings.Contains(release["pack"].(string), "vpn-provider-awg") {
@@ -216,6 +219,9 @@ func TestProviderPackAcceptsUnknownProvider(t *testing.T) {
 	debian := root.Packages["debian"]
 	if len(debian.Commands) > 0 || len(debian.Services) > 0 {
 		t.Fatalf("provider deploy must not run before content delivery: %+v", debian)
+	}
+	if len(debian.Prepare) > 0 || len(debian.Names) > 0 || len(debian.Repo) > 0 || len(debian.Sysctls) > 0 {
+		t.Fatalf("admin must leave OS provisioning to the provider: %+v", debian)
 	}
 	if len(root.Hooks) != 2 {
 		t.Fatalf("install/upgrade deploy hooks = %+v", root.Hooks)

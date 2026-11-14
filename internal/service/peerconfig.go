@@ -24,7 +24,7 @@ import (
 	"strings"
 	"uuid"
 
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
 
 	"github.com/skip2/go-qrcode"
 )
@@ -41,7 +41,7 @@ func (s *Service) GetPeerConfig(userID string, key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	pk, err := agentmodels.ParseKey(key)
+	pk, err := awgmodels.ParseKey(key)
 	if err != nil {
 		return "", err
 	}
@@ -64,7 +64,7 @@ func (s *Service) GetPeerConfig(userID string, key string) (string, error) {
 	}
 
 	pubKey := peer.PrivateKey.PublicKey()
-	var ifacePeer *agentmodels.InterfacePeer
+	var ifacePeer *awgmodels.InterfacePeer
 	for i := range iface.Peers {
 		if iface.Peers[i].Key == pubKey {
 			ifacePeer = &iface.Peers[i]
@@ -150,7 +150,7 @@ func (s *Service) GetPeerQRCode(userID string, key string) (string, error) {
 // writeAmneziaParams appends cfg's AmneziaWG obfuscation parameters (only
 // the ones that were actually set) so generated client configs keep working
 // against an AmneziaWG server instead of falling back to plain WireGuard.
-func writeAmneziaParams(b *strings.Builder, cfg agentmodels.InterfaceConfig) {
+func writeAmneziaParams(b *strings.Builder, cfg awgmodels.InterfaceConfig) {
 	writeInt := func(name string, v *int) {
 		if v != nil {
 			_, _ = fmt.Fprintf(b, "%s = %d\n", name, *v)

@@ -27,10 +27,11 @@ import (
 	"strings"
 	"time"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/internal/plugin"
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 type Plugin struct{}
@@ -120,19 +121,19 @@ func clientFor(cfg config) *agentclient.Client {
 	return agentclient.New(&http.Client{Timeout: 15 * time.Second}, cfg.AgentURL)
 }
 
-func interfaceConfig(cfg config) (agentmodels.InterfaceConfig, error) {
-	result := agentmodels.InterfaceConfig{Interface: cfg.Interface, Address: cfg.Address, ListenPort: cfg.ListenPort, MTU: cfg.MTU}
+func interfaceConfig(cfg config) (awgmodels.InterfaceConfig, error) {
+	result := awgmodels.InterfaceConfig{Interface: cfg.Interface, Address: cfg.Address, ListenPort: cfg.ListenPort, MTU: cfg.MTU}
 	var err error
 	if cfg.PrivateKey == "" {
-		result.PrivateKey, err = agentmodels.GeneratePrivateKey()
+		result.PrivateKey, err = awgmodels.GeneratePrivateKey()
 	} else {
-		result.PrivateKey, err = agentmodels.ParseKey(cfg.PrivateKey)
+		result.PrivateKey, err = awgmodels.ParseKey(cfg.PrivateKey)
 	}
 	if err != nil {
 		return result, fmt.Errorf("private key: %w", err)
 	}
 	if cfg.Amnezia {
-		agentmodels.GenerateAmneziaParams(&result)
+		awgmodels.GenerateAmneziaParams(&result)
 	}
 	return result, nil
 }
@@ -175,7 +176,7 @@ func (p *Plugin) Status(ctx context.Context, deployment plugin.Deployment) (mode
 	return models.PluginStatus{State: "running"}, nil
 }
 
-func peerUser(peer agentmodels.InterfacePeer) models.PluginUser {
+func peerUser(peer awgmodels.InterfacePeer) models.PluginUser {
 	return models.PluginUser{ID: peer.Key.String(), Data: map[string]any{
 		"publicKey":  peer.Key.String(),
 		"allowedIPs": peer.AllowedIPs,
@@ -201,24 +202,24 @@ func (p *Plugin) ListUsers(ctx context.Context, deployment plugin.Deployment) ([
 	return users, nil
 }
 
-func decodePeer(input map[string]any) (agentmodels.InterfacePeer, string, error) {
+func decodePeer(input map[string]any) (awgmodels.InterfacePeer, string, error) {
 	cfg, err := decode[userConfig](input)
 	if err != nil {
-		return agentmodels.InterfacePeer{}, "", err
+		return awgmodels.InterfacePeer{}, "", err
 	}
 	if len(cfg.AllowedIPs) == 0 {
-		return agentmodels.InterfacePeer{}, "", fmt.Errorf("at least one allowed IP is required")
+		return awgmodels.InterfacePeer{}, "", fmt.Errorf("at least one allowed IP is required")
 	}
-	var privateKey agentmodels.Key
+	var privateKey awgmodels.Key
 	if cfg.PrivateKey == "" {
-		privateKey, err = agentmodels.GeneratePrivateKey()
+		privateKey, err = awgmodels.GeneratePrivateKey()
 	} else {
-		privateKey, err = agentmodels.ParseKey(cfg.PrivateKey)
+		privateKey, err = awgmodels.ParseKey(cfg.PrivateKey)
 	}
 	if err != nil {
-		return agentmodels.InterfacePeer{}, "", fmt.Errorf("private key: %w", err)
+		return awgmodels.InterfacePeer{}, "", fmt.Errorf("private key: %w", err)
 	}
-	return agentmodels.InterfacePeer{
+	return awgmodels.InterfacePeer{
 		Key:               privateKey.PublicKey(),
 		AllowedIPs:        cfg.AllowedIPs,
 		Endpoint:          cfg.Endpoint,
@@ -300,7 +301,7 @@ func (p *Plugin) DeleteUser(ctx context.Context, deployment plugin.Deployment, i
 	if err != nil {
 		return err
 	}
-	peers := make([]agentmodels.InterfacePeer, 0, len(iface.Peers))
+	peers := make([]awgmodels.InterfacePeer, 0, len(iface.Peers))
 	found := false
 	for _, peer := range iface.Peers {
 		if peer.Key.String() == id {

@@ -19,9 +19,10 @@ package service
 import (
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // loadTopology projects the existing AWG inventory into the neutral graph.
@@ -175,7 +176,7 @@ func (s *Service) createLegacyInterface(serverID uuid.UUID, in NetworkInterfaceI
 	if err != nil || !legacy {
 		return nil, legacy, err
 	}
-	iface, err := s.CreateInterface(serverID.String(), agentmodels.InterfaceConfig{Interface: in.Name, Address: in.Address})
+	iface, err := s.CreateInterface(serverID.String(), awgmodels.InterfaceConfig{Interface: in.Name, Address: in.Address})
 	return iface, true, err
 }
 

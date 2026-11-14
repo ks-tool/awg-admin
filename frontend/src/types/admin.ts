@@ -342,12 +342,18 @@ export interface RegistryRequest {
   registry: Registry;
 }
 /**
- * AgentDeployment selects either an OCI release or a local vpn-agent binary.
+ * AgentDeployment selects either an OCI release or a local vpn-agent binary and
+ * optionally updates the agent connection settings before deployment.
  */
 export interface AgentDeployment {
   artifact?: string;
   binaryPath?: string;
   registry: Registry;
+  settings?: AgentDeploymentSettings;
+}
+export interface AgentDeploymentSettings {
+  address: string;
+  mtls: boolean;
 }
 /**
  * ProviderRepository is a provider found under an OCI repository prefix.

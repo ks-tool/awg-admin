@@ -19,8 +19,9 @@ package service
 import (
 	"testing"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func newTestServerWithAgent(t *testing.T) (*Service, *models.Server, *fakeAgentTLS) {
@@ -47,7 +48,7 @@ func TestReconcileServerFindsAgentOnlyInterface(t *testing.T) {
 	svc, srv, fa := newTestServerWithAgent(t)
 
 	fa.mu.Lock()
-	fa.store["wg-orphan"] = agentmodels.InterfaceConfig{Interface: "wg-orphan", Address: "10.9.0.1/24", ListenPort: 51900}
+	fa.store["wg-orphan"] = awgmodels.InterfaceConfig{Interface: "wg-orphan", Address: "10.9.0.1/24", ListenPort: 51900}
 	fa.mu.Unlock()
 
 	report, err := svc.ReconcileServer(srv.ID.String())
@@ -67,7 +68,7 @@ func TestReconcileServerFindsAgentOnlyInterface(t *testing.T) {
 func TestReconcileServerFindsDBOnlyInterface(t *testing.T) {
 	svc, srv, fa := newTestServerWithAgent(t)
 
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	})
 	if err != nil {
@@ -92,7 +93,7 @@ func TestReconcileServerFindsDBOnlyInterface(t *testing.T) {
 func TestReconcileServerNoMismatch(t *testing.T) {
 	svc, srv, _ := newTestServerWithAgent(t)
 
-	if _, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	if _, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	}); err != nil {
 		t.Fatalf("CreateInterface: %v", err)
@@ -111,7 +112,7 @@ func TestImportInterfaceCreatesItFromAgentConfig(t *testing.T) {
 	svc, srv, fa := newTestServerWithAgent(t)
 
 	fa.mu.Lock()
-	fa.store["wg-orphan"] = agentmodels.InterfaceConfig{Interface: "wg-orphan", Address: "10.9.0.1/24", ListenPort: 51900}
+	fa.store["wg-orphan"] = awgmodels.InterfaceConfig{Interface: "wg-orphan", Address: "10.9.0.1/24", ListenPort: 51900}
 	fa.mu.Unlock()
 
 	iface, err := svc.ImportInterface(srv.ID.String(), "wg-orphan")
@@ -146,7 +147,7 @@ func TestDeleteAgentInterfaceRemovesItFromAgentOnly(t *testing.T) {
 	svc, srv, fa := newTestServerWithAgent(t)
 
 	fa.mu.Lock()
-	fa.store["wg-orphan"] = agentmodels.InterfaceConfig{Interface: "wg-orphan", Address: "10.9.0.1/24", ListenPort: 51900}
+	fa.store["wg-orphan"] = awgmodels.InterfaceConfig{Interface: "wg-orphan", Address: "10.9.0.1/24", ListenPort: 51900}
 	fa.mu.Unlock()
 
 	if err := svc.DeleteAgentInterface(srv.ID.String(), "wg-orphan"); err != nil {

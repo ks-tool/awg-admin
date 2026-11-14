@@ -104,7 +104,7 @@ func (s *Service) cachedProviderManifest(serverID string) (*models.Manifest, err
 	if len(records) == 0 {
 		return nil, os.ErrNotExist
 	}
-	manifest := &models.Manifest{ProtocolVersion: models.ProtocolVersion, AgentID: serverID, Providers: make([]models.ProviderDefinition, 0, len(records))}
+	manifest := &models.Manifest{ProtocolVersion: models.ProtocolVersion, Providers: make([]models.ProviderDefinition, 0, len(records))}
 	for _, record := range records {
 		provider := record.Definition
 		sort.Slice(provider.Resources, func(i, j int) bool { return provider.Resources[i].Kind < provider.Resources[j].Kind })
@@ -190,7 +190,7 @@ func (s *Service) RefreshProviderManifest(serverID string) (*models.Manifest, er
 		return nil, err
 	}
 	for _, provider := range manifest.Providers {
-		s.providerRegistry.store(manifest.AgentID, provider.Version, provider)
+		s.providerRegistry.store(serverID, provider.Version, provider)
 	}
 	return manifest, nil
 }
@@ -214,13 +214,48 @@ func (s *Service) waitForProvider(serverID, name string, timeout time.Duration) 
 					return nil
 				}
 			}
-			lastErr = errors.New("provider not found in agent manifest: " + name)
+			if discoveryErr := manifest.ProviderErrors[name]; len(discoveryErr) > 0 {
+				lastErr = errors.New(discoveryErr)
+			} else {
+				lastErr = errors.New("provider not found in agent manifest: " + name)
+			}
 		} else {
 			lastErr = err
 		}
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
 			return errors.New("provider " + name + " did not appear in agent manifest after deployment: " + lastErr.Error())
+		}
+		if remaining > 250*time.Millisecond {
+			remaining = 250 * time.Millisecond
+		}
+		time.Sleep(remaining)
+	}
+}
+
+func (s *Service) waitForProviderRemoval(serverID, name string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for {
+		manifest, err := s.RefreshProviderManifest(serverID)
+		if err == nil {
+			registered := false
+			for _, provider := range manifest.Providers {
+				if provider.Name == name {
+					registered = true
+					break
+				}
+			}
+			if !registered {
+				return nil
+			}
+			lastErr = errors.New("provider is still present in agent manifest: " + name)
+		} else {
+			lastErr = err
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return errors.New("provider " + name + " did not disappear from agent manifest after removal: " + lastErr.Error())
 		}
 		if remaining > 250*time.Millisecond {
 			remaining = 250 * time.Millisecond

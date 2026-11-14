@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"strings"
 
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
 )
 
 // Conf is a parsed wg-quick/awg-quick configuration file: one [Interface]
@@ -42,7 +42,7 @@ type Conf struct {
 // from a zero value; multi-valued keys (Address, DNS, hooks) accumulate across
 // repeated lines the way wg-quick treats them.
 type InterfaceSection struct {
-	PrivateKey agentmodels.Key
+	PrivateKey awgmodels.Key
 	Address    []string
 	ListenPort *int
 	MTU        *int
@@ -62,8 +62,8 @@ type InterfaceSection struct {
 
 // PeerSection holds one [Peer] section's keys.
 type PeerSection struct {
-	PublicKey    agentmodels.Key
-	PresharedKey *agentmodels.Key
+	PublicKey    awgmodels.Key
+	PresharedKey *awgmodels.Key
 	// AllowedIPs are normalized CIDRs (a bare address becomes /32 or /128).
 	AllowedIPs []string
 	Endpoint   string
@@ -261,7 +261,7 @@ func (p *PeerSection) set(lkey, key, value string, seen map[string]bool) error {
 	case "publickey":
 		p.PublicKey, err = parseKey(key, value)
 	case "presharedkey":
-		var k agentmodels.Key
+		var k awgmodels.Key
 		if k, err = parseKey(key, value); err == nil {
 			p.PresharedKey = &k
 		}
@@ -284,7 +284,7 @@ func (p *PeerSection) set(lkey, key, value string, seen map[string]bool) error {
 
 // validate enforces the keys the import can't do without.
 func (c *Conf) validate() error {
-	if agentmodels.IsEmpty(c.Interface.PrivateKey) {
+	if awgmodels.IsEmpty(c.Interface.PrivateKey) {
 		return fmt.Errorf("[Interface] PrivateKey is required")
 	}
 	if len(c.Interface.Address) == 0 {
@@ -293,10 +293,10 @@ func (c *Conf) validate() error {
 	if c.Interface.ListenPort == nil {
 		return fmt.Errorf("[Interface] ListenPort is required (without it no client Endpoint can be rendered)")
 	}
-	seen := make(map[agentmodels.Key]int, len(c.Peers))
+	seen := make(map[awgmodels.Key]int, len(c.Peers))
 	for i, p := range c.Peers {
 		n := i + 1
-		if agentmodels.IsEmpty(p.PublicKey) {
+		if awgmodels.IsEmpty(p.PublicKey) {
 			return fmt.Errorf("[Peer] #%d: PublicKey is required", n)
 		}
 		if len(p.AllowedIPs) == 0 {
@@ -322,10 +322,10 @@ func splitList(value string) []string {
 	return out
 }
 
-func parseKey(key, value string) (agentmodels.Key, error) {
-	k, err := agentmodels.ParseKey(value)
+func parseKey(key, value string) (awgmodels.Key, error) {
+	k, err := awgmodels.ParseKey(value)
 	if err != nil {
-		return agentmodels.Key{}, fmt.Errorf("%s: not a valid base64 WireGuard key", key)
+		return awgmodels.Key{}, fmt.Errorf("%s: not a valid base64 WireGuard key", key)
 	}
 	return k, nil
 }
@@ -378,7 +378,7 @@ func normalizeCIDR(raw string) (string, error) {
 }
 
 // shortKey abbreviates a key for messages the way the UI does.
-func shortKey(k agentmodels.Key) string {
+func shortKey(k awgmodels.Key) string {
 	s := k.String()
 	if len(s) > 8 {
 		return s[:8] + "…"

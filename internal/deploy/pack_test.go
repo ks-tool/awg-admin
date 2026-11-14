@@ -18,13 +18,19 @@ package deploy
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	packcmd "github.com/horchestra/pack/cmd"
+	"github.com/horchestra/pack/pkg/target"
 	"github.com/ks-tool/vpn-admin/models"
 	vpnagentpack "github.com/ks-tool/vpn-admin/pack/vpn-agent"
 )
@@ -103,24 +109,49 @@ func TestPackFirewallRules(t *testing.T) {
 	}
 }
 
+func TestHostAgents(t *testing.T) {
+	checksums := map[string]string{
+		"pack-host-agent-linux-amd64": "6f36ccaa26bdb2adb40291742234368982ca0afe966b778a4a2ccf608d6e49d5",
+		"pack-host-agent-linux-arm64": "1116e5311a77ff09f1bf7f701594949117bd0e6886cdb80fb311075190e15a71",
+	}
+	for name, want := range checksums {
+		data, err := fs.ReadFile(hostAgents, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(data)
+		if got := hex.EncodeToString(sum[:]); got != want {
+			t.Errorf("%s SHA-256 = %s, want %s", name, got, want)
+		}
+	}
+}
+
 func TestApplyPackUsesHostTarget(t *testing.T) {
 	original := embeddedPackApply
 	t.Cleanup(func() { embeddedPackApply = original })
 	called := 0
-	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
+	embeddedPackApply = func(ctx context.Context, options packcmd.ApplyOptions) error {
 		called++
-		if !options.Refresh || options.Env["PACK_SSH_PASSPHRASE"] != "key-passphrase" {
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) <= 0 || time.Until(deadline) > packApplyTimeout {
+			t.Fatalf("pack apply deadline = %v, %v", deadline, ok)
+		}
+		if options.Refresh || options.Env["PACK_SSH_PASSPHRASE"] != "key-passphrase" {
 			t.Fatalf("unexpected apply options: %#v", options)
+		}
+		if options.Planned == nil {
+			t.Fatal("pack apply does not report its plan")
+		}
+		if !slices.Contains(target.Names(), packTargetName) {
+			t.Fatalf("host target is not registered: %v", target.Names())
 		}
 		var release map[string]any
 		readPackTestJSON(t, filepath.Join(options.Dir, "release.yaml"), &release)
 		if !strings.Contains(release["pack"].(string), (&vpnagentpack.Config{}).Meta().Name) {
 			t.Fatalf("unexpected release: %#v", release)
 		}
-		targets := release["targets"].(map[string]any)
-		host := targets[packTargetName].(map[string]any)
-		if host["url"] != packTargetSource {
-			t.Fatalf("unexpected target source: %#v", host)
+		if _, ok := release["targets"]; ok {
+			t.Fatalf("embedded host target must not have a download source: %#v", release)
 		}
 		var values struct {
 			Values map[string]any `json:"values"`
@@ -181,40 +212,6 @@ func TestApplyPackUsesHostTarget(t *testing.T) {
 	}
 	if called != 1 {
 		t.Fatalf("embedded apply called %d times", called)
-	}
-}
-
-func TestApplyPackReusesTargetLock(t *testing.T) {
-	original := embeddedPackApply
-	t.Cleanup(func() { embeddedPackApply = original })
-	cache := t.TempDir()
-	lock := []byte("{\"targets\":{\"host\":{\"source\":\"" + packTargetSource + "\",\"sha256\":\"abc\"}}}\n")
-	called := 0
-	embeddedPackApply = func(_ context.Context, options packcmd.ApplyOptions) error {
-		called++
-		path := filepath.Join(options.Dir, "release.lock.json")
-		if called == 1 {
-			if _, err := os.Stat(path); !os.IsNotExist(err) {
-				t.Fatalf("first apply unexpectedly has a target lock: %v", err)
-			}
-		} else {
-			restored, err := os.ReadFile(path)
-			if err != nil || string(restored) != string(lock) {
-				t.Fatalf("restored target lock = %q, %v", restored, err)
-			}
-		}
-		return os.WriteFile(path, lock, 0o600)
-	}
-	item := packRelease{name: "VPN firewall", step: "firewall", pack: &firewallPack{}, values: map[string]any{}, firewall: []string{"i:awg0"}}
-	srv := models.Server{SSH: models.SSHConfig{Host: "192.0.2.1", KeyData: "private-key"}}
-	for range 2 {
-		if err := applyPack(context.Background(), srv, item, "", "", cache); err != nil {
-			t.Fatal(err)
-		}
-	}
-	persistent, err := os.ReadFile(filepath.Join(cache, "releases", "firewall.lock.json"))
-	if err != nil || string(persistent) != string(lock) {
-		t.Fatalf("persistent target lock = %q, %v", persistent, err)
 	}
 }
 

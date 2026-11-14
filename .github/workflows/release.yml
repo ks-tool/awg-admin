@@ -136,6 +136,9 @@ jobs:
             throw "makensis.exe not found under $nsis after 'choco install nsis'"
           }
 
+      - name: Download host agents
+        run: go run ./scripts/download-host-agents.go
+
       - name: Build desktop app
         # -ldflags stamps main.version so the app shows it on the Settings page
         # (main.go's version var). github.ref_name is the admin tag, already

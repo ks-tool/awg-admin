@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 	"uuid"
 
 	"github.com/ks-tool/vpn-admin/internal/deploy"
@@ -98,11 +100,11 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	}
 	if srv.Unmanaged {
 		if _, err := s.fetchProviderManifest(id); err != nil {
-			log.Error().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("server is waiting for v2 agent and AWG provider")
 			return models.AgentStatusUnmanaged, nil
 		}
 		if err := s.completeServerMigration(srv); err != nil {
-			log.Error().Err(err).Str("server_id", id).Msg("server is waiting for v2 agent and AWG provider")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("server is waiting for v2 agent and AWG provider")
 			return models.AgentStatusUnmanaged, nil
 		}
 	}
@@ -113,7 +115,7 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	// with a silent agent (degraded).
 	if !mtls {
 		if _, err := s.tunnels.Ensure(sID, srv.SSH, srv.Agent.Address); err != nil {
-			log.Error().Err(err).Str("server_id", id).Msg("agent status: SSH tunnel to agent is down")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("agent status: SSH tunnel to agent is down")
 			return models.AgentStatusDown, nil
 		}
 	}
@@ -123,7 +125,7 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 	if err := s.pingAgent(srv); err != nil {
 		if mtls {
 			// mTLS is reached directly; a failed probe means the agent is unreachable.
-			log.Error().Err(err).Str("server_id", id).Msg("agent status: mTLS agent unreachable")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("agent status: mTLS agent unreachable")
 			return models.AgentStatusDown, nil
 		}
 		// SSH: the pre-check saw a live tunnel, but a probe failing with a
@@ -131,22 +133,22 @@ func (s *Service) ServerAgentStatus(id string) (models.AgentStatus, error) {
 		// underneath us — Alive() merely lagged. That's "tunnel down" (red), not
 		// a silent agent behind a genuinely live tunnel (degraded).
 		if tunnelDropped(err) {
-			log.Error().Err(err).Str("server_id", id).Msg("agent status: SSH tunnel to agent died")
+			log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("agent status: SSH tunnel to agent died")
 			return models.AgentStatusDown, nil
 		}
-		log.Error().Err(err).Str("server_id", id).Msg("agent status: SSH tunnel up but agent not responding")
+		log.Error().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("agent status: SSH tunnel up but agent not responding")
 		return models.AgentStatusDegraded, nil
 	}
 
 	manifest, err := s.fetchProviderManifest(id)
 	if err != nil {
-		log.Warn().Err(err).Str("server_id", id).Msg("failed to read provider manifest health")
+		log.Warn().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("failed to read provider manifest health")
 		return models.AgentStatusDegraded, nil
 	}
 	for _, provider := range manifest.Providers {
-		resources, err := s.ListProviderResources(id, provider.Name)
+		resources, err := s.remoteProviderResources(id, provider.Name)
 		if err != nil {
-			log.Warn().Err(err).Str("server_id", id).Str("provider", provider.Name).Msg("failed to read provider resource health")
+			log.Warn().Err(err).Str("server_id", id).Str("server_name", srv.Name).Str("provider", provider.Name).Msg("failed to read provider resource health")
 			return models.AgentStatusDegraded, nil
 		}
 		for _, resource := range resources {
@@ -298,6 +300,37 @@ func (s *Service) UnlockServerSudo(id string, password string, applyToAll bool) 
 	return nil
 }
 
+func (s *Service) configureAgentDeployment(srv *models.Server, settings *models.AgentDeploymentSettings) error {
+	if settings == nil {
+		return nil
+	}
+	address := strings.TrimSpace(settings.Address)
+	if len(address) == 0 {
+		return fmt.Errorf("agent address is required")
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || len(host) == 0 {
+		return fmt.Errorf("agent address must be in host:port format")
+	}
+	portNumber, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || portNumber == 0 {
+		return fmt.Errorf("agent address must contain a valid TCP port")
+	}
+	if !settings.MTLS && host != "127.0.0.1" && host != "::1" && !strings.EqualFold(host, "localhost") {
+		return fmt.Errorf("agent address without mTLS must use a loopback host")
+	}
+
+	srv.Agent.Address = address
+	if settings.MTLS {
+		if err := issueAgentTLS(srv); err != nil {
+			return err
+		}
+	} else {
+		srv.Agent.TLS = nil
+	}
+	return s.store.Servers().Set(srv)
+}
+
 // GenerateAgentTLS (re)issues a CA, server and client certificate for the
 // server's agent and stores them on the server record. The server cert's
 // SAN is derived from Agent.Address so it matches whatever "white" IP or
@@ -312,13 +345,19 @@ func (s *Service) GenerateAgentTLS(id string) (*models.Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := issueAgentTLS(srv); err != nil {
+		return nil, err
+	}
+	return srv, s.store.Servers().Set(srv)
+}
 
+func issueAgentTLS(srv *models.Server) error {
 	host := srv.Agent.Address
 	if h, _, splitErr := net.SplitHostPort(host); splitErr == nil {
 		host = h
 	}
 	if len(host) == 0 {
-		return nil, fmt.Errorf("agent address is required to issue TLS certificates")
+		return fmt.Errorf("agent address is required to issue TLS certificates")
 	}
 
 	var ips []net.IP
@@ -331,11 +370,10 @@ func (s *Service) GenerateAgentTLS(id string) (*models.Server, error) {
 
 	tlsMaterial, err := pki.IssueAgentTLS(srv.Name, ips, dnsNames)
 	if err != nil {
-		return nil, fmt.Errorf("issue agent TLS material: %w", err)
+		return fmt.Errorf("issue agent TLS material: %w", err)
 	}
-
 	srv.Agent.TLS = tlsMaterial
-	return srv, s.store.Servers().Set(srv)
+	return nil
 }
 
 func (s *Service) serverUDPPorts(id uuid.UUID) []uint16 {
@@ -413,7 +451,7 @@ func (s *Service) DeployAgent(id string, agentSourceID string) error {
 		// right away instead of waiting for the next unrelated edit to
 		// trigger a push.
 		if err := s.SyncServer(id); err != nil {
-			log.Warn().Err(err).Str("server_id", id).Msg("failed to sync server after deploying agent")
+			log.Warn().Err(err).Str("server_id", id).Str("server_name", srv.Name).Msg("failed to sync server after deploying agent")
 		}
 	}()
 	return nil

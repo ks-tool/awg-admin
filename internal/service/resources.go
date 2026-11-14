@@ -29,12 +29,13 @@ import (
 
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/models"
+	"github.com/ks-tool/vpn-admin/storage"
 )
 
 var ErrProviderNotFound = errors.New("provider not found in agent manifest")
 
 type schemaCacheKey struct {
-	agentID  string
+	serverID string
 	provider string
 }
 
@@ -53,8 +54,8 @@ func newProviderRegistry() *providerRegistry {
 	return &providerRegistry{schemas: make(map[schemaCacheKey]schemaCacheEntry), refreshing: make(map[string]bool)}
 }
 
-func (r *providerRegistry) cached(agentID, provider, version string) (models.ProviderDefinition, bool) {
-	key := schemaCacheKey{agentID: agentID, provider: provider}
+func (r *providerRegistry) cached(serverID, provider, version string) (models.ProviderDefinition, bool) {
+	key := schemaCacheKey{serverID: serverID, provider: provider}
 	r.mu.RLock()
 	entry, ok := r.schemas[key]
 	r.mu.RUnlock()
@@ -64,9 +65,9 @@ func (r *providerRegistry) cached(agentID, provider, version string) (models.Pro
 	return entry.definition, true
 }
 
-func (r *providerRegistry) store(agentID, version string, definition models.ProviderDefinition) {
+func (r *providerRegistry) store(serverID, version string, definition models.ProviderDefinition) {
 	r.mu.Lock()
-	r.schemas[schemaCacheKey{agentID: agentID, provider: definition.Name}] = schemaCacheEntry{version: version, definition: definition}
+	r.schemas[schemaCacheKey{serverID: serverID, provider: definition.Name}] = schemaCacheEntry{version: version, definition: definition}
 	r.mu.Unlock()
 }
 
@@ -102,7 +103,7 @@ func (s *Service) GetProviderSchema(serverID, providerName string) (*models.Prov
 	if len(provider.Resources) > 0 {
 		return provider, nil
 	}
-	if cached, ok := s.providerRegistry.cached(manifest.AgentID, providerName, provider.Version); ok && definitionsEqual(cached.Resources, provider.Resources) {
+	if cached, ok := s.providerRegistry.cached(serverID, providerName, provider.Version); ok && definitionsEqual(cached.Resources, provider.Resources) {
 		return &cached, nil
 	}
 	var definition *models.ProviderDefinition
@@ -112,9 +113,21 @@ func (s *Service) GetProviderSchema(serverID, providerName string) (*models.Prov
 		return err
 	})
 	if err == nil {
-		s.providerRegistry.store(manifest.AgentID, provider.Version, *definition)
+		s.providerRegistry.store(serverID, provider.Version, *definition)
 	}
 	return definition, err
+}
+
+func (s *Service) remoteProviderResources(serverID, provider string) ([]models.Resource, error) {
+	var resources []models.Resource
+	if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
+		var err error
+		resources, err = client.ListResources(ctx, provider)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return resources, nil
 }
 
 func (s *Service) ListProviderResources(serverID, provider string) ([]models.Resource, error) {
@@ -136,12 +149,8 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 			localByName[item.Kind+"\x00"+item.Name] = item
 		}
 	}
-	var resources []models.Resource
-	if err := s.withAgent(serverID, func(ctx context.Context, client *agentclient.Client) error {
-		var err error
-		resources, err = client.ListResources(ctx, provider)
-		return err
-	}); err != nil {
+	resources, err := s.remoteProviderResources(serverID, provider)
+	if err != nil {
 		return nil, err
 	}
 	result := make([]models.Resource, 0, len(resources))
@@ -204,7 +213,7 @@ func (s *Service) ListProviderResources(serverID, provider string) ([]models.Res
 		}); err != nil {
 			return nil, err
 		}
-		if err := s.migrateProviderResourceSecret(serverID, definition, item); err != nil {
+		if err := s.restoreProviderResourceSecret(serverID, definition, item); err != nil {
 			return nil, err
 		}
 		created.APIVersion = apiVersion
@@ -428,6 +437,10 @@ func (s *Service) migrateProviderResourceSecret(serverID string, definition *mod
 	if !pending {
 		return nil
 	}
+	return s.restoreProviderResourceSecret(serverID, definition, item)
+}
+
+func (s *Service) restoreProviderResourceSecret(serverID string, definition *models.ProviderDefinition, item models.Resource) error {
 	actionAvailable := false
 	for _, resourceDefinition := range definition.Resources {
 		if resourceDefinition.Kind != item.Kind {
@@ -449,7 +462,7 @@ func (s *Service) migrateProviderResourceSecret(serverID string, definition *mod
 		}
 		interfaceID, err := uuid.Parse(item.ID)
 		if err != nil {
-			return err
+			return nil
 		}
 		iface, err := s.store.Servers().Interfaces(serverUUID).Get(interfaceID)
 		if err != nil {
@@ -467,11 +480,48 @@ func (s *Service) migrateProviderResourceSecret(serverID string, definition *mod
 	}
 
 	var spec struct {
-		UserRef   string `json:"userRef"`
-		PublicKey string `json:"publicKey"`
+		UserRef      string `json:"userRef"`
+		InterfaceRef string `json:"interfaceRef"`
+		PublicKey    string `json:"publicKey"`
 	}
 	if err := json.Unmarshal(item.Spec, &spec); err != nil {
 		return err
+	}
+	if len(spec.UserRef) == 0 {
+		if definition.Name != "awg" {
+			return nil
+		}
+		serverUUID, err := uuid.Parse(serverID)
+		if err != nil {
+			return err
+		}
+		interfaceID, err := uuid.Parse(spec.InterfaceRef)
+		if err != nil {
+			return nil
+		}
+		iface, err := s.store.Servers().Interfaces(serverUUID).Get(interfaceID)
+		if storage.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		for _, peer := range iface.Peers {
+			if peer.Key.String() != spec.PublicKey || peer.PresharedKey == nil {
+				continue
+			}
+			supported, err := s.peerSupportsPresharedOnlyImport(serverID)
+			if err != nil || !supported {
+				return err
+			}
+			raw, err := json.Marshal(map[string]string{"presharedKey": peer.PresharedKey.String()})
+			if err != nil {
+				return err
+			}
+			_, err = s.RunProviderResourceAction(serverID, definition.Name, item.Kind, item.Name, "importSecret", raw)
+			return err
+		}
+		return nil
 	}
 	userID, err := uuid.Parse(spec.UserRef)
 	if err != nil {

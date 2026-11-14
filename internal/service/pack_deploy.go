@@ -62,6 +62,9 @@ func (s *Service) DeployAgentPack(id string, deployment models.AgentDeployment) 
 	if err != nil {
 		return err
 	}
+	if err := s.configureAgentDeployment(srv, deployment.Settings); err != nil {
+		return err
+	}
 
 	s.deployStatus.start(sID)
 	go func() {
@@ -146,6 +149,9 @@ func (s *Service) RemoveProvider(id, name string) error {
 	s.deployStatus.setStep(sID, "remove_provider_"+name)
 	go func() {
 		err := deploy.RemoveProviderFromPack(context.Background(), *srv, name, s.tunnels.PassphraseFor(sID), s.tunnels.SudoPasswordFor(sID))
+		if err == nil {
+			err = s.waitForProviderRemoval(id, name, 20*time.Second)
+		}
 		if err == nil {
 			err = s.removeCachedProvider(sID, name)
 		}

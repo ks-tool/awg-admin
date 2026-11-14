@@ -14,9 +14,9 @@
   limitations under the License.
 */
 
-// Package agentclient is a typed HTTP client over the agent's actual API
-// (agent/internal/api/handlers.go: PUT/GET/DELETE /interfaces). It takes an
-// arbitrary *http.Client so the caller decides the transport — an SSH
+// Package agentclient is a typed HTTP client over the agent's resource API
+// and its transparent provider bridge. It takes an arbitrary *http.Client
+// so the caller decides the transport — an SSH
 // tunnel (internal/sshclient.TunnelClient) or a direct mTLS client — the
 // client itself doesn't care which.
 package agentclient
@@ -30,6 +30,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
 
 	"github.com/ks-tool/vpn-admin/models"
 	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
@@ -61,18 +63,18 @@ func New(httpClient *http.Client, baseURL string) *Client {
 
 // Set applies cfg to the agent's interface of the same name, creating it if
 // it doesn't already exist (PUT /interfaces).
-func (c *Client) Set(ctx context.Context, cfg agentmodels.InterfaceConfig) error {
+func (c *Client) Set(ctx context.Context, cfg awgmodels.InterfaceConfig) error {
 	return c.set(ctx, cfg, false)
 }
 
 // SetForceReplacePeers applies cfg with the agent's full peer replacement
 // behavior. Unlike Set, this intentionally tears down all live peer sessions
 // on the interface before recreating its peer set.
-func (c *Client) SetForceReplacePeers(ctx context.Context, cfg agentmodels.InterfaceConfig) error {
+func (c *Client) SetForceReplacePeers(ctx context.Context, cfg awgmodels.InterfaceConfig) error {
 	return c.set(ctx, cfg, true)
 }
 
-func (c *Client) set(ctx context.Context, cfg agentmodels.InterfaceConfig, replacePeers bool) error {
+func (c *Client) set(ctx context.Context, cfg awgmodels.InterfaceConfig, replacePeers bool) error {
 	body, err := json.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal interface config: %w", err)
@@ -102,7 +104,7 @@ func (c *Client) set(ctx context.Context, cfg agentmodels.InterfaceConfig, repla
 }
 
 // Get fetches the current config of the named interface (GET /interfaces/{name}).
-func (c *Client) Get(ctx context.Context, name string) (*agentmodels.InterfaceConfig, error) {
+func (c *Client) Get(ctx context.Context, name string) (*awgmodels.InterfaceConfig, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/interfaces/"+name, nil)
 	if err != nil {
 		return nil, err
@@ -118,7 +120,7 @@ func (c *Client) Get(ctx context.Context, name string) (*agentmodels.InterfaceCo
 		return nil, responseError(resp, name)
 	}
 
-	var cfg agentmodels.InterfaceConfig
+	var cfg awgmodels.InterfaceConfig
 	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("decode interface config: %w", err)
 	}
@@ -126,7 +128,7 @@ func (c *Client) Get(ctx context.Context, name string) (*agentmodels.InterfaceCo
 }
 
 // List fetches every interface configured on the agent (GET /interfaces/).
-func (c *Client) List(ctx context.Context) ([]agentmodels.InterfaceConfig, error) {
+func (c *Client) List(ctx context.Context) ([]awgmodels.InterfaceConfig, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/interfaces/", nil)
 	if err != nil {
 		return nil, err
@@ -142,7 +144,7 @@ func (c *Client) List(ctx context.Context) ([]agentmodels.InterfaceConfig, error
 		return nil, responseError(resp, "")
 	}
 
-	var cfgs []agentmodels.InterfaceConfig
+	var cfgs []awgmodels.InterfaceConfig
 	if err := json.NewDecoder(resp.Body).Decode(&cfgs); err != nil {
 		return nil, fmt.Errorf("decode interface list: %w", err)
 	}
@@ -277,8 +279,8 @@ func (c *Client) Metrics(ctx context.Context) (*agentmodels.SystemSnapshot, erro
 }
 
 // InterfaceMetrics fetches one interface's peer metrics and agent-measured p95 latency.
-func (c *Client) InterfaceMetrics(ctx context.Context, name string) (*agentmodels.InterfaceSnapshot, error) {
-	var snap agentmodels.InterfaceSnapshot
+func (c *Client) InterfaceMetrics(ctx context.Context, name string) (*awgmodels.InterfaceSnapshot, error) {
+	var snap awgmodels.InterfaceSnapshot
 	if err := c.interfaceMetricsGet(ctx, "/metrics/"+url.PathEscape(name), &snap); err != nil {
 		return nil, err
 	}
@@ -286,8 +288,8 @@ func (c *Client) InterfaceMetrics(ctx context.Context, name string) (*agentmodel
 }
 
 // InterfaceMetricsHistory fetches one interface's retained peer history.
-func (c *Client) InterfaceMetricsHistory(ctx context.Context, name string) (*agentmodels.InterfaceHistory, error) {
-	var history agentmodels.InterfaceHistory
+func (c *Client) InterfaceMetricsHistory(ctx context.Context, name string) (*awgmodels.InterfaceHistory, error) {
+	var history awgmodels.InterfaceHistory
 	if err := c.interfaceMetricsGet(ctx, "/metrics/"+url.PathEscape(name)+"/history", &history); err != nil {
 		return nil, err
 	}

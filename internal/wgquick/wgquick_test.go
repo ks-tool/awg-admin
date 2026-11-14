@@ -21,12 +21,12 @@ import (
 	"strings"
 	"testing"
 
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
 )
 
-func genKey(t *testing.T) agentmodels.Key {
+func genKey(t *testing.T) awgmodels.Key {
 	t.Helper()
-	k, err := agentmodels.GeneratePrivateKey()
+	k, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,13 +35,13 @@ func genKey(t *testing.T) agentmodels.Key {
 
 // Key's String/PublicKey have pointer receivers, so a fresh value needs a
 // variable first.
-func keyStr(k agentmodels.Key) string { return k.String() }
-func pubStr(k agentmodels.Key) string { pub := k.PublicKey(); return pub.String() }
+func keyStr(k awgmodels.Key) string { return k.String() }
+func pubStr(k awgmodels.Key) string { pub := k.PublicKey(); return pub.String() }
 
 // fullConf is a realistic awg-quick server conf exercising every accepted key:
 // comments (full-line and trailing), case-insensitive keys, repeated hooks,
 // multi-valued lines, a bare AllowedIPs address, a routed LAN and a PSK.
-func fullConf(t *testing.T) (string, agentmodels.Key, agentmodels.Key, agentmodels.Key) {
+func fullConf(t *testing.T) (string, awgmodels.Key, awgmodels.Key, awgmodels.Key) {
 	t.Helper()
 	ifKey, p1, p2 := genKey(t), genKey(t), genKey(t)
 	psk := genKey(t)

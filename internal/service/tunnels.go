@@ -25,8 +25,9 @@ import (
 	"time"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 const (
@@ -82,7 +83,7 @@ func (s *Service) BuildTunnel(steps []models.TunnelStep, subnet string) (*models
 	if entrySrv.SSH.Host == "" {
 		return nil, errors.New("entry server has no host address for the tunnel endpoint")
 	}
-	if agentmodels.IsEmpty(entryIface.PrivateKey) || agentmodels.IsEmpty(exitIface.PrivateKey) {
+	if awgmodels.IsEmpty(entryIface.PrivateKey) || awgmodels.IsEmpty(exitIface.PrivateKey) {
 		return nil, errors.New("both interfaces must have a private key")
 	}
 
@@ -104,7 +105,7 @@ func (s *Service) BuildTunnel(steps []models.TunnelStep, subnet string) (*models
 	ones, _ := subnetNet.Mask.Size()
 
 	tunnelID := uuid.New()
-	psk, err := agentmodels.GenerateKey()
+	psk, err := awgmodels.GenerateKey()
 	if err != nil {
 		return nil, fmt.Errorf("generate preshared key: %w", err)
 	}
@@ -235,7 +236,7 @@ func (s *Service) RemoveTunnel(tunnelID string) error {
 	// in the list but GetPeerConfig can't find them on the interface.
 	tunnelPeerKeys := map[string]bool{}
 	for i := range members {
-		if agentmodels.IsEmpty(members[i].iface.PrivateKey) {
+		if awgmodels.IsEmpty(members[i].iface.PrivateKey) {
 			continue
 		}
 		pub := members[i].iface.PrivateKey.PublicKey()
@@ -256,7 +257,7 @@ func (s *Service) RemoveTunnel(tunnelID string) error {
 // table, tunnel id), while KEEPING the interface's client peers so they survive
 // the teardown. Identity (name, key, address, listen port, obfuscation) is kept.
 func resetTunnelInterface(iface *models.Interface, tunnelPeerKeys map[string]bool) {
-	kept := make([]agentmodels.InterfacePeer, 0, len(iface.Peers))
+	kept := make([]awgmodels.InterfacePeer, 0, len(iface.Peers))
 	for i := range iface.Peers {
 		if tunnelPeerKeys[iface.Peers[i].Key.String()] {
 			continue // the tunnel's own gateway/relay peer — drop it
@@ -278,7 +279,7 @@ func resetTunnelInterface(iface *models.Interface, tunnelPeerKeys map[string]boo
 // interface is sent out to the exit (Table + ip rule/route hooks). Hooks are
 // idempotent and use wg-quick's %i placeholder (the agent substitutes the
 // interface name).
-func applyRelayTemplate(iface *models.Interface, tunnelID uuid.UUID, exitPub, psk agentmodels.Key, table, prio int) {
+func applyRelayTemplate(iface *models.Interface, tunnelID uuid.UUID, exitPub, psk awgmodels.Key, table, prio int) {
 	iface.Table = table
 	iface.PreUp = append(iface.PreUp,
 		"sysctl -w net.ipv4.ip_forward=1",
@@ -289,7 +290,7 @@ func applyRelayTemplate(iface *models.Interface, tunnelID uuid.UUID, exitPub, ps
 		fmt.Sprintf("ip route del default dev %%i table %d 2>/dev/null || true", table),
 		fmt.Sprintf("ip rule del iif %%i table %d priority %d 2>/dev/null || true", table, prio),
 	)
-	iface.Peers = append(iface.Peers, agentmodels.InterfacePeer{
+	iface.Peers = append(iface.Peers, awgmodels.InterfacePeer{
 		Key:          exitPub,
 		PresharedKey: new(psk),
 		AllowedIPs:   []string{"0.0.0.0/0"},
@@ -306,7 +307,7 @@ func applyRelayTemplate(iface *models.Interface, tunnelID uuid.UUID, exitPub, ps
 // like any interface and egress through the same MARK/MASQUERADE. The exit is
 // identified by role via Table==0 (see ListTunnels/RemoveTunnel), not the port,
 // so keeping the port doesn't confuse entry/exit detection.
-func applyExitTemplate(iface *models.Interface, tunnelID uuid.UUID, entry *models.Interface, entryPub, psk agentmodels.Key, entrySubnet, endpoint, exitAddress string) {
+func applyExitTemplate(iface *models.Interface, tunnelID uuid.UUID, entry *models.Interface, entryPub, psk awgmodels.Key, entrySubnet, endpoint, exitAddress string) {
 	iface.Address = exitAddress
 	iface.Table = 0
 	copyAmneziaParams(&iface.InterfaceConfig, &entry.InterfaceConfig)
@@ -323,7 +324,7 @@ func applyExitTemplate(iface *models.Interface, tunnelID uuid.UUID, entry *model
 		"iptables -t nat -D POSTROUTING ! -o %i -m mark --mark " + tunnelMark + " -j MASQUERADE 2>/dev/null || true",
 	}
 
-	iface.Peers = []agentmodels.InterfacePeer{{
+	iface.Peers = []awgmodels.InterfacePeer{{
 		Key:               entryPub,
 		PresharedKey:      new(psk),
 		AllowedIPs:        []string{entrySubnet},
@@ -333,7 +334,7 @@ func applyExitTemplate(iface *models.Interface, tunnelID uuid.UUID, entry *model
 	iface.Tunnel = new(tunnelID)
 }
 
-func copyAmneziaParams(dst, src *agentmodels.InterfaceConfig) {
+func copyAmneziaParams(dst, src *awgmodels.InterfaceConfig) {
 	dst.Jc, dst.Jmin, dst.Jmax = copyIntPtr(src.Jc), copyIntPtr(src.Jmin), copyIntPtr(src.Jmax)
 	dst.S1, dst.S2, dst.S3, dst.S4 = copyIntPtr(src.S1), copyIntPtr(src.S2), copyIntPtr(src.S3), copyIntPtr(src.S4)
 	dst.H1, dst.H2, dst.H3, dst.H4 = copyStrPtr(src.H1), copyStrPtr(src.H2), copyStrPtr(src.H3), copyStrPtr(src.H4)

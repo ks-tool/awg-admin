@@ -21,26 +21,27 @@ import (
 	"strings"
 	"testing"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
-func genKey(t *testing.T) agentmodels.Key {
+func genKey(t *testing.T) awgmodels.Key {
 	t.Helper()
-	k, err := agentmodels.GeneratePrivateKey()
+	k, err := awgmodels.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
 	return k
 }
 
-func keyStr(k agentmodels.Key) string { return k.String() }
-func pubStr(k agentmodels.Key) string { pub := k.PublicKey(); return pub.String() }
+func keyStr(k awgmodels.Key) string { return k.String() }
+func pubStr(k awgmodels.Key) string { pub := k.PublicKey(); return pub.String() }
 
 // importFixture seeds the fake agent with a live unmanaged "wg-legacy" and its
 // conf: three peers, a routed LAN behind the first, hooks, DNS.
 type importFixture struct {
-	ifKey, p1, p2, p3 agentmodels.Key
+	ifKey, p1, p2, p3 awgmodels.Key
 	conf              string
 }
 
@@ -102,13 +103,13 @@ func TestCreateInterfaceRejectsUnmanagedName(t *testing.T) {
 	svc, srv, fa := newTestServerWithAgent(t)
 	newImportFixture(t, fa)
 
-	_, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{Interface: "wg-legacy", Address: "10.1.0.1/24", ListenPort: 51821})
+	_, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{Interface: "wg-legacy", Address: "10.1.0.1/24", ListenPort: 51821})
 	var verr *ValidationError
 	if !errors.As(err, &verr) || !strings.Contains(err.Error(), "import it instead") {
 		t.Fatalf("CreateInterface(wg-legacy) err = %v, want a ValidationError pointing at import", err)
 	}
 
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{Interface: "wg0", Address: "10.1.0.1/24", ListenPort: 51821})
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{Interface: "wg0", Address: "10.1.0.1/24", ListenPort: 51821})
 	if err != nil {
 		t.Fatalf("CreateInterface(wg0): %v", err)
 	}
@@ -128,7 +129,7 @@ func TestCreateInterfaceRejectsUnmanagedName(t *testing.T) {
 // With no reachable agent the unmanaged-name check must be skipped, not block.
 func TestCreateInterfaceUnmanagedCheckIsBestEffort(t *testing.T) {
 	svc, srv := newValidationTestServer(t)
-	if _, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820}); err != nil {
+	if _, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820}); err != nil {
 		t.Fatalf("CreateInterface with unreachable agent: %v", err)
 	}
 }
@@ -264,7 +265,7 @@ func TestPreviewImportValidationErrors(t *testing.T) {
 	stranger := genKey(t)
 
 	// A peer key already registered to a user elsewhere must not be imported twice.
-	other, _ := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{Interface: "wg0", Address: "10.1.0.1/24", ListenPort: 51821})
+	other, _ := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{Interface: "wg0", Address: "10.1.0.1/24", ListenPort: 51821})
 	carol, _ := svc.CreateUser(UserInput{Name: "carol"})
 	if _, err := svc.AddPeer(carol.ID.String(), AddPeerInput{Name: "old", InterfaceID: other.ID, PrivateKey: keyStr(f.p3)}); err != nil {
 		t.Fatal(err)
@@ -299,7 +300,7 @@ func TestPreviewImportRejectsConflictsWithExistingInterfaces(t *testing.T) {
 	newImportFixture(t, fa)
 
 	// Same listen port as the conf → rejected by the shared uniqueness check.
-	if _, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{Interface: "wg0", Address: "10.1.0.1/24", ListenPort: 51900}); err != nil {
+	if _, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{Interface: "wg0", Address: "10.1.0.1/24", ListenPort: 51900}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := svc.PreviewImport(srv.ID.String(), "wg-legacy", "")

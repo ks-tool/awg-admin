@@ -23,8 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ks-tool/vpn-admin/models"
 	"uuid"
+
+	"github.com/ks-tool/vpn-admin/models"
 )
 
 func TestFirewallSyncCoalescesChangesAndReloadsInterfaces(t *testing.T) {

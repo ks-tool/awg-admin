@@ -20,8 +20,9 @@ import (
 	"strings"
 	"testing"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 // newValidationTestServer gives a Service with one server and no reachable agent
@@ -43,7 +44,7 @@ func newValidationTestServer(t *testing.T) (*Service, *models.Server) {
 
 func TestCreateInterfaceRejectsDuplicates(t *testing.T) {
 	svc, srv := newValidationTestServer(t)
-	if _, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	if _, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	}); err != nil {
 		t.Fatalf("first CreateInterface: %v", err)
@@ -51,12 +52,12 @@ func TestCreateInterfaceRejectsDuplicates(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		cfg     agentmodels.InterfaceConfig
+		cfg     awgmodels.InterfaceConfig
 		wantSub string
 	}{
-		{"duplicate name", agentmodels.InterfaceConfig{Interface: "wg0", Address: "10.1.0.1/24", ListenPort: 51821}, "name"},
-		{"duplicate port", agentmodels.InterfaceConfig{Interface: "wg1", Address: "10.1.0.1/24", ListenPort: 51820}, "port"},
-		{"overlapping subnet", agentmodels.InterfaceConfig{Interface: "wg1", Address: "10.0.0.5/24", ListenPort: 51821}, "overlap"},
+		{"duplicate name", awgmodels.InterfaceConfig{Interface: "wg0", Address: "10.1.0.1/24", ListenPort: 51821}, "name"},
+		{"duplicate port", awgmodels.InterfaceConfig{Interface: "wg1", Address: "10.1.0.1/24", ListenPort: 51820}, "port"},
+		{"overlapping subnet", awgmodels.InterfaceConfig{Interface: "wg1", Address: "10.0.0.5/24", ListenPort: 51821}, "overlap"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -70,13 +71,13 @@ func TestCreateInterfaceRejectsDuplicates(t *testing.T) {
 
 func TestCreateInterfaceAllowsDistinct(t *testing.T) {
 	svc, srv := newValidationTestServer(t)
-	if _, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	if _, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	}); err != nil {
 		t.Fatalf("wg0: %v", err)
 	}
 	// Distinct name, port and non-overlapping subnet — must be accepted.
-	if _, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	if _, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg1", Address: "10.0.1.1/24", ListenPort: 51821,
 	}); err != nil {
 		t.Fatalf("wg1 (distinct): %v", err)
@@ -85,7 +86,7 @@ func TestCreateInterfaceAllowsDistinct(t *testing.T) {
 
 func TestAddPeerRejectsBadAllowedIPs(t *testing.T) {
 	svc, srv := newValidationTestServer(t)
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	})
 	if err != nil {
@@ -136,13 +137,13 @@ func TestAddPeerRejectsBadAllowedIPs(t *testing.T) {
 // fields are re-validated.
 func TestUpdateInterfaceAllowsUnchangedFieldsDespiteConflict(t *testing.T) {
 	svc, srv := newValidationTestServer(t)
-	wg0, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	wg0, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.1/24", ListenPort: 51820,
 	})
 	if err != nil {
 		t.Fatalf("CreateInterface wg0: %v", err)
 	}
-	wg1, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	wg1, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg1", Address: "10.0.1.1/24", ListenPort: 51821,
 	})
 	if err != nil {
@@ -169,7 +170,7 @@ func TestUpdateInterfaceAllowsUnchangedFieldsDespiteConflict(t *testing.T) {
 // point-to-point /31 (both addresses usable, no network/broadcast to skip).
 func TestNextFreeIPHandlesSlash31(t *testing.T) {
 	svc, srv := newValidationTestServer(t)
-	iface, err := svc.CreateInterface(srv.ID.String(), agentmodels.InterfaceConfig{
+	iface, err := svc.CreateInterface(srv.ID.String(), awgmodels.InterfaceConfig{
 		Interface: "wg0", Address: "10.0.0.0/31", ListenPort: 51820,
 	})
 	if err != nil {

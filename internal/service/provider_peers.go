@@ -26,9 +26,10 @@ import (
 	"strings"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/models"
 	"github.com/ks-tool/vpn-admin/storage"
-	agentmodels "github.com/ks-tool/vpn-agent/v2/models"
 )
 
 func providerFromAPIVersion(apiVersion string) string {
@@ -52,7 +53,7 @@ func (s *Service) providerInterface(serverID uuid.UUID, interfaceID uuid.UUID) (
 
 func (s *Service) addProviderPeer(userID uuid.UUID, in AddPeerInput, server *models.Server, interfaceResource *models.Resource) (*models.User, error) {
 	provider := providerFromAPIVersion(interfaceResource.APIVersion)
-	identifier, err := agentmodels.GenerateKey()
+	identifier, err := awgmodels.GenerateKey()
 	if err != nil {
 		return nil, err
 	}

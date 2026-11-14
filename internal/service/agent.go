@@ -29,6 +29,8 @@ import (
 	"time"
 	"uuid"
 
+	awgmodels "github.com/ks-tool/vpn-agent/v2/providers/awg/models"
+
 	"github.com/ks-tool/vpn-admin/internal/agentclient"
 	"github.com/ks-tool/vpn-admin/internal/sshclient"
 	"github.com/ks-tool/vpn-admin/models"
@@ -252,12 +254,12 @@ func (s *Service) serverAndInterface(serverID, interfaceID string) (*models.Serv
 	return srv, iface, err
 }
 
-func (s *Service) GetServerInterfaceMetrics(serverID, interfaceID string) (*agentmodels.InterfaceSnapshot, error) {
+func (s *Service) GetServerInterfaceMetrics(serverID, interfaceID string) (*awgmodels.InterfaceSnapshot, error) {
 	srv, iface, err := s.serverAndInterface(serverID, interfaceID)
 	if err != nil {
 		return nil, err
 	}
-	var snap *agentmodels.InterfaceSnapshot
+	var snap *awgmodels.InterfaceSnapshot
 	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
 		var mErr error
 		snap, mErr = c.InterfaceMetrics(ctx, iface.Interface)
@@ -266,12 +268,12 @@ func (s *Service) GetServerInterfaceMetrics(serverID, interfaceID string) (*agen
 	return snap, err
 }
 
-func (s *Service) GetServerInterfaceMetricsHistory(serverID, interfaceID string) (*agentmodels.InterfaceHistory, error) {
+func (s *Service) GetServerInterfaceMetricsHistory(serverID, interfaceID string) (*awgmodels.InterfaceHistory, error) {
 	srv, iface, err := s.serverAndInterface(serverID, interfaceID)
 	if err != nil {
 		return nil, err
 	}
-	var history *agentmodels.InterfaceHistory
+	var history *awgmodels.InterfaceHistory
 	err = s.callAgent(srv, func(ctx context.Context, c *agentclient.Client) error {
 		var mErr error
 		history, mErr = c.InterfaceMetricsHistory(ctx, iface.Interface)
